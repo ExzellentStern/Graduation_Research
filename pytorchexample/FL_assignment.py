@@ -199,11 +199,11 @@ def train(net, trainloader, epochs, lr, device):
     net.to(device)
     #多クラス分類用の損失関数（交差エントロピー）を定義
     criterion = torch.nn.CrossEntropyLoss().to(device)#criterionは評価基準の意
-    #確率的勾配降下法（SGD）を用いた最適化手法.SGDからあとで変えてもいい.
-    optimizer = torch.optim.SGD(
+    #確率的勾配降下法（SGD）を用いた最適化手法.SGDからあとで変えてもいい.(1/30:SGDからAdamWに変更)
+    optimizer = torch.optim.AdamW(
         net.parameters(),
         lr=lr,
-        momentum=0.9
+        #momentum=0.9
     )
     #学習モードに切り替える.
     net.train()
@@ -239,6 +239,8 @@ def test(net, testloader, device):
     
 
     net.to(device)
+    #1/30:net.eval()を追加する.Pytorchには2つのモデルがあり,net.trainだとdropoutが有効,net.evalだとdropoutが無効になる.
+    net.eval()
     #多クラス分類用の損失関数（交差エントロピー）を定義
     criterion = torch.nn.CrossEntropyLoss()
     #変数の初期化
@@ -267,4 +269,6 @@ def test(net, testloader, device):
 
     return loss, accuracy
 
-#この辺にログとかファイル出力を行うプログラムを加えたいところ.(1/29)
+#ログとかファイル出力を行うプログラムを加えたいところ.(1/29)
+#1/29,ログのcsvファイルの作成プログラムは成功.
+#用いた画像の生成結果に関するファイル出力があった方がいいかも(1/29)

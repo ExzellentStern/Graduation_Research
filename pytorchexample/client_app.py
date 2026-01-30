@@ -60,6 +60,8 @@ def train(msg: Message, context: Context):
         round_=server_round,
         train_loss=train_loss,
     )
+    #memo:各クライアントのラウンド数は把握できないのでこれ改善の余地あり.
+    #今回はアプリケーション開発課題用なのでとりあえずサーバーの損失関数と正確性が読み取れれば大丈夫.
     # ===== 追加ここまで =====
 
     # ローカル学習の結果を、サーバに返すための処理をここで行う.
@@ -109,7 +111,7 @@ def evaluate(msg: Message, context: Context):
         device,
     )
 
-    # ===== 追加：ログ出力（クライアント側 evaluate）=====
+    #ログ出力（クライアント側 evaluate）(追加部分)
     # train と同様に server_round を取得（無ければ -1）
     server_round = msg.content.get("config", {}).get("server_round", -1)
 
@@ -125,8 +127,7 @@ def evaluate(msg: Message, context: Context):
         eval_loss=eval_loss,
         eval_acc=eval_acc,
     )
-    # ===== 追加ここまで =====
-
+    # メモ
     #メタ情報
     metrics = {
         "eval_loss": eval_loss,
