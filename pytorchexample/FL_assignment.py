@@ -148,7 +148,7 @@ def load_data(partition_id: int, num_partitions: int, batch_size: int):
 
     testloader = DataLoader(#test(検証用)
         partition_train_test["test"],
-        batch_size=batch_size,
+        batch_size=25,
         shuffle=False
     )
 

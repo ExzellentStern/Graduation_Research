@@ -118,8 +118,8 @@ def main(grid: Grid, context: Context) -> None:
     print("local_epochs   :", local_epochs)
     print("batch_size     :", batch_size)
     print("learning_rate  :", lr)
-    print("optimizer      : SGD")
-    print("data_split     : IID")
+    print("optimizer      : AdamW")
+    print("data_split     : IID")#非IIDは研究内容
     print("seed           : 42")
     print("================================")
 
@@ -129,7 +129,7 @@ def main(grid: Grid, context: Context) -> None:
         local_epochs=local_epochs,
         batch_size=batch_size,
         learning_rate=lr,
-        optimizer="SGD",
+        optimizer="AdamW",
         iid=True,
         seed=42,
     )

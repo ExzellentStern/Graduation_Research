@@ -66,7 +66,15 @@ def train(msg: Message, context: Context):
 
     # ローカル学習の結果を、サーバに返すための処理をここで行う.
     #クライアントで学習し終わったモデルの重みstate_dictを取り出し,Flowerが通信に使える形式であるArrayRecordに変換する.
-    model_record = ArrayRecord(model.state_dict())
+    #model_record = ArrayRecord(model.state_dict())
+    # ===== サーバへ返す直前に CPU に戻す（重要）=====
+    state_dict_cpu = {
+        k: v.detach().cpu()
+        for k, v in model.state_dict().items()
+    }
+    model_record = ArrayRecord(state_dict_cpu)
+    # ===== ここまで =====
+
     #学習に関するメタデータなど.num-examplesはこのクライアントが学習に使ったデータ数.FedAvg では データ数に応じた重み付き平均を取るために使われる.
     metrics = {
         "train_loss": train_loss,
