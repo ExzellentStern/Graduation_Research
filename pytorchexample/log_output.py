@@ -1,4 +1,5 @@
-# log_output.py
+#これは提出しなくていい.ログの出力だけであって村松先生の課題とは一切関係ない.
+#笠原がレポートを書きやすくするために作成しているものであり,FLの動作に一才の影響を及ぼさない.
 import os
 import csv
 from datetime import datetime
@@ -6,9 +7,7 @@ from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# =========================
-# ログ保存先
-# =========================
+#ログの保存先
 LOG_DIR = "logs"
 CLIENT_CSV = os.path.join(LOG_DIR, "client_metrics.csv")
 SERVER_CSV = os.path.join(LOG_DIR, "server_metrics.csv")

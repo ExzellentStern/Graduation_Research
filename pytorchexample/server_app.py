@@ -1,49 +1,80 @@
-"""pytorchexample: A Flower / PyTorch app."""
-#以下,結果をわかりやすくするためにインポートするやつ
+"""
+このファイルの役割（Server側）：
+
+- Federated Learning の全体制御
+- グローバルモデルの初期化
+- クライアントへの学習設定配布（train_config）
+- FedAvg による集約
+- 各ラウンド後のグローバル評価
+- 固定画像による可視化ログ出力
+- 最終モデル保存
+
+※ 攻撃設定（attack_type 等）や IID/non-IID 設定はここからクライアントへ配布される。
+"""
+
+# ============================================================
+# 可視化・ログ用ライブラリ
+# ============================================================
 import os
 import csv
 import torch.nn.functional as F
 from torchvision.utils import save_image, make_grid
 
-
-# ここまで
+# ============================================================
+# Flower / PyTorch 関連
+# ============================================================
 import torch
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
-from pytorchexample.log_output import log_server_metrics, print_round_summary, log_run_config
-from pytorchexample.FL_assignment import Net, load_centralized_dataset, test
+
+from pytorchexample.log_output import (
+    log_server_metrics,
+    print_round_summary,
+    log_run_config,
+)
+from pytorchexample.task import Net, load_centralized_dataset, test
+
 
 app = ServerApp()
 
-# ここ各ラウンドごとのラベルづけされた画像をファイルに出力するためのプログラム
+# ============================================================
+# 固定評価用データ（毎ラウンド同じ入力を使う）
+# ============================================================
+_FIXED_IMAGES_CPU = None
+_FIXED_LABELS_CPU = None
 
-_FIXED_IMAGES_CPU = None  # shape: (N,3,32,32)  正規化済み
-_FIXED_LABELS_CPU = None  # shape: (N,)
 
 def _unnormalize(imgs: torch.Tensor) -> torch.Tensor:
-    """Normalize((0.5),(0.5)) を逆変換して [0,1] に戻す（保存・可視化用）"""
+    """[-1,1] 正規化を [0,1] に戻す（画像保存用）"""
     return torch.clamp(imgs * 0.5 + 0.5, 0.0, 1.0)
+
 
 def _get_fixed_batch(n_images: int = 32):
     """
-    テストデータローダの「先頭から n_images 枚」を固定セットとして確保する。
-    1回目だけロードしてCPUにキャッシュ、以降は同じ画像を使う。
+    テストデータの先頭から n_images 枚を固定評価セットとして使用。
+    1度だけ読み込み、以降はキャッシュを使う。
     """
     global _FIXED_IMAGES_CPU, _FIXED_LABELS_CPU
+
     if _FIXED_IMAGES_CPU is not None:
         return _FIXED_IMAGES_CPU, _FIXED_LABELS_CPU
 
-    # load_centralized_dataset() は shuffle=False のはずなので、先頭バッチは毎回同じ
     dl = load_centralized_dataset()
     batch = next(iter(dl))
+
     images = batch["img"][:n_images].detach().cpu()
     labels = batch["label"][:n_images].detach().cpu()
 
     _FIXED_IMAGES_CPU = images
     _FIXED_LABELS_CPU = labels
+
     return _FIXED_IMAGES_CPU, _FIXED_LABELS_CPU
 
+
+# ============================================================
+# 固定評価結果の保存
+# ============================================================
 def _save_round_fixed_eval(
     server_round: int,
     images: torch.Tensor,
@@ -53,33 +84,30 @@ def _save_round_fixed_eval(
     out_root: str = "logs/fixed_eval",
 ):
     """
-    ラウンドごとの固定セット推論結果を保存する。
-    - preds.csv: index/true/pred/conf
-    - grid.png: 画像一覧
-    - mis/*.png: 誤分類画像だけ、ファイル名に true/pred/conf を埋め込む（ラベル付き画像）
+    各ラウンドでの固定画像に対する予測結果を保存する。
+
+    保存内容：
+    - preds.csv（予測結果一覧）
+    - grid.png（画像一覧）
+    - mis/*.png（誤分類画像のみ）
     """
     out_dir = os.path.join(out_root, f"round_{server_round:03d}")
     os.makedirs(out_dir, exist_ok=True)
 
-    # CSV 保存
+    # ===================== CSV保存 =====================
     csv_path = os.path.join(out_dir, "preds.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["index", "true_label", "pred_label", "confidence"])
+        writer = csv.writer(f)
+        writer.writerow(["index", "true_label", "pred_label", "confidence"])
         for i in range(labels.size(0)):
-            w.writerow([
-                i,
-                int(labels[i].item()),
-                int(preds[i].item()),
-                float(confs[i].item()),
-            ])
+            writer.writerow([i, int(labels[i]), int(preds[i]), float(confs[i])])
 
-    # 画像grid保存（固定画像なので毎ラウンド同じだが、比較の基準として置いておくと便利）
+    # ===================== グリッド画像保存 =====================
     vis = _unnormalize(images.detach().cpu())
     grid = make_grid(vis, nrow=8)
     save_image(grid, os.path.join(out_dir, "grid.png"))
 
-    # 誤分類画像のみ、ラベル入りファイル名で保存（←これが“ラベルづけされた画像”）
+    # ===================== 誤分類画像保存 =====================
     mis_dir = os.path.join(out_dir, "mis")
     os.makedirs(mis_dir, exist_ok=True)
 
@@ -88,111 +116,199 @@ def _save_round_fixed_eval(
     confs_cpu = confs.detach().cpu()
 
     for i in range(labels_cpu.size(0)):
-        t = int(labels_cpu[i].item())
-        p = int(preds_cpu[i].item())
+        t = int(labels_cpu[i])
+        p = int(preds_cpu[i])
         if p != t:
-            c = float(confs_cpu[i].item())
+            c = float(confs_cpu[i])
             filename = f"{i:03d}_true{t}_pred{p}_conf{c:.3f}.png"
             save_image(vis[i], os.path.join(mis_dir, filename))
 
-#ここまで
-#サーバーのメイン処理
+
+# ============================================================
+# 追加：毎ラウンド config を train/eval 両方に配る FedAvg
+# ============================================================
+class FedAvgWithPerRoundConfig(FedAvg):
+    """
+    - configure_train / configure_evaluate が呼ばれるたびに、
+      クライアントへ渡す instructions に config を「そのラウンド番号付き」で注入する。
+    - Flowerのバージョン差（Message/RecordDict/FitInsなど）を吸収して、
+      ConfigRecord が空にならないようにする。
+    """
+
+    def __init__(
+        self,
+        *,
+        fraction_evaluate: float,
+        lr: float,
+        data_split: str,
+        alpha: float,
+        attack_type: str,
+        malicious_ids,
+        poison_rate: float,
+    ):
+        super().__init__(fraction_evaluate=fraction_evaluate)
+        self._base_cfg = {
+            "lr": lr,
+            "data_split": data_split,
+            "alpha": alpha,
+            "attack_type": attack_type,
+            "malicious_ids": malicious_ids,
+            "poison_rate": poison_rate,
+        }
+
+    def _cfg(self, server_round: int) -> ConfigRecord:
+        d = dict(self._base_cfg)
+        d["server_round"] = server_round
+        return ConfigRecord(d)
+
+    def _inject_config_anywhere(self, ins, cfg: ConfigRecord) -> bool:
+        """Flowerのバージョン差を吸収して、configをとにかく届く形で入れる。"""
+
+        # Case A: ins が Message で ins.content が RecordDict/TypedDict など
+        if hasattr(ins, "content"):
+            try:
+                ins.content["config"] = cfg
+                return True
+            except Exception:
+                pass
+
+        # Case B: ins が (client_proxy, something) のタプル
+        if isinstance(ins, tuple) and len(ins) == 2:
+            obj = ins[1]
+            if hasattr(obj, "content"):
+                try:
+                    obj.content["config"] = cfg
+                    return True
+                except Exception:
+                    pass
+            if hasattr(obj, "config"):
+                try:
+                    obj.config = cfg  # FitIns/EvaluateIns系
+                    return True
+                except Exception:
+                    pass
+
+        # Case C: FitIns/EvaluateIns っぽい（.config を持つ）
+        if hasattr(ins, "config"):
+            try:
+                ins.config = cfg
+                return True
+            except Exception:
+                pass
+
+        return False
+
+    def configure_train(self, server_round: int, *args, **kwargs):
+        instructions = super().configure_train(server_round, *args, **kwargs)
+        cfg = self._cfg(server_round)
+
+        for ins in instructions:
+            self._inject_config_anywhere(ins, cfg)
+
+        return instructions
+
+    def configure_evaluate(self, server_round: int, *args, **kwargs):
+        instructions = super().configure_evaluate(server_round, *args, **kwargs)
+        cfg = self._cfg(server_round)
+
+        for ins in instructions:
+            self._inject_config_anywhere(ins, cfg)
+
+        return instructions
+
+
+# ============================================================
+# メイン処理（FL全体制御）
+# ============================================================
 @app.main()
 def main(grid: Grid, context: Context) -> None:
-    """
-    gridがクライアントとの通信や分散実行を管理する仕組み
-    contextには実験設定（ラウンド数・学習率など）が入っている
-    """
+    # ===================== 実験設定読み込み（pyproject.toml） =====================
+    fraction_evaluate = context.run_config["fraction-evaluate"]
+    num_rounds = context.run_config["num-server-rounds"]
+    lr = context.run_config["learning-rate"]
+    local_epochs = context.run_config["local-epochs"]
+    batch_size = context.run_config["batch-size"]
 
-    #実験設定の読み込み
-    fraction_evaluate: float = context.run_config["fraction-evaluate"]
-    num_rounds: int = context.run_config["num-server-rounds"]
-    lr: float = context.run_config["learning-rate"]
-#ここから(変更箇所)
-    local_epochs: int = context.run_config["local-epochs"]
-    batch_size: int = context.run_config["batch-size"]
+    # ---- 追加：データ分割 / 攻撃 設定（無ければデフォルト） ----
+    data_split = context.run_config.get("data-split", "iid")                 # "iid" / "non_iid" / "dirichlet"
+    alpha = float(context.run_config.get("dirichlet-alpha", 0.5))            # Dirichlet 用
+    attack_type = context.run_config.get("attack-type", "none")              # "none" / "sign_flip" / "scale" / ...
+    malicious_ids = context.run_config.get("malicious-ids", [])              # 例: [0,1]
+    poison_rate = float(context.run_config.get("poison-rate", 0.0))          # label_flip 等で利用する想定
 
+    # 表示（確認用）
     print("=== Experiment Configuration ===")
-    print("rounds         :", num_rounds)
-    print("fraction_eval  :", fraction_evaluate)
-    print("local_epochs   :", local_epochs)
-    print("batch_size     :", batch_size)
-    print("learning_rate  :", lr)
-    print("optimizer      : AdamW")
-    print("data_split     : IID")#非IIDは研究内容
-    print("seed           : 42")
+    print("rounds        :", num_rounds)
+    print("fraction_eval :", fraction_evaluate)
+    print("local_epochs  :", local_epochs)
+    print("batch_size    :", batch_size)
+    print("learning_rate :", lr)
+    print("optimizer     : AdamW")
+    print("data_split    :", data_split, f"(alpha={alpha})")
+    print("attack_type   :", attack_type)
+    print("malicious_ids :", malicious_ids)
+    print("poison_rate   :", poison_rate)
+    print("seed          : 42")
     print("================================")
 
-    # 既存：ファイル保存用ログ（JSON / CSV想定）
+    # 実験ログ保存（あなたの log_run_config 仕様に合わせて iid を bool で渡す）
     log_run_config(
         rounds=num_rounds,
         local_epochs=local_epochs,
         batch_size=batch_size,
         learning_rate=lr,
         optimizer="AdamW",
-        iid=True,
+        iid=(data_split == "iid"),
         seed=42,
     )
-    #ここまで
 
-    # グローバルモデルの初期化
-    #CNNモデルNet()を生成,その重みであるstate_dictをArrayRecordに変換
+    # ===================== グローバルモデル初期化 =====================
     global_model = Net()
     arrays = ArrayRecord(global_model.state_dict())
 
-    #ここで FedAvg（Federated Averaging） を使用すると宣言
-    """
-    FedAvgの流れは以下↓
-    各クライアントがローカル学習
-    重みをサーバーに送信
-    サーバーが平均を取る
-    新しいグローバルモデルを配信
-    """
-    strategy = FedAvg(fraction_evaluate=fraction_evaluate)
-
-    # ここがめっちゃ重要なFLの動作
-    result = strategy.start(
-        grid=grid,
-        initial_arrays=arrays,#初期グローバルモデル
-        train_config=ConfigRecord({"lr": lr}),#クライアントに渡す学習設定
-        num_rounds=num_rounds,#サーバラウンド数
-        evaluate_fn=global_evaluate,#各ラウンド後に呼ばれる評価関数
+    # ===================== 集約戦略（毎ラウンド config を注入する版） =====================
+    strategy = FedAvgWithPerRoundConfig(
+        fraction_evaluate=fraction_evaluate,
+        lr=lr,
+        data_split=data_split,
+        alpha=alpha,
+        attack_type=attack_type,
+        malicious_ids=malicious_ids,
+        poison_rate=poison_rate,
     )
 
-    # Save final model to disk
+    # ===================== FL開始 =====================
+    # この Flower 版では start() が train_config_fn を受け取らないので、
+    # strategy 側（configure_train/evaluate）で毎ラウンド注入する。
+    result = strategy.start(
+        grid=grid,
+        initial_arrays=arrays,
+        num_rounds=num_rounds,
+        evaluate_fn=global_evaluate,
+    )
+
+    # ===================== 最終モデル保存 =====================
     print("\nSaving final model to disk...")
-    #Federated Learningの全ラウンド終了後に得られた最終的なグローバルモデルの重みであるresult.arraysを
-    #to_torch_state_dictでFlower用の配列型式からPyTorch の state_dict 形式に変換する.
-    #変換したものをfinal_model.ptに保存する.パラメータとかがファイルに入ってるが,人が読むようなファイルではない.
     state_dict = result.arrays.to_torch_state_dict()
     torch.save(state_dict, "final_model.pt")
 
-#Federated Learning の各サーバラウンド終了後に呼ばれる「評価係」を定義している
-def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
-    # CNNモデルを新しく生成
-    model = Net()
 
-    # Flower形式の重みarraysをPyTorchのstate_dictに変換し，モデルに読み込む
-    # これにより集約後のグローバルモデルができる
+# ============================================================
+# 各ラウンド後のグローバル評価
+# ============================================================
+def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
+    model = Net()
     model.load_state_dict(arrays.to_torch_state_dict())
 
-    # 評価を行う計算デバイスを設定
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
-
-    # ★評価モード（Dropoutなどを無効化してブレを減らす）
     model.eval()
 
-    # サーバが持っている 全体のテストデータを読み込む
+    # ===================== 全体テスト評価 =====================
     test_dataloader = load_centralized_dataset()
-
-    # グローバルモデルを使ってテストデータに対する予測を行い
-    # 平均損失(test_loss)と正解率(test_acc)を算出
     test_loss, test_acc = test(model, test_dataloader, device)
 
-    # ここから追加：固定画像セットの予測をラウンドごとに保存
-    # 固定画像セット（例：32枚）を毎回同じものとして使い、
-    # その予測ラベル/真のラベル/自信度をラウンド別に保存する
+    # ===================== 固定画像評価（可視化用） =====================
     fixed_images_cpu, fixed_labels_cpu = _get_fixed_batch(n_images=32)
     fixed_images = fixed_images_cpu.to(device)
     fixed_labels = fixed_labels_cpu.to(device)
@@ -210,13 +326,9 @@ def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
         confs=confs,
         out_root="logs/fixed_eval",
     )
-    # ===== 追加ここまで =====
 
-    #ログ出力（サーバ側 evaluate）
+    # ===================== ログ出力 =====================
     log_server_metrics(server_round, test_acc, test_loss)
     print_round_summary(server_round, accuracy=test_acc, loss_func=test_loss)
-    
 
-    # 評価結果を Flower 用の形式で返す
     return MetricRecord({"accuracy": test_acc, "loss_func": test_loss})
-

@@ -209,3 +209,5 @@ __marimo__/
 final_model.pt
 .DS_Store
 logs/
+
+out/

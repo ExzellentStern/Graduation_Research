@@ -24,12 +24,24 @@ publisher = "flwrlabs"
 serverapp = "pytorchexample.server_app:app"
 clientapp = "pytorchexample.client_app:app"
 
+# ============================================================
+# Flower アプリ設定（※このテーブルは1回だけ定義する）
+# ============================================================
 [tool.flwr.app.config]
-num-server-rounds = 100
+num-server-rounds = 5
 fraction-evaluate = 0.2
-local-epochs = 2  
+local-epochs = 1
 learning-rate = 0.001
 batch-size = 25
+
+# 追加：IID / non-IID
+data-split = "non_iid"          # "non_iid" または "dirichlet" に変える
+dirichlet-alpha = 0.6     # non_iid/dirichlet の時に効く（0.1で激偏り）
+
+# 追加：攻撃設定（今の実装に合わせる）
+attack-type = "none"        # "sign_flip" or "scale"
+malicious-ids = "0,1"      # 攻撃クライアントID
+poison-rate = 0.2
 
 [tool.flwr.federations]
 default = "local-simulation"
