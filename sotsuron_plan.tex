@@ -1,0 +1,318 @@
+\documentclass[a4j, twocolumn]{jsarticle}  % 研究計画は1段組が読みやすい（日本語対応）
+
+\usepackage[a4paper, left=2.0cm, right=2.0cm, top=2.0cm, bottom=2.0cm]{geometry} % 余白を標準寄りに
+\usepackage{amsmath}   % 数式用
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{titlesec}  % 見出し調整
+\usepackage{enumitem}  % 箇条書きの余白調整（見やすさ改善）
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% 見出し設定（強すぎないサイズに調整）
+\titleformat{\section}[block]
+  {\normalfont\Large\bfseries}
+  {\thesection}{1em}{} 
+\titleformat{\subsection}[block]
+  {\normalfont\large\bfseries}
+  {\thesubsection}{1em}{} 
+\titleformat{\subsubsection}[block]
+  {\normalfont\normalsize\bfseries}
+  {\thesubsubsection}{1em}{} 
+
+% 箇条書きの詰まりを軽減
+\setlist[itemize]{topsep=4pt, itemsep=2pt, leftmargin=*}
+
+\title{
+Federated LearningにおけるAdaptive Model Poisoning AttackとRobust Aggregationの評価に関する実験計画書
+}
+\author{3CDA2216 笠原秀星,3CDA2220 齋藤麻美}
+\date{\today}
+
+\begin{document}
+
+\maketitle  % タイトルを表示
+
+\section{研究背景・概要}
+
+Federated Learning（以下, FL）は, 生データを共有することなく複数のデバイスや組織が協調して機械学習モデルを学習する分散学習の枠組みである\cite{mammen2021fl}.
+FLは, ユーザのプライバシー保護と機械学習の両立を可能にする技術として注目されており, スマートフォンにおける単語予測や顔認識, 音声認識技術の向上に利用されている. また, 厳格なプライバシー規制によりデータ共有が困難な医療分野や, 自動運転車におけるリアルタイムデータの活用など, 幅広い分野への応用が期待されている\cite{li2019fl}.
+
+一方で, FLには収束性, データ分布の不均一性（Non-I.I.D.）, 通信コスト, 大規模環境への適用, モデル集約手法など, さまざまな課題が存在する\cite{ma2020privacy}. 特に, FLでは多数の参加者が学習に関与するため, 悪意のあるクライアントによる攻撃への耐性を確保することが重要な研究課題となっている. 医療データや個人情報などの機密性の高いデータを扱う応用が想定されることから, 安全かつ信頼性の高い学習環境の実現が求められている.
+
+FLに対する代表的な攻撃としてPoisoning Attackが挙げられる. Poisoning Attackは大きくData Poisoning AttackとModel Poisoning Attackの2種類に分類される. Data Poisoning Attackは学習データそのものを改ざんする攻撃であり, ラベル反転攻撃やBackdoor Attackなどが含まれる. 一方, Model Poisoning Attackはクライアントがサーバへ送信するモデル更新や勾配情報を改ざんする攻撃であり, 勾配操作や最適化手法を利用した攻撃などが提案されている.
+
+これらの攻撃に対する防御手法としては, 異常検知, Robust Aggregation, 摂動機構の3つに大別される. 異常検知にはコサイン類似度やクラスタリング, スコアベース手法などが用いられる. また, Robust AggregationにはKrum, Trimmed Mean, Median, Bulyanなどの集約手法が提案されている. さらに, 摂動機構としては差分プライバシーを利用した手法が広く研究されている\cite{sagar2023survey}.
+
+本研究では, これらの中でもModel Poisoning Attackに着目する. Data Poisoning Attackに関してはこれまで多くの研究が行われており, 攻撃に対して頑健な集約手法や検知手法が多数提案されている. 一方で, Model Poisoning Attackは学習データではなくモデル更新そのものを改ざんするため, サーバ側から攻撃を識別することが困難であり, より深刻な脅威となる. また, その防御手法に関する研究はData Poisoning Attackと比較して十分に進んでいるとは言えない.
+
+さらに, FangらはAdaptive Model Poisoning Attackを提案し, 既存のRobust Aggregation手法を考慮した攻撃によって防御機構を回避できる可能性を示している\cite{fang2020local}. このことは, 従来の防御手法が必ずしも十分な耐性を有していないことを示唆しており, Adaptive Model Poisoning Attackに対する詳細な評価が必要である.
+
+そこで本研究では, Non-I.I.D.環境下においてAdaptive Model Poisoning AttackがFLの学習性能に与える影響を評価する. また, KrumやTrimmed MeanなどのRobust Aggregation手法に対する攻撃の有効性を比較・分析し, 既存防御手法の限界を明らかにする. さらに, 攻撃が成立する要因について考察するとともに, Model Poisoning Attackに対する効果的な防御手法について検討することを目的とする.
+
+\section{事前知識}
+\subsection{Federated Learning}
+%FLとは何か.従来の機械学習とは何が違うのか.どういうアルゴリズムを用いるのかなど基礎的なFLの知識について述べる.
+%通信ラウンド,クライアント,サーバ
+%FLを攻撃と防御の観点からカテゴリー分けする.
+先に述べたようにFederated Learningは生データを共有することなく複数のデバイスや組織が協調して機械学習モデルを学習する分散学習の枠組みである\cite{mammen2021fl}.
+集約アルゴリズムとしてFederated Averaging (以下,FedAvg)を用いる.FedAvgはGoogleが2016年に発表した論文の中で示されたものである\cite{mcmahan2017fedavg}.
+
+\subsubsection{FedAvg}
+\begin{table}[t]
+\centering
+\caption{FedAvgで用いる主な記号}
+\begin{tabular}{ll}
+\hline
+記号 & 意味 \\
+\hline
+$K$ & 全クライアント数 \\
+$C$ & 各ラウンドで参加する割合 \\
+$S_t$ & ラウンド$t$で選択されたクライアント集合 \\
+$w_t$ & グローバルモデル \\
+$w_{t+1}^k$ & クライアント$k$が更新したモデル \\
+$n_k$ & クライアント$k$のデータ数 \\
+$E$ & ローカル学習のエポック数 \\
+$B$ & ミニバッチサイズ \\
+$\eta$ & 学習率 \\
+\hline
+\end{tabular}
+\label{tab:fedavg_symbol}
+\end{table}
+\begin{algorithm}[t]
+\caption{Federated Averaging (FedAvg)}
+\label{alg:fedavg}
+\begin{algorithmic}[1]
+
+\State \textbf{Server executes:}
+\State Initialize $w_0$
+
+\For{each round $t = 1,2,\ldots$}
+    \State $m \leftarrow \max(C \cdot K, 1)$
+    \State $S_t \leftarrow$ random set of $m$ clients
+
+    \ForAll{$k \in S_t$ in parallel}
+        \State $w_{t+1}^{k} \leftarrow \mathrm{ClientUpdate}(k,w_t)$
+    \EndFor
+
+    \State $
+    w_{t+1}
+    \leftarrow
+    \sum_{k \in S_t}
+    \frac{n_k}{n_t}
+    w_{t+1}^{k}
+    $
+\EndFor
+
+\Statex
+\State \textbf{ClientUpdate}$(k,w)$
+\State Split $P_k$ into batches of size $B$
+
+\For{$i=1$ to $E$}
+    \For{batch $b \in B$}
+        \State $
+        w \leftarrow
+        w-\eta\nabla\ell(w;b)
+        $
+    \EndFor
+\EndFor
+
+\State \Return $w$ to server
+
+\end{algorithmic}
+\end{algorithm}
+アルゴリズム\ref{alg:fedavg}にFedAvgの処理手順を示す。
+
+まず，サーバはグローバルモデル $w_0$ を初期化する。
+その後，各通信ラウンド $t$ において，全クライアント数 $K$ のうち割合 $C$ に応じた $m$ 個のクライアントをランダムに選択する。
+選択されたクライアント集合を $S_t$ とする。
+
+選択された各クライアントは，サーバから受け取ったグローバルモデル $w_t$ を用いてローカル学習を実施する。
+各クライアントは自身が保有するデータ集合 $P_k$ をミニバッチサイズ $B$ ごとに分割し，エポック数 $E$ 回の学習を行う。
+モデル更新には確率的勾配降下法（SGD）を用い，学習率を $\eta$ とすると，各ミニバッチ $b$ に対して次式によりパラメータを更新する。
+
+\begin{equation}
+w \leftarrow w-\eta\nabla \ell(w;b)
+\end{equation}
+
+ここで，$\ell(w;b)$ はミニバッチ $b$ に対する損失関数であり，$\nabla \ell(w;b)$ はその勾配を表す。
+
+ローカル学習終了後，各クライアントは更新後のモデル $w_{t+1}^{k}$ をサーバへ送信する。
+サーバは受信したモデルを，各クライアントの保有データ数 $n_k$ に応じて重み付け平均することで新たなグローバルモデル $w_{t+1}$ を生成する。
+
+\begin{equation}
+w_{t+1}
+=
+\sum_{k \in S_t}
+\frac{n_k}{n_t}
+w_{t+1}^{k}
+\end{equation}
+
+ただし，
+
+\begin{equation}
+n_t=\sum_{k\in S_t}n_k
+\end{equation}
+
+である。
+この処理を複数ラウンド繰り返すことで，生データを共有することなくグローバルモデルを学習する。
+\subsection{Data Poisoning Attack}
+
+Data Poisoning Attackは，攻撃者が学習データそのものを改ざんし，グローバルモデルの性能低下や誤動作を引き起こす攻撃である。Federated Learningでは，各クライアントが保有するローカルデータや学習過程をサーバが直接確認できないため，悪意のあるクライアントが改ざんしたデータを用いて学習を行うことで，モデルに悪影響を与えることが可能である\cite{sagar2023survey}。
+
+Data Poisoning Attackは，Label Flipping Attack，Poisoning Sample Attack，Backdoor Attackなどに分類される。Label Flipping Attackは，学習データのラベルを意図的に別のラベルへ変更する攻撃である。例えば，数字認識タスクにおいて「1」のラベルを「7」に変更して学習させることで，モデルの分類性能を低下させることができる。
+
+Poisoning Sample Attackは，学習データそのものを改ざんする攻撃であり，ノイズの付加や特定のパターンの埋め込みなどによって学習結果を操作する。
+
+一方，Backdoor Attackは，特定のトリガを含む入力に対してのみ誤分類を引き起こす攻撃である。攻撃者はトリガ付きデータを学習データへ混入させることで，通常の入力に対する性能を維持したまま，トリガを含む入力に対してのみ攻撃者が指定したラベルを出力するようモデルを誘導する。そのため，Backdoor Attackは高い攻撃成功率とステルス性を有しており，発見が困難であるという特徴を持つ。
+
+Data Poisoning Attackは実装が比較的容易である一方，異常なデータ分布やラベルの偏りを利用した検知手法によって防御できる場合がある。そのため近年では，学習データではなくモデル更新そのものを改ざんするModel Poisoning Attackに関する研究が盛んに行われている\cite{sagar2023survey}\cite{xie2020dba}\cite{nguyen2022flame}。
+
+
+
+\subsection{Model Poisoning Attack}
+
+Model Poisoning Attackは，悪意のあるクライアントがサーバへ送信するモデル更新や勾配情報を改ざんし，グローバルモデルの性能低下や誤動作を引き起こす攻撃である。Data Poisoning Attackが学習データそのものを改ざんするのに対し，Model Poisoning Attackは学習後のモデルパラメータを直接操作する点に特徴がある。そのため，サーバ側から攻撃の有無を判断することが困難であり，Federated Learningにおける深刻な脅威の一つとして注目されている\cite{sagar2023survey}。
+
+Model Poisoning Attackは，Gradient Manipulation，Optimization Methods，Untargeted Attackの3種類に分類される\cite{sagar2023survey}。Gradient Manipulationは，モデル更新の勾配を意図的に操作する攻撃であり，勾配反転（Sign Flipping Attack）やランダムな勾配の挿入などが代表例として知られている。これらの攻撃は，グローバルモデルの収束を妨害し，性能を低下させることを目的とする。
+
+Optimization Methodsは，攻撃効果を最大化するようにモデル更新を最適化する攻撃である。攻撃者は正常なモデル更新との差を小さく保ちながら，攻撃目的を達成するようにモデルを改ざんすることで，異常検知や防御機構による検出を回避する。Backdoor AttackやModel Replacement Attackの多くはこの分類に含まれる。
+
+Untargeted Attackは，特定の入力に対する誤分類ではなく，グローバルモデル全体の性能低下を目的とする攻撃である。攻撃者はモデル更新を大きく改ざんすることで，学習の収束を妨害し，モデルの可用性を低下させる。
+
+
+\subsection{Robust Aggregation}
+%Robust Aggregationとは何で,どんな種類があるのか述べる.数式などもあれば良い.
+%Krum,Mean,Trimmed Mean,Median,Bulyanなどについて論文で述べられていたはず.
+%それぞれの手法については\subsubsectionで書けばいいと思う.
+Robust Aggregationは，悪意のあるクライアントによる異常なモデル更新の影響を軽減することを目的とした集約手法である\cite{sagar2023survey}。従来のFedAvgでは，各クライアントから送信されたモデル更新を重み付き平均によって集約するため，悪意のあるクライアントが極端なモデル更新を送信した場合，グローバルモデルが大きな影響を受ける可能性がある。
+
+この問題に対処するため，Byzantine Fault Toleranceの考え方を取り入れたRobust Aggregationが提案されている。代表的な手法としてMean（FedAvg），Median，Trimmed Mean，Krum，Bulyanなどが知られており，異常なモデル更新を除外または影響を低減しながらグローバルモデルを更新する。
+
+\subsubsection{Mean (FedAvg)}
+
+FedAvgは，Federated Learningにおいて最も広く利用されている集約手法である。各クライアントから送信されたモデル更新を，保有するデータ数に応じて重み付け平均することで新たなグローバルモデルを生成する。
+
+FedAvgは実装が容易で計算コストも低いという利点を持つ一方，異常なモデル更新の影響を受けやすいという欠点がある。そのため，Model Poisoning Attackに対して脆弱であることが知られている。
+
+\subsubsection{Median}
+
+Medianは，各パラメータについて中央値を採用する集約手法である。平均値ではなく中央値を利用することで，極端に大きな値や小さな値の影響を受けにくくなる。
+
+そのため，悪意のあるクライアントが異常なモデル更新を送信した場合でも，その影響を軽減できる。しかし，多数のクライアントが攻撃に参加している場合には性能が低下する可能性がある。
+
+\subsubsection{Trimmed Mean}
+
+Trimmed Meanは，各パラメータについて極端に大きい値と小さい値を一定数除外した後に平均を計算する手法である。
+
+この手法は外れ値の影響を低減できるため，単純な平均よりもModel Poisoning Attackに対して頑健である。一方で，正常なクライアントの更新が除外される場合もあり，学習性能が低下する可能性がある。
+
+\subsubsection{Krum}
+
+Krumは，各クライアントのモデル更新と他のクライアントとの距離を計算し，最も多くのクライアントと類似しているモデル更新を選択する手法である。
+
+平均を取るのではなく，信頼できると判断された単一のモデル更新を採用するため，異常なモデル更新を排除しやすいという特徴を持つ。しかし，クライアント数が増加すると計算コストが大きくなるという課題がある。
+
+\subsubsection{Bulyan}
+
+Bulyanは，KrumとTrimmed Meanを組み合わせた集約手法である。まずKrumを用いて信頼できるモデル更新を選択し，その後Trimmed Meanによって集約を行う。
+
+複数のByzantine攻撃に対して高い耐性を持つことが報告されているが，計算コストが大きく，クライアント数が多い環境では実行時間が増加するという欠点がある。
+
+本研究では，FedAvgを基準手法とし，Median，Trimmed Mean，KrumおよびBulyanをRobust Aggregationとして採用する。また，Adaptive Model Poisoning Attackを適用した場合の攻撃成功率やモデル精度の変化を比較し，各集約手法の有効性を評価する。
+
+
+%あとでそれぞれの手法の代表論文についても確認して示さなきゃいけないと思うけど,とりあえずはこれで.
+%まだ論文を読んでないので必要に応じて収集する.
+\section{関連研究}
+%実験するにあたって,何を使うのか,どんな環境で行うのかを再現性の観点から詳細に書く.
+\section{研究目的・課題}
+%関連研究を踏まえた上で研究目的と課題をまとめる.
+\section{実験方法}
+\subsection{データセット}
+%多分MNISTかなぁ．
+\subsection{モデル}
+%Adoptive Attackの論文で使われているモデルを確認する必要がある.
+\subsection{攻撃手法}
+\subsection{防御手法}
+
+\section{評価方法}
+\subsection{評価指標}
+\subsection{比較条件}
+
+\section{実験環境}
+
+\section{スケジュール}
+\begin{thebibliography}{99}
+
+\bibitem{mammen2021fl}
+Priyanka Mary Mammen,
+``Federated Learning: Opportunities and Challenges,''
+Proceedings of ACM Conference,
+2021.
+\bibitem{li2019fl}
+Tian Li,
+Anit Kumar Sahu,
+Ameet Talwalkar,
+Virginia Smith,
+``Federated Learning: Challenges, Methods, and Future Directions,''
+arXiv preprint arXiv:1908.07873,
+2019.
+\bibitem{ma2020privacy}
+Chuan Ma,
+Jun Li,
+Ming Ding,
+Howard H. Yang,
+Feng Shu,
+Tony Q. S. Quek,
+H. Vincent Poor,
+``On Safeguarding Privacy and Security in the Framework of Federated Learning,''
+arXiv preprint arXiv:1909.06512,
+2020.
+
+\bibitem{sagar2023survey}
+Subhash Sagar,
+Chang-Tsun Li,
+Seng W. Loke,
+Jinho Choi,
+``Poisoning Attacks and Defenses in Federated Learning: A Survey,''
+IEEE Security \& Privacy,
+2023.
+
+\bibitem{fang2020local}
+Minghong Fang,
+Xiaoyu Cao,
+Jinyuan Jia,
+Neil Zhenqiang Gong,
+``Local Model Poisoning Attacks to Byzantine-Robust Federated Learning,''
+Proceedings of the 29th USENIX Security Symposium (USENIX Security 2020),
+pp. 1605--1622,
+2020.
+\bibitem{mcmahan2017fedavg}
+H. Brendan McMahan,
+Eider Moore,
+Daniel Ramage,
+Seth Hampson,
+Blaise Aguera y Arcas,
+``Communication-Efficient Learning of Deep Networks from Decentralized Data,''
+Proceedings of the 20th International Conference on Artificial Intelligence and Statistics (AISTATS),
+pp. 1273--1282,
+2017.
+\bibitem{xie2020dba}
+Chulin Xie,
+Keli Huang,
+Pin-Yu Chen,
+Bo Li,
+``DBA: Distributed Backdoor Attacks against Federated Learning,''
+International Conference on Learning Representations (ICLR),
+2020.
+\bibitem{nguyen2022flame}
+Tuan D. Nguyen et al.,
+``FLAME: Taming Backdoors in Federated Learning,''
+31st USENIX Security Symposium (USENIX Security 2022),
+pp. 1415--1432,
+2022.
+\end{thebibliography}
+
+\end{document}
