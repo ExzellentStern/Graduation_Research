@@ -1,0 +1,320 @@
+\documentclass[a4j, twocolumn]{jsarticle}  % jsarticleクラスを指定（日本語対応）
+
+\usepackage[a4paper, left=1.0cm, right=1.0cm, top=1.5cm, bottom=1.5cm]{geometry} % マージンの設定
+\usepackage{amsmath}   % 数式用パッケージ
+\usepackage{graphicx}  % 画像用パッケージ
+\usepackage{lipsum}    % ダミーテキスト生成用パッケージ（任意）
+\usepackage{titlesec}  % 見出しのカスタマイズ
+
+% 見出し番号のサイズを小さく設定
+\titleformat{\section}[block]
+  {\normalfont\Large\bfseries} % 見出しのフォント
+  {\thesection}{1em}{\MakeUppercase}  % 見出し番号の設定
+\titleformat{\subsection}[block]
+  {\normalfont\large\bfseries} % 小さめの見出し
+  {\thesubsection}{1em}{}  % 見出し番号を含む
+\titleformat{\subsubsection}[block]
+  {\normalfont\normalsize\bfseries} % 更に小さく
+  {\thesubsubsection}{1em}{} 
+
+\newcommand{\answerline}[1]{%
+    \par\noindent\rule{\textwidth}{0.6pt}
+    %\vspace{#1}
+}
+
+\title{斎藤のTodoリスト(6/16-6/22)}  % タイトル
+\author{}  % 著者名
+\date{}  % 日付を表示しない
+\begin{document}
+
+\maketitle  % タイトルを表示
+\section{論文調査}
+
+以下の論文を読み，卒業論文の実験計画を作成するために必要な情報を調査してください．\\
+2.1~2.9を行なってください.調べ学習です.2.10と3章は笠原がやります.
+
+\subsection{対象論文}
+
+\textbf{Local Model Poisoning Attacks to Byzantine-Robust Federated Learning}\\
+Minghong Fang, Xiaoyu Cao, Jinyuan Jia, Neil Zhenqiang Gong\\
+USENIX Security Symposium 2020
+
+\subsection{調査目的}
+
+以下の卒業論文構成を埋めるための情報を収集すること．\\
+作成中の実験計画書自体はGithubに置いてあります．必要に応じてクローンして利用してください．
+
+\begin{itemize}
+    \item 研究目的・課題
+    \item 実験方法
+    \begin{itemize}
+        \item データセット
+        \item モデル
+        \item 攻撃手法
+        \item 防御手法
+    \end{itemize}
+    \item 評価方法
+    \begin{itemize}
+        \item 評価指標
+        \item 比較条件
+    \end{itemize}
+    \item 実験環境
+\end{itemize}
+
+\section{作業内容}
+
+\subsection{研究目的・課題}
+
+以下の内容を調査すること．
+
+\begin{itemize}
+    \item この論文で解決しようとしている問題
+    \item 従来研究の問題点
+    \item 著者らが提案した手法
+    \item 論文の新規性
+\end{itemize}
+
+%\subsection{関連研究}
+
+%以下の論文について調査すること．
+
+%\begin{itemize}
+%    \item Fang et al. (2020)\\
+%    \textit{Local Model Poisoning Attacks to Byzantine-Robust Federated Learning}
+%
+%    \item Xie et al. (2020)\\
+%    \textit{DBA: Distributed Backdoor Attacks against Federated Learning}
+
+%    \item Bagdasaryan et al. (2020)\\
+%    \textit{How To Backdoor Federated Learning}
+
+%    \item Nguyen et al. (2022)\\
+%    \textit{FLAME: Taming Backdoors in Federated Learning}
+
+%    \item Sagar et al. (2023)\\
+%    \textit{Poisoning Attacks and Defenses in Federated Learning: A Survey}
+%\end{itemize}
+
+%以下をまとめること．
+
+%\begin{itemize}
+%    \item 何を提案した論文か
+%    \item 攻撃研究か防御研究か
+%    \item 評価対象
+%    \item 使用データセット
+%    \item 本研究との関係
+%\end{itemize}
+
+\subsection{データセット}
+
+論文中で使用されているデータセットを全て調査すること．
+
+特に以下について調査すること．
+
+\begin{itemize}
+    \item MNIST
+    \item Fashion-MNIST
+    \item CH-MNIST
+    \item Breast Cancer Wisconsin (Diagnostic)
+\end{itemize}
+
+以下の表形式で整理すること．
+
+\begin{center}
+\begin{tabular}{|c|c|c|c|}
+\hline
+データセット名 & クラス数 & サンプル数 & 用途 \\
+\hline
+ & & & \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{データセット比較調査}
+(優先度は一番下でいい.余裕があればやる)\\
+Federated Learningにおける攻撃・防御研究で利用されているデータセットを調査すること．
+
+以下をまとめること．
+
+\begin{itemize}
+    \item データセット名%ここはマスト
+    \item データの種類（画像・表形式など）%ここはマスト
+    \item 使用論文%ここは必要に応じて
+    \item 利用目的%ここは必要に応じて
+\end{itemize}
+
+特に以下について調査すること．
+
+\begin{itemize}
+    \item MNIST
+    \item Fashion-MNIST
+    \item CIFAR-10
+    \item CIFAR-100
+    \item FEMNIST
+    \item CH-MNIST
+    \item Breast Cancer Wisconsin
+\end{itemize}
+
+\subsection{モデル}
+
+論文で使用されている機械学習モデルを調査すること．
+
+以下をまとめること．
+
+\begin{itemize}
+    \item モデル名
+    \item 用途
+    \item ネットワーク構成
+\end{itemize}
+
+特に以下について調査すること．
+
+\begin{itemize}
+    \item Logistic Regression
+    \item Deep Neural Network (DNN)
+    \item ResNet20
+\end{itemize}
+
+\subsection{攻撃手法}
+
+論文で提案されている攻撃手法について調査すること．
+
+以下をまとめること．
+
+\begin{itemize}
+    \item 攻撃名
+    \item 攻撃対象
+    \item 攻撃の流れ
+    \item 攻撃者が操作するもの
+\end{itemize}
+
+特に以下について詳細に調査すること．
+
+\begin{itemize}
+    \item Local Model Poisoning Attack
+\end{itemize}
+
+\subsection{防御手法}
+
+論文で評価対象となっている防御手法について調査すること．
+
+以下をまとめること．
+
+\begin{itemize}
+    \item 手法名
+    \item 仕組み
+    \item 特徴
+\end{itemize}
+
+対象は以下とする．
+
+\begin{itemize}
+    \item Krum
+    \item Bulyan
+    \item Trimmed Mean
+    \item Median
+\end{itemize}
+
+\subsection{評価指標}
+
+論文で使用されている評価指標を調査すること．
+
+以下を調査すること．
+
+\begin{itemize}
+    \item Error Rate
+    \item Accuracy
+\end{itemize}
+
+その他使用されている指標があれば追加すること．
+
+\subsection{比較条件}
+
+どのような条件で比較実験を行っているか調査すること．
+
+例：
+
+\begin{itemize}
+    \item Full Knowledge
+    \item Partial Knowledge
+    \item IID
+    \item Non-IID
+    \item 攻撃者割合
+    \item データセットの違い
+    \item モデルの違い
+\end{itemize}
+
+\subsection{実験環境}
+
+論文中に記載されている実験設定を調査すること．
+
+以下をまとめること．
+
+\begin{itemize}
+    \item 使用フレームワーク
+    \item ワーカ数
+    \item 悪性クライアント数
+    \item 学習回数
+    \item バッチサイズ
+    \item ハイパーパラメータ
+\end{itemize}
+
+\subsection{卒論実験への適用案}
+(ここは笠原がやるので無理に描かなくていいです.)\\
+調査した内容を基に，
+卒業論文で採用可能な実験設定を提案すること．
+
+以下をまとめること．
+
+\begin{itemize}
+    \item 推奨データセット
+    \item 推奨モデル
+    \item 推奨攻撃手法
+    \item 推奨防御手法
+    \item 推奨評価指標
+    \item 推奨比較条件
+\end{itemize}
+
+それぞれについて理由も記載すること．
+
+
+
+\section{最終成果物}
+(ここは笠原がやるので無理に描かなくていいです.)\\
+以下の卒業論文構成が埋められるレベルまで調査すること．
+
+\begin{itemize}
+    \item 研究目的・課題
+    \item 実験方法
+    \begin{itemize}
+        \item データセット
+        \item モデル
+        \item 攻撃手法
+        \item 防御手法
+    \end{itemize}
+    \item 評価方法
+    \begin{itemize}
+        \item 評価指標
+        \item 比較条件
+    \end{itemize}
+    \item 実験環境
+\end{itemize}
+\section{提出形式}
+
+LaTeX文書とPDF両方をgithubに提出すること.
+難しい場合は要相談
+
+\section{注意事項}
+
+\begin{itemize}
+    \item 推測で書かないこと．
+    \item 情報が見つからない場合は「論文中に記載なし」と記載すること．
+    \item 可能な限り表形式で整理すること．%無理はしなくていい
+    \item 自分の意見と論文の内容を混同しないこと．
+    \item 大変な作業なので必要に応じて相談すること.
+    \item 報連相をしっかり行うこと．
+    \item 提出期限を守ること．
+    \item LaTeXで文章や表を作成するにあたり,生成AIを適宜利用することを推奨する.
+\end{itemize}
+
+\end{document}
