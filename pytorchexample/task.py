@@ -1,6 +1,6 @@
 """
 このファイルの役割
-- CNNモデル(Net)の定義（CIFAR-10 用）
+- 全結合DNNモデル(Net)の定義（MNIST 用）
 - Federated Learning 用データ分割（IID / Non-IID 切替）
 - 学習(train) / 評価(test) の基本ループ
 - サーバ側の共通テストデータローダ作成(load_centralized_dataset)
@@ -8,6 +8,12 @@
 ※ 注意：FLの実験では「再現性」が重要。
   - データ分割の seed を固定（seed=42）
   - 前処理（Normalizeなど）はサーバ・クライアントで揃える
+
+【変更履歴】CIFAR-10+CNN 版から MNIST+DNN 版へ変更（実験計画書 7.1 対応）
+  - データセットを uoft-cs/cifar10 → ylecun/mnist に変更
+  - Normalize をグレースケール1chの値に変更
+  - Net を CNN → 全結合DNN（入力784 → 128 → 64 → 10）に変更
+  - forward 内で画像を flatten する処理を追加
 """
 
 import torch
@@ -19,50 +25,43 @@ from torchvision.transforms import Compose, Normalize, ToTensor
 
 
 # ============================================================
-# 1) モデル定義（CIFAR-10 用 CNN）
+# 1) モデル定義（MNIST 用 全結合DNN）
+#    入力層(784) → 128 → 64 → 出力層(10), 活性化関数はReLU
 # ============================================================
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
 
-        # Conv(3→6, 5x5) → ReLU → MaxPool(2x2)
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-
-        # Conv(6→16, 5x5) → ReLU → MaxPool(2x2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-
-        # Flatten後の次元：16ch * 5 * 5
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
+        self.fc1 = nn.Linear(28 * 28, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 10)
 
         self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
-        x = self.pool(self.relu(self.conv1(x)))
-        x = self.pool(self.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
+        # (N, 1, 28, 28) -> (N, 784) にflatten
+        x = x.view(x.size(0), -1)
         x = self.relu(self.fc1(x))
-        x = self.dropout(x)
         x = self.relu(self.fc2(x))
         return self.fc3(x)
 
 
 # ============================================================
 # 2) データ前処理（PyTorchテンソル化 & 正規化）
+#    MNIST はグレースケール1chなので mean/std も1要素にする
+#    （MNIST全体の統計量: mean=0.1307, std=0.3081 を使用）
 # ============================================================
 pytorch_transforms = Compose([
     ToTensor(),
-    Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+    Normalize((0.1307,), (0.3081,)),
 ])
 
 
 def apply_transforms(batch):
     """HuggingFace datasets の batch に対して前処理を適用する。"""
 
-    # label だけ取得した時など、画像カラムが batch に存在しない場合がある
+    # MNIST(ylecun/mnist) の画像カラムは "image"。
+    # CIFAR-10 は "img" だったため、両対応のままにしておく。
     if "img" in batch:
         key = "img"
     elif "image" in batch:
@@ -85,7 +84,7 @@ def apply_transforms(batch):
 # 3) FL用データ分割（IID / Non-IID 切替）
 # ============================================================
 # 方針：
-# - CIFAR-10(train) を 1回だけ読み込み、各クライアント用 index を作って再利用する
+# - MNIST(train) を 1回だけ読み込み、各クライアント用 index を作って再利用する
 # - IID: 全データをシャッフルして均等分割
 # - Non-IID(Dirichlet): クラスごとに Dirichlet 分布で各クライアントへの割当比率を作り、偏りを導入
 #
@@ -95,12 +94,15 @@ def apply_transforms(batch):
 _TRAIN_DS = None
 _PARTITION_CACHE = {}  # key -> List[List[int]]
 
+# データセット名（MNIST）。切り替えが必要な場合はここだけ変更すればよい。
+_DATASET_NAME = "ylecun/mnist"
+
 
 def _load_train_dataset():
-    """CIFAR-10 train split をロードしてキャッシュする（1プロセスで1回）。"""
+    """MNIST train split をロードしてキャッシュする（1プロセスで1回）。"""
     global _TRAIN_DS
     if _TRAIN_DS is None:
-        _TRAIN_DS = load_dataset("uoft-cs/cifar10", split="train")
+        _TRAIN_DS = load_dataset(_DATASET_NAME, split="train")
         _TRAIN_DS = _TRAIN_DS.with_transform(apply_transforms)
     return _TRAIN_DS
 
@@ -233,7 +235,7 @@ def load_data(
 # 4) サーバ側で使用する「全体テストデータ」
 # ============================================================
 def load_centralized_dataset():
-    test_dataset = load_dataset("uoft-cs/cifar10", split="test")
+    test_dataset = load_dataset(_DATASET_NAME, split="test")
     dataset = test_dataset.with_format("torch").with_transform(apply_transforms)
     return DataLoader(dataset, batch_size=128)
 

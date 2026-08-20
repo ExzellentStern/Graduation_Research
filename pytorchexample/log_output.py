@@ -1,5 +1,4 @@
-#これは提出しなくていい.ログの出力だけであって村松先生の課題とは一切関係ない.
-#笠原がレポートを書きやすくするために作成しているものであり,FLの動作に一才の影響を及ぼさない.
+
 import os
 import csv
 from datetime import datetime
@@ -13,6 +12,12 @@ CLIENT_CSV = os.path.join(LOG_DIR, "client_metrics.csv")
 SERVER_CSV = os.path.join(LOG_DIR, "server_metrics.csv")
 CONFIG_TXT = os.path.join(LOG_DIR, "run_config.txt")
 PLOT_DIR = os.path.join(LOG_DIR, "plots")
+
+# 実験計画書 7.5 対応：実験条件を区別できる形のCSV
+# （server_metrics.csv は round/accuracy/loss_func のみで、複数条件・複数実行の
+#   結果を一つのファイルに貯めていく run_experiments.py（7.6）では条件を区別できない）
+RESULTS_CSV = os.path.join(LOG_DIR, "results.csv")
+SUMMARY_CSV = os.path.join(LOG_DIR, "summary.csv")
 
 
 # =========================
@@ -91,6 +96,96 @@ def log_server_metrics(
         if not file_exists:
             w.writerow(["round", "accuracy", "loss_func"])
         w.writerow([round_, accuracy, loss_func])
+
+
+# =========================
+# 実験結果ログ（実験計画書 7.5 対応）
+# =========================
+_RESULTS_COLUMNS = [
+    "run_id",
+    "round",
+    "accuracy",
+    "loss_func",
+    "aggregation_method",
+    "data_split",
+    "malicious_ratio",
+    "attack_type",
+    "seed",
+]
+
+_SUMMARY_COLUMNS = [
+    "run_id",
+    "final_round",
+    "final_accuracy",
+    "final_loss",
+    "aggregation_method",
+    "data_split",
+    "malicious_ratio",
+    "attack_type",
+    "seed",
+]
+
+
+def log_results_csv(
+    run_id: str,
+    round_: int,
+    accuracy: float,
+    loss_func: float,
+    aggregation_method: str,
+    data_split: str,
+    malicious_ratio: float,
+    attack_type: str,
+    seed: int,
+):
+    """ラウンドごとの Accuracy/Loss を、実験条件つきで logs/results.csv に追記する。"""
+    _ensure_dir()
+    file_exists = os.path.exists(RESULTS_CSV)
+    with open(RESULTS_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_RESULTS_COLUMNS)
+        w.writerow([
+            run_id,
+            round_,
+            accuracy,
+            loss_func,
+            aggregation_method,
+            data_split,
+            malicious_ratio,
+            attack_type,
+            seed,
+        ])
+
+
+def log_summary_csv(
+    run_id: str,
+    final_round: int,
+    final_accuracy: float,
+    final_loss: float,
+    aggregation_method: str,
+    data_split: str,
+    malicious_ratio: float,
+    attack_type: str,
+    seed: int,
+):
+    """1回の実行につき1行、最終ラウンドの Accuracy/Loss を logs/summary.csv に追記する。"""
+    _ensure_dir()
+    file_exists = os.path.exists(SUMMARY_CSV)
+    with open(SUMMARY_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_SUMMARY_COLUMNS)
+        w.writerow([
+            run_id,
+            final_round,
+            final_accuracy,
+            final_loss,
+            aggregation_method,
+            data_split,
+            malicious_ratio,
+            attack_type,
+            seed,
+        ])
 
 
 # =========================

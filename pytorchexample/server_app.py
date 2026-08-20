@@ -17,6 +17,7 @@
 # ============================================================
 import os
 import csv
+from datetime import datetime
 import torch.nn.functional as F
 from torchvision.utils import save_image, make_grid
 
@@ -24,16 +25,19 @@ from torchvision.utils import save_image, make_grid
 # Flower / PyTorch 関連
 # ============================================================
 import torch
-from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
+from flwr.app import ArrayRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
-from flwr.serverapp.strategy import FedAvg
 
 from pytorchexample.log_output import (
     log_server_metrics,
     print_round_summary,
     log_run_config,
+    log_results_csv,
+    log_summary_csv,
 )
 from pytorchexample.task import Net, load_centralized_dataset, test
+from pytorchexample.robust_strategy import RobustFedAvg
+from malicious import resolve_malicious_ids
 
 
 app = ServerApp()
@@ -125,100 +129,13 @@ def _save_round_fixed_eval(
 
 
 # ============================================================
-# 追加：毎ラウンド config を train/eval 両方に配る FedAvg
-# ============================================================
-class FedAvgWithPerRoundConfig(FedAvg):
-    """
-    - configure_train / configure_evaluate が呼ばれるたびに、
-      クライアントへ渡す instructions に config を「そのラウンド番号付き」で注入する。
-    - Flowerのバージョン差（Message/RecordDict/FitInsなど）を吸収して、
-      ConfigRecord が空にならないようにする。
-    """
-
-    def __init__(
-        self,
-        *,
-        fraction_evaluate: float,
-        lr: float,
-        data_split: str,
-        alpha: float,
-        attack_type: str,
-        malicious_ids,
-        poison_rate: float,
-    ):
-        super().__init__(fraction_evaluate=fraction_evaluate)
-        self._base_cfg = {
-            "lr": lr,
-            "data_split": data_split,
-            "alpha": alpha,
-            "attack_type": attack_type,
-            "malicious_ids": malicious_ids,
-            "poison_rate": poison_rate,
-        }
-
-    def _cfg(self, server_round: int) -> ConfigRecord:
-        d = dict(self._base_cfg)
-        d["server_round"] = server_round
-        return ConfigRecord(d)
-
-    def _inject_config_anywhere(self, ins, cfg: ConfigRecord) -> bool:
-        """Flowerのバージョン差を吸収して、configをとにかく届く形で入れる。"""
-
-        # Case A: ins が Message で ins.content が RecordDict/TypedDict など
-        if hasattr(ins, "content"):
-            try:
-                ins.content["config"] = cfg
-                return True
-            except Exception:
-                pass
-
-        # Case B: ins が (client_proxy, something) のタプル
-        if isinstance(ins, tuple) and len(ins) == 2:
-            obj = ins[1]
-            if hasattr(obj, "content"):
-                try:
-                    obj.content["config"] = cfg
-                    return True
-                except Exception:
-                    pass
-            if hasattr(obj, "config"):
-                try:
-                    obj.config = cfg  # FitIns/EvaluateIns系
-                    return True
-                except Exception:
-                    pass
-
-        # Case C: FitIns/EvaluateIns っぽい（.config を持つ）
-        if hasattr(ins, "config"):
-            try:
-                ins.config = cfg
-                return True
-            except Exception:
-                pass
-
-        return False
-
-    def configure_train(self, server_round: int, *args, **kwargs):
-        instructions = super().configure_train(server_round, *args, **kwargs)
-        cfg = self._cfg(server_round)
-
-        for ins in instructions:
-            self._inject_config_anywhere(ins, cfg)
-
-        return instructions
-
-    def configure_evaluate(self, server_round: int, *args, **kwargs):
-        instructions = super().configure_evaluate(server_round, *args, **kwargs)
-        cfg = self._cfg(server_round)
-
-        for ins in instructions:
-            self._inject_config_anywhere(ins, cfg)
-
-        return instructions
-
-
-# ============================================================
 # メイン処理（FL全体制御）
+#
+# 【変更履歴】毎ラウンドconfig配布 + Robust Aggregation の実体は
+# pytorchexample/robust_strategy.py の RobustFedAvg に統合した
+# （実験計画書 7.2 の aggregation.py と server_app.py の連携）。
+# 旧 FedAvgWithPerRoundConfig（_inject_config_anywhereによる回避策）は削除し、
+# 公式ドキュメント記載のシンプルな config 直接書き込み方式に統一した。
 # ============================================================
 @app.main()
 def main(grid: Grid, context: Context) -> None:
@@ -232,9 +149,42 @@ def main(grid: Grid, context: Context) -> None:
     # ---- 追加：データ分割 / 攻撃 設定（無ければデフォルト） ----
     data_split = context.run_config.get("data-split", "iid")                 # "iid" / "non_iid" / "dirichlet"
     alpha = float(context.run_config.get("dirichlet-alpha", 0.5))            # Dirichlet 用
-    attack_type = context.run_config.get("attack-type", "none")              # "none" / "sign_flip" / "scale" / ...
-    malicious_ids = context.run_config.get("malicious-ids", [])              # 例: [0,1]
+    attack_type = context.run_config.get("attack-type", "none")              # "none" / "sign_flip" / "scale" / "adaptive"
     poison_rate = float(context.run_config.get("poison-rate", 0.0))          # label_flip 等で利用する想定
+    seed = int(context.run_config.get("seed", 42))                           # 実験計画書7.5：データ分割の再現性用シード
+
+    # ---- 追加：実験計画書7.6：実験ごとに出力先を分けるためのディレクトリ ----
+    # run_experiments.py が実験条件ごとに別ディレクトリを渡すことで、
+    # final_model.pt / fixed_eval の画像が実験間で上書きされないようにする。
+    output_dir = str(context.run_config.get("output-dir", "."))
+    os.makedirs(output_dir, exist_ok=True)
+
+    # ---- 追加：悪性クライアント生成（実験計画書 7.3 対応） ----
+    # malicious-ids に手動指定（例: "0,1"）があればそちらを優先し、
+    # 空なら num-clients / malicious-ratio / malicious-seed から自動生成する。
+    num_clients = int(context.run_config.get("num-clients", 100))
+    malicious_ratio = float(context.run_config.get("malicious-ratio", 0.0))
+    malicious_seed = int(context.run_config.get("malicious-seed", 42))
+    malicious_ids_raw = str(context.run_config.get("malicious-ids", ""))
+    malicious_ids = resolve_malicious_ids(
+        num_clients=num_clients,
+        malicious_ratio=malicious_ratio,
+        seed=malicious_seed,
+        manual_ids_raw=malicious_ids_raw,
+    )
+
+    # ---- 追加：Robust Aggregation 設定（実験計画書 7.2 対応） ----
+    # "fedavg" / "median" / "trimmed_mean" / "krum" / "bulyan"
+    aggregation_method = context.run_config.get("aggregation-method", "fedavg")
+    # 防御側が想定する悪性クライアント数の上限 f。
+    # -1（pyproject.tomlのデフォルト＝未指定）なら、簡易的に実際の malicious_ids の数をそのまま使う
+    # （攻撃側と防御側の想定を分けて実験したい場合は run_config で 0 以上の値を明示的に指定すること）。
+    # ★注意：0 は「防御側は悪性クライアントがいないと想定する」という有効な設定であり、
+    #   「未指定」とは区別する必要があるため、番兵値として -1 を使っている。
+    num_malicious_assumed_raw = int(context.run_config.get("num-malicious-assumed", -1))
+    num_malicious_assumed = (
+        len(malicious_ids) if num_malicious_assumed_raw < 0 else num_malicious_assumed_raw
+    )
 
     # 表示（確認用）
     print("=== Experiment Configuration ===")
@@ -246,9 +196,12 @@ def main(grid: Grid, context: Context) -> None:
     print("optimizer     : AdamW")
     print("data_split    :", data_split, f"(alpha={alpha})")
     print("attack_type   :", attack_type)
+    print("num_clients   :", num_clients)
+    print("malicious_ratio:", malicious_ratio, f"(seed={malicious_seed}, manual={malicious_ids_raw!r})")
     print("malicious_ids :", malicious_ids)
     print("poison_rate   :", poison_rate)
-    print("seed          : 42")
+    print("aggregation   :", aggregation_method, f"(f_assumed={num_malicious_assumed})")
+    print("seed          :", seed)
     print("================================")
 
     # 実験ログ保存（あなたの log_run_config 仕様に合わせて iid を bool で渡す）
@@ -259,15 +212,23 @@ def main(grid: Grid, context: Context) -> None:
         learning_rate=lr,
         optimizer="AdamW",
         iid=(data_split == "iid"),
-        seed=42,
+        seed=seed,
     )
+
+    # ---- 追加：実験計画書7.5：results.csv / summary.csv 用の実行識別子 ----
+    run_id = (
+        f"{aggregation_method}_{data_split}_ratio{malicious_ratio}"
+        f"_seed{seed}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    )
+    # 最終ラウンドの結果を summary.csv に書くために覚えておく入れ物
+    last_eval = {}
 
     # ===================== グローバルモデル初期化 =====================
     global_model = Net()
     arrays = ArrayRecord(global_model.state_dict())
 
-    # ===================== 集約戦略（毎ラウンド config を注入する版） =====================
-    strategy = FedAvgWithPerRoundConfig(
+    # ===================== 集約戦略（毎ラウンド config 配布 + Robust Aggregation） =====================
+    strategy = RobustFedAvg(
         fraction_evaluate=fraction_evaluate,
         lr=lr,
         data_split=data_split,
@@ -275,7 +236,67 @@ def main(grid: Grid, context: Context) -> None:
         attack_type=attack_type,
         malicious_ids=malicious_ids,
         poison_rate=poison_rate,
+        seed=seed,
+        aggregation_method=aggregation_method,
+        num_malicious_assumed=num_malicious_assumed,
     )
+
+    # ===================== 各ラウンド後のグローバル評価 =====================
+    # 実験計画書7.5：results.csv に条件つきで書き込むため、main() 内のクロージャにして
+    # run_id / aggregation_method / data_split / malicious_ratio / attack_type / seed を
+    # そのまま参照できるようにしている。最終ラウンドの値は last_eval に残しておき、
+    # strategy.start() 完了後に summary.csv へ1行だけ書き込むのに使う。
+    def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
+        model = Net()
+        model.load_state_dict(arrays.to_torch_state_dict())
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        model.to(device)
+        model.eval()
+
+        # ===================== 全体テスト評価 =====================
+        test_dataloader = load_centralized_dataset()
+        test_loss, test_acc = test(model, test_dataloader, device)
+
+        # ===================== 固定画像評価（可視化用） =====================
+        fixed_images_cpu, fixed_labels_cpu = _get_fixed_batch(n_images=32)
+        fixed_images = fixed_images_cpu.to(device)
+        fixed_labels = fixed_labels_cpu.to(device)
+
+        with torch.no_grad():
+            logits = model(fixed_images)
+            probs = F.softmax(logits, dim=1)
+            confs, preds = torch.max(probs, dim=1)
+
+        _save_round_fixed_eval(
+            server_round=server_round,
+            images=fixed_images,
+            labels=fixed_labels,
+            preds=preds,
+            confs=confs,
+            out_root=os.path.join(output_dir, "fixed_eval"),
+        )
+
+        # ===================== ログ出力 =====================
+        log_server_metrics(server_round, test_acc, test_loss)
+        print_round_summary(server_round, accuracy=test_acc, loss_func=test_loss)
+
+        log_results_csv(
+            run_id=run_id,
+            round_=server_round,
+            accuracy=test_acc,
+            loss_func=test_loss,
+            aggregation_method=aggregation_method,
+            data_split=data_split,
+            malicious_ratio=malicious_ratio,
+            attack_type=attack_type,
+            seed=seed,
+        )
+        last_eval["round"] = server_round
+        last_eval["accuracy"] = test_acc
+        last_eval["loss_func"] = test_loss
+
+        return MetricRecord({"accuracy": test_acc, "loss_func": test_loss})
 
     # ===================== FL開始 =====================
     # この Flower 版では start() が train_config_fn を受け取らないので、
@@ -288,47 +309,21 @@ def main(grid: Grid, context: Context) -> None:
     )
 
     # ===================== 最終モデル保存 =====================
-    print("\nSaving final model to disk...")
+    model_path = os.path.join(output_dir, "final_model.pt")
+    print(f"\nSaving final model to {model_path} ...")
     state_dict = result.arrays.to_torch_state_dict()
-    torch.save(state_dict, "final_model.pt")
+    torch.save(state_dict, model_path)
 
-
-# ============================================================
-# 各ラウンド後のグローバル評価
-# ============================================================
-def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
-    model = Net()
-    model.load_state_dict(arrays.to_torch_state_dict())
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    model.eval()
-
-    # ===================== 全体テスト評価 =====================
-    test_dataloader = load_centralized_dataset()
-    test_loss, test_acc = test(model, test_dataloader, device)
-
-    # ===================== 固定画像評価（可視化用） =====================
-    fixed_images_cpu, fixed_labels_cpu = _get_fixed_batch(n_images=32)
-    fixed_images = fixed_images_cpu.to(device)
-    fixed_labels = fixed_labels_cpu.to(device)
-
-    with torch.no_grad():
-        logits = model(fixed_images)
-        probs = F.softmax(logits, dim=1)
-        confs, preds = torch.max(probs, dim=1)
-
-    _save_round_fixed_eval(
-        server_round=server_round,
-        images=fixed_images,
-        labels=fixed_labels,
-        preds=preds,
-        confs=confs,
-        out_root="logs/fixed_eval",
-    )
-
-    # ===================== ログ出力 =====================
-    log_server_metrics(server_round, test_acc, test_loss)
-    print_round_summary(server_round, accuracy=test_acc, loss_func=test_loss)
-
-    return MetricRecord({"accuracy": test_acc, "loss_func": test_loss})
+    # ===================== 実験計画書7.5：summary.csv（最終ラウンドの結果を1行） =====================
+    if last_eval:
+        log_summary_csv(
+            run_id=run_id,
+            final_round=last_eval["round"],
+            final_accuracy=last_eval["accuracy"],
+            final_loss=last_eval["loss_func"],
+            aggregation_method=aggregation_method,
+            data_split=data_split,
+            malicious_ratio=malicious_ratio,
+            attack_type=attack_type,
+            seed=seed,
+        )

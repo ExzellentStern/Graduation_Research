@@ -1,7 +1,4 @@
-"""
-このファイルは一応FederatedLearning関連なので提出するが,
-機械学習以外の操作も結構ある.課題評価としては概ねFL_assignmentを用いれば良いと思う.
-"""
+
 
 import torch
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
@@ -11,6 +8,7 @@ from pytorchexample.log_output import log_client_metrics, print_round_summary
 from pytorchexample.task import Net, load_data
 from pytorchexample.task import test as test_fn
 from pytorchexample.task import train as train_fn
+from attack import sign_flip_delta, scale_delta
 
 # 追加：ラベル分布の簡易サマリ用
 from collections import Counter
@@ -49,6 +47,7 @@ def train(msg: Message, context: Context):
     # --- IID / non-IID 用設定（データ分割）---
     data_split = cfg.get("data_split", "iid")
     alpha = float(cfg.get("alpha", 0.5))
+    seed = int(cfg.get("seed", 42))  # 実験計画書7.5：データ分割の再現性用シード
 
     # --- 攻撃用設定（保持：将来の拡張のため消さない）---
     attack_type = cfg.get("attack_type", "none")
@@ -60,9 +59,16 @@ def train(msg: Message, context: Context):
 
     # ============================================================
     # 1) モデル初期化（サーバから受け取った重みをロード）
+    #    ★実験計画書7.4：攻撃を「更新量ベース」で行うため、学習前のグローバル重みを
+    #      global_state_dict_cpu として退避しておく（Δ = local - global の計算に使う）。
     # ============================================================
+    global_state_dict_cpu = {
+        k: v.detach().cpu().clone()
+        for k, v in msg.content["arrays"].to_torch_state_dict().items()
+    }
+
     model = Net()
-    model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
+    model.load_state_dict(global_state_dict_cpu)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -81,6 +87,7 @@ def train(msg: Message, context: Context):
         batch_size,
         data_split=data_split,
         alpha=alpha,
+        seed=seed,
     )
 
     # 悪性クライアント判定
@@ -141,30 +148,37 @@ def train(msg: Message, context: Context):
     # ============================================================
     # 5) 学習後のモデル重みを取得（送信直前はCPUへ）
     # ============================================================
-    state_dict_cpu = {k: v.detach().cpu() for k, v in model.state_dict().items()}
+    local_state_dict_cpu = {k: v.detach().cpu() for k, v in model.state_dict().items()}
 
     # ============================================================
-    # 6) 攻撃（ここが重要：学習後・送信直前に適用）
-    #    ※ sign_flip / scale は維持
+    # 6) 攻撃（実験計画書7.4：更新量ベース Δ = local − global）
+    #    ここが重要：学習後・送信直前に、Δ = local - global に対して攻撃を適用し、
+    #    global + Δ_malicious として送信する。
+    #    ※ "adaptive" 攻撃は集約手法・他クライアントの更新を要するためサーバ側
+    #      （robust_strategy.py の aggregate_train）で集約直前に差し替える。
+    #      ここ（クライアント側）では何もせず、honestな更新のまま送信する。
     #    ※ poison_rate は将来の label_flip 等で使う想定なので保持
     # ============================================================
-    if is_malicious and attack_type == "sign_flip":
-        for k in state_dict_cpu:
-            state_dict_cpu[k] = -state_dict_cpu[k]
+    delta = {k: local_state_dict_cpu[k] - global_state_dict_cpu[k] for k in local_state_dict_cpu}
 
+    if is_malicious and attack_type == "sign_flip":
+        delta = sign_flip_delta(delta)
     elif is_malicious and attack_type == "scale":
-        scale_factor = 10.0
-        for k in state_dict_cpu:
-            state_dict_cpu[k] = scale_factor * state_dict_cpu[k]
+        delta = scale_delta(delta, scale_factor=10.0)
+
+    state_dict_to_send = {k: global_state_dict_cpu[k] + delta[k] for k in delta}
 
     # ============================================================
     # 7) サーバへ返送
     # ============================================================
-    model_record = ArrayRecord(state_dict_cpu)
+    model_record = ArrayRecord(state_dict_to_send)
 
     metrics = {
         "train_loss": train_loss,
         "num-examples": len(trainloader.dataset),
+        # サーバ側でAdaptive攻撃（実験計画書7.4）を適用する際、
+        # どの更新が悪性クライアント由来かを特定するために送る。
+        "partition-id": partition_id,
     }
 
     metric_record = MetricRecord(metrics)
@@ -183,6 +197,7 @@ def evaluate(msg: Message, context: Context):
 
     data_split = cfg.get("data_split", "iid")
     alpha = float(cfg.get("alpha", 0.5))
+    seed = int(cfg.get("seed", 42))  # 実験計画書7.5：データ分割の再現性用シード
     server_round = cfg.get("server_round", -1)
 
     # --- 攻撃設定（evaluateでは攻撃を適用しないが、表示・整合性確認用に読む）---
@@ -212,6 +227,7 @@ def evaluate(msg: Message, context: Context):
         batch_size,
         data_split=data_split,
         alpha=alpha,
+        seed=seed,
     )
 
     # 悪性クライアント判定（表示用）
