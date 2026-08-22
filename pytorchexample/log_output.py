@@ -65,20 +65,7 @@ def log_client_metrics(
     eval_acc: float | None = None,
     num_examples: int | None = None,
 ):
-    _ensure_dir()
-    file_exists = os.path.exists(CLIENT_CSV)
-    with open(CLIENT_CSV, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        if not file_exists:
-            w.writerow([
-                "round",
-                "client_id",
-                "train_loss",
-                "eval_loss",
-                "eval_acc",
-                "num_examples",
-            ])
-        w.writerow([round_, client_id, train_loss, eval_loss, eval_acc, num_examples])
+    return
 
 
 # =========================

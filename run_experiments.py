@@ -36,6 +36,7 @@ import argparse
 import csv
 import os
 import subprocess
+import sys
 from datetime import datetime
 
 AGGREGATION_METHODS = ["fedavg", "median", "trimmed_mean", "krum", "bulyan"]
@@ -85,7 +86,7 @@ def run_one(
 ) -> str:
     """1条件を実行する。戻り値は "done" / "skipped" / "failed"。"""
     name = condition_name(aggregation, data_split, ratio, seed)
-    output_dir = os.path.join(EXPERIMENTS_DIR, name)
+    output_dir = os.path.abspath(os.path.join(EXPERIMENTS_DIR, name))
 
     if is_done(output_dir):
         print(f"[SKIP] {name}（{output_dir}/final_model.pt が既に存在＝完了済み）")
@@ -102,11 +103,12 @@ def run_one(
         f'seed={seed} '
         f'attack-type="{ATTACK_TYPE}" '
         f'num-clients={num_clients} '
-        f'output-dir="{output_dir}"'
+        f'output-dir="{output_dir.replace(os.sep, "/")}"'
     )
 
+    flwr_executable = os.path.join(os.path.dirname(sys.executable), "flwr.exe")
     cmd = [
-        "flwr", "run", ".", federation,
+        flwr_executable, "run", ".",
         "--run-config", run_config,
         "--federation-config", f"num-supernodes={num_clients}",
         "--stream",  # --streamを付けないと flwr run は完了を待たずに即座に返ってしまう
@@ -131,7 +133,7 @@ def run_one(
 def main() -> None:
     parser = argparse.ArgumentParser(description="実験計画書7.6：全実験条件の自動実行")
     parser.add_argument("--quick", action="store_true", help="動作確認用の小規模設定で試す")
-    parser.add_argument("--federation", default="local-simulation", help="flwr run に渡すfederation名")
+    parser.add_argument("--federation", default=None, help="互換性のために保持（現在は既定Federationを使用）")
     args = parser.parse_args()
 
     if args.quick:

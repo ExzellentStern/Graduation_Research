@@ -39,10 +39,34 @@ quickstart-pytorch
 
 ### Install dependencies and project
 
-Install the dependencies defined in `pyproject.toml` as well as the `pytorchexample` package.
+On Windows, keep the virtual environment outside folders whose path contains
+non-ASCII characters. This avoids an encoding error when Python reads the
+editable-install path file.
 
-```bash
-pip install -e .
+```powershell
+py -3.11 -m venv "$HOME\.venvs\Graduation_Research"
+& "$HOME\.venvs\Graduation_Research\Scripts\Activate.ps1"
+python -m pip install --upgrade pip
+python -m pip install .
+python -m pip install pytest
+```
+
+In VS Code, select `$HOME\.venvs\Graduation_Research\Scripts\python.exe` as
+the Python interpreter.
+
+Because Ray can fail on Windows when the project path contains Japanese
+characters, run the experiment through the included synchronization script.
+It copies the current source to `C:\work\Graduation_Research`, configures 10
+simulated clients, and runs 50 rounds by default.
+
+```powershell
+.\run_experiment.ps1
+```
+
+To run a shorter test:
+
+```powershell
+.\run_experiment.ps1 -Rounds 1
 ```
 
 ## Run the project

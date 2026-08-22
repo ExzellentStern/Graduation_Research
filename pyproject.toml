@@ -28,7 +28,7 @@ clientapp = "pytorchexample.client_app:app"
 # Flower アプリ設定（※このテーブルは1回だけ定義する）
 # ============================================================
 [tool.flwr.app.config]
-num-server-rounds = 5
+num-server-rounds = 50
 fraction-evaluate = 0.2
 local-epochs = 1
 learning-rate = 0.001
