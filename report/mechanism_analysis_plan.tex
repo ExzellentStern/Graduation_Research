@@ -1,0 +1,147 @@
+\documentclass[a4j, twocolumn, dvipdfmx]{jsarticle}
+
+\usepackage[a4paper, left=2.0cm, right=2.0cm, top=2.0cm, bottom=2.0cm]{geometry}
+\usepackage{amsmath}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{flushend}
+
+\titleformat{\section}[block]
+  {\normalfont\large\bfseries}
+  {\thesection}{0.7em}{}
+
+\titleformat{\subsection}[block]
+  {\normalfont\normalsize\bfseries}
+  {\thesubsection}{0.7em}{}
+
+\titlespacing*{\section}
+  {0pt}{1.5ex plus 0.5ex minus 0.2ex}{0.8ex}
+
+\titlespacing*{\subsection}
+  {0pt}{1.2ex plus 0.4ex minus 0.2ex}{0.6ex}
+
+\setlist[itemize]{topsep=4pt, itemsep=2pt, leftmargin=*}
+
+\title{
+Robust Aggregation の失敗モードに関する定量分析計画書
+}
+\author{3CDA2216 笠原秀星}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{目的}
+
+本文書は，\texttt{sotsuron\_plan.tex}で報告した実験結果（Adaptive Model Poisoning Attackに対する各Robust Aggregation手法の耐性評価）のうち，特に挙動の異なる4つの現象について，その要因を定量的に分析するための計画をまとめる。
+
+Fang ら\cite{fang2020local}のAdaptive Model Poisoning Attackは，Robust Aggregation手法が防御として不十分であることを攻撃成功率の観点から示したが，「なぜ・どの条件で防御が破綻するのか」というメカニズムには踏み込んでいない。本研究では，既存実験で観測された以下の現象を手がかりに，この問いに定量的な説明を与えることを目指す。
+
+\section{観測された現象}
+
+\begin{itemize}
+  \item Krum / Bulyanは，Malicious Ratio 0.0（悪性クライアント不在）の場合でもラウンドごとの精度変動が大きい。
+  \item FedAvgは，Malicious Ratio 0.2以上でAccuracy・Lossがラウンドごとに大きく振動する。
+  \item Trimmed MeanをNon-IID環境で用いた場合，Malicious Ratio 0.3のときのみSeed間で最終Accuracyが0.74--0.84と大きくばらつく（他のMalicious Ratioでは Seed間差は0.01未満）。
+  \item Bulyanは頑健性条件 $n \geq 4f+3$ を満たさないMalicious Ratio 0.3（$100 < 123$）において，原理的に動作しない。
+\end{itemize}
+
+4点目は集約手法の数式上の制約から自明に説明できるため考察のみで扱い，1--3点目について新たな定量指標を導入して分析する。
+
+\section{提案する分析指標}
+
+\subsection{honestクラスタの分散（benign spread）}
+
+各ラウンドにおいて，honestなクライアント更新の重心 $\bar{v}_{\text{benign}}$ からの平均距離を次式で定義する。
+
+\begin{equation}
+\text{spread} = \frac{1}{|B|}\sum_{i \in B} \|v_i - \bar{v}_{\text{benign}}\|_2
+\end{equation}
+
+ここで $B$ はhonestクライアントの添字集合，$v_i$ はクライアント $i$ の更新ベクトルである。IID環境よりNon-IID環境の方がこの値が大きくなることが予想される。
+
+\subsection{maliciousの押し出し距離と push ratio}
+
+攻撃適用後のmalicious更新ベクトルについても同様に，honest重心からの平均距離を求める。
+
+\begin{equation}
+\text{push} = \frac{1}{|M|}\sum_{i \in M} \|v_i - \bar{v}_{\text{benign}}\|_2
+\end{equation}
+
+両者の比
+
+\begin{equation}
+\text{push\_ratio} = \frac{\text{push}}{\text{spread}}
+\end{equation}
+
+を定義する。push\_ratioが小さいほど，malicious更新はhonestクラスタの分布に紛れやすく，検出・排除されにくいと解釈できる。「Non-IID環境ではhonest同士の分散が元々大きいためpush\_ratioが小さくなり，攻撃が識別されにくい」という仮説をこの指標で検証する。
+
+\subsection{Krum選択結果}
+
+KrumおよびBulyanの内部選択において，選ばれたクライアントがmaliciousかhonestかを2値 \texttt{krum\_selected\_malicious} として各ラウンド記録する。Malicious Ratio 0.0でも生じる精度変動が，honestクライアント間のどのような差異に起因するかをこの記録とspreadの推移から考察する。
+
+\subsection{Trimmed Meanにおける生存率（今後の課題）}
+
+Trimmed Meanは座標ごとに上位・下位 $\beta$ 個の値を除外してから平均を取るため，malicious更新が座標ごとに除外対象となるか否かで攻撃の効き方が変わる。座標ごとの順位を用いて，malicious更新が除外されずに生き残った座標の割合 \texttt{frac\_dims\_survived} を定義する。この指標は次元数が大きく計算コストが増えるため，まずは3.1--3.3節の指標を優先し，実装余力があれば追加する。
+
+\section{実装方針}
+
+上記指標は，\texttt{pytorchexample/robust\_strategy.py} の \texttt{aggregate\_train} 内，Adaptive Model Poisoning Attack適用後・集約前の時点で計算する。この時点で全クライアントの更新ベクトル \texttt{updates}，malicious添字 \texttt{malicious\_pos}，集約前のグローバルモデル \texttt{self.\_last\_global\_vector} がすでにメモリ上に存在するため，モデル全体のベクトルを新たに保存する必要はなく，ラウンドごとの要約統計量のみをCSVへ追記すればよい。
+
+\section{実験対象条件}
+
+新指標は既存ログ（\texttt{result/}, \texttt{logs/}）には含まれないため，再実験が必要である。全条件×Ratio細分化×Seed数増加を単純に掛け合わせると実行数が膨大になるため（後述の見積りで350〜400回，計算時間にして半日以上），\textbf{探索(Phase 1)}と\textbf{検証(Phase 2)}の2段階に分けて依存関係を切ることで，網羅性を保ちながら実行数を抑える。
+
+\subsection{Phase 1：ベースグリッド＋Ratio細分化（探索）}
+
+まずSeed数は3のまま，全手法・全条件を対象にRatio方向の解像度を上げて実行する。目的は「どの手法・どのデータ分布・どのRatio付近で不安定になるか」を広く安く特定することであり，この段階ではSeed間分布の精緻な推定は求めない。
+
+\begin{itemize}
+  \item 集約手法：FedAvg，Median，Trimmed Mean，Krum，Bulyanの5手法全て
+  \item データ分布：IID・Non-IID
+  \item Malicious Ratio：基本は0.0，0.1，0.2，0.3。加えて
+    \begin{itemize}
+      \item Trimmed Mean（Non-IID）：0.225，0.25，0.275を追加
+      \item Krum・Bulyan：0.05刻みで0.0から実行可能上限（Bulyanは $n \geq 4f+3$ を満たす範囲）まで追加
+      \item FedAvg：0.125，0.15，0.175を追加
+    \end{itemize}
+  \item Seed：3（全条件共通，据え置き）
+\end{itemize}
+
+概算実行数はFedAvg 42，Median 24，Trimmed Mean 33，Krum 42，Bulyan 30の計約171回（1回平均2分として約5.7時間）。
+
+\subsection{Phase 2：Seed数増加（検証）}
+
+Phase 1の結果，Seed間で最終Accuracyのばらつきが大きい（既存結果のTrimmed Mean Non-IID Ratio 0.3のような）ことが確認されたRatio点\textbf{のみ}を対象に，Seedを3から10へ増やして追加実行する（7 Seed分を追加）。全Ratio×全手法に一律でSeedを増やすことはしない。
+
+現時点でSeed間ばらつきが疑われるのはKrum・Bulyan（元々Ratio 0.0でも変動が大きい）とTrimmed Mean（Non-IID，Ratio 0.2--0.3付近）だが，最終的な対象点はPhase 1の結果を見てから確定する。仮にKrum・Bulyanの全Ratio×IID/Non-IIDとTrimmed Mean Non-IIDの数点が対象になった場合，概算で追加70回程度（約2.3時間）。
+
+Phase 1と2を合わせても総実行数は約240回・半日弱に収まり，全条件に10 Seed×細分化Ratioを単純に掛け合わせる場合（350〜400回）よりも大幅に抑えられる。
+
+\section{今後の流れ}
+
+\begin{enumerate}
+  \item \texttt{robust\_strategy.py} に spread / push / push\_ratio / krum\_selected\_malicious のロギングを追加する。
+  \item 5節のPhase 1（ベースグリッド＋細分化Ratio，Seed 3）を再実験し，新しい診断用CSVを生成する。
+  \item Phase 1の結果からSeed間ばらつきが大きいRatio点を特定し，該当点のみPhase 2（Seed 10への増加）を実行する。
+  \item push\_ratioをIID / Non-IID・手法別に比較する図を作成し，「Non-IIDでは攻撃が紛れやすい」という仮説を検証する。
+  \item Krum選択結果の推移とMalicious Ratio 0.0での精度変動を突き合わせ，Krum自体の不安定性の要因を考察する。
+  \item 得られた考察を\texttt{sotsuron\_plan.tex}の考察章に統合する。
+\end{enumerate}
+
+\begin{thebibliography}{9}
+\bibitem{fang2020local}
+Minghong Fang,
+Xiaoyu Cao,
+Jinyuan Jia,
+Neil Zhenqiang Gong,
+``Local Model Poisoning Attacks to Byzantine-Robust Federated Learning,''
+Proceedings of the 29th USENIX Security Symposium (USENIX Security 2020),
+pp. 1605--1622,
+2020.
+\end{thebibliography}
+
+\end{document}

@@ -239,6 +239,8 @@ def main(grid: Grid, context: Context) -> None:
         seed=seed,
         aggregation_method=aggregation_method,
         num_malicious_assumed=num_malicious_assumed,
+        malicious_ratio=malicious_ratio,
+        run_id=run_id,
     )
 
     # ===================== 各ラウンド後のグローバル評価 =====================

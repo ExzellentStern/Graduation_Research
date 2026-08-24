@@ -38,6 +38,7 @@ from aggregation import (
     vector_to_state_dict,
 )
 from attack import adaptive_attack
+from pytorchexample.log_output import log_diagnostics_csv
 
 
 class RobustFedAvg(FedAvg):
@@ -70,6 +71,8 @@ class RobustFedAvg(FedAvg):
         num_malicious_assumed: int = 0,
         trimmed_mean_beta: Optional[int] = None,
         krum_multi_k: int = 1,
+        malicious_ratio: float = 0.0,
+        run_id: str = "unknown",
         **kwargs,
     ):
         super().__init__(fraction_evaluate=fraction_evaluate, **kwargs)
@@ -82,6 +85,10 @@ class RobustFedAvg(FedAvg):
         self.malicious_ids = list(malicious_ids)
         self.poison_rate = poison_rate
         self.seed = seed
+
+        # --- report/mechanism_analysis_plan.tex 対応：診断ログ用の実験条件識別子 ---
+        self.malicious_ratio = malicious_ratio
+        self.run_id = run_id
 
         # --- Robust Aggregation 設定 ---
         self.aggregation_method = aggregation_method.lower()
@@ -176,28 +183,56 @@ class RobustFedAvg(FedAvg):
         updates = stack_updates(vectors)
         n = updates.shape[0]
 
+        # --- 各クライアントがmalicious/honestのどちらかを特定する ---
+        # report/mechanism_analysis_plan.tex の診断指標（benign_spread等）は
+        # attack_type によらず計算するため、malicious_ids との突合はここで毎回行う。
+        partition_ids = [self._extract_metric(c, "partition-id") for c in reply_contents]
+        malicious_ids_set = set(self.malicious_ids)
+        malicious_pos = np.array(
+            [
+                i
+                for i, pid in enumerate(partition_ids)
+                if pid is not None and int(pid) in malicious_ids_set
+            ],
+            dtype=int,
+        )
+        malicious_pos_set = set(malicious_pos.tolist())
+        benign_pos = np.array(
+            [i for i in range(n) if i not in malicious_pos_set], dtype=int
+        )
+
         # --- Adaptive Model Poisoning Attack（実験計画書7.4） ---
         # 攻撃者はサーバ視点で「全クライアントの更新」と「使用中の集約手法」を
         # 把握できる（論文でいう full-knowledge 攻撃者）という前提のもと、
         # 集約直前に悪性クライアント分のベクトルをクラフトした攻撃済みベクトルへ差し替える。
         # sign_flip / scale はクライアント側（client_app.py）で既に適用済みのため、
         # ここで扱うのは attack_type == "adaptive" のときだけ。
-        if self.attack_type == "adaptive" and self._last_global_vector is not None and self.malicious_ids:
-            partition_ids = [self._extract_metric(c, "partition-id") for c in reply_contents]
-            malicious_ids_set = set(self.malicious_ids)
-            malicious_pos = [
-                i
-                for i, pid in enumerate(partition_ids)
-                if pid is not None and int(pid) in malicious_ids_set
-            ]
-            if malicious_pos:
-                updates = adaptive_attack(
-                    updates,
-                    malicious_idx=malicious_pos,
-                    global_vector=self._last_global_vector,
-                    aggregation_method=self.aggregation_method,
-                    f=self.num_malicious_assumed,
+        if self.attack_type == "adaptive" and self._last_global_vector is not None and len(malicious_pos) > 0:
+            updates = adaptive_attack(
+                updates,
+                malicious_idx=malicious_pos,
+                global_vector=self._last_global_vector,
+                aggregation_method=self.aggregation_method,
+                f=self.num_malicious_assumed,
+            )
+
+        # --- report/mechanism_analysis_plan.tex 対応：honestクラスタの分散とmaliciousの押し出し距離 ---
+        # 集約直前（攻撃適用後）のupdatesを使い、honest重心からの平均距離として定義する。
+        # honestが存在しない/maliciousが存在しない場合はNoneのままログする。
+        benign_spread = None
+        malicious_push_dist = None
+        push_ratio = None
+        if len(benign_pos) > 0:
+            benign_vectors = updates[benign_pos]
+            benign_center = benign_vectors.mean(axis=0)
+            benign_spread = float(np.linalg.norm(benign_vectors - benign_center, axis=1).mean())
+            if len(malicious_pos) > 0:
+                malicious_vectors = updates[malicious_pos]
+                malicious_push_dist = float(
+                    np.linalg.norm(malicious_vectors - benign_center, axis=1).mean()
                 )
+                if benign_spread > 1e-12:
+                    push_ratio = malicious_push_dist / benign_spread
 
         # --- fedavg のみ num-examples による重み付けを行う ---
         weights = None
@@ -217,13 +252,39 @@ class RobustFedAvg(FedAvg):
                 " run_experiments.py 側でこの例外を捕捉し、Bulyanの限界として記録してください。"
             )
 
-        aggregated_vector = aggregate(
+        aggregated_vector, agg_info = aggregate(
             self.aggregation_method,
             updates,
             weights=weights,
             f=self.num_malicious_assumed,
             trimmed_mean_beta=self.trimmed_mean_beta,
             krum_multi_k=self.krum_multi_k,
+            return_info=True,
+        )
+
+        # --- report/mechanism_analysis_plan.tex 対応：Krum/Bulyanの選択結果 ---
+        # selected_idx のうちmaliciousが占める割合（krum標準=multi_k=1なら0か1になる）。
+        # fedavg/median/trimmed_meanはselected_idxが無いためNoneのまま。
+        frac_selected_malicious = None
+        selected_idx = agg_info.get("selected_idx")
+        if selected_idx is not None and len(selected_idx) > 0:
+            frac_selected_malicious = float(
+                sum(1 for idx in selected_idx if int(idx) in malicious_pos_set) / len(selected_idx)
+            )
+
+        log_diagnostics_csv(
+            run_id=self.run_id,
+            round_=server_round,
+            aggregation_method=self.aggregation_method,
+            data_split=self.data_split,
+            malicious_ratio=self.malicious_ratio,
+            seed=self.seed,
+            n_malicious=len(malicious_pos),
+            n_benign=len(benign_pos),
+            benign_spread=benign_spread,
+            malicious_push_dist=malicious_push_dist,
+            push_ratio=push_ratio,
+            frac_selected_malicious=frac_selected_malicious,
         )
 
         new_state_dict = vector_to_state_dict(aggregated_vector, shapes_ref, state_dicts[0])

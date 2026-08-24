@@ -274,7 +274,8 @@ def aggregate(
     f: int = 0,
     trimmed_mean_beta: Optional[int] = None,
     krum_multi_k: int = 1,
-) -> np.ndarray:
+    return_info: bool = False,
+):
     """
     aggregation type（文字列）に応じて集約手法を切り替えるディスパッチ関数。
 
@@ -285,20 +286,35 @@ def aggregate(
         f: 防御側が想定する悪性クライアント数の上限（median以外のrobust手法で使用）
         trimmed_mean_beta: 指定があれば trimmed_mean の beta として f より優先して使う
         krum_multi_k: krum で平均に使う候補数（1なら標準Krum）
+        return_info: True の場合 (aggregated, info) を返す。
+            info["selected_idx"] は krum/bulyan でのみ設定される
+            （どのクライアントが選択されたかのデバッグ・分析用。fedavg/median/trimmed_meanは空dict）。
+            既存呼び出し（False）はaggregatedのみを返す従来通りの挙動を維持する。
+
+    Returns:
+        return_info=False（デフォルト）: aggregated のみ
+        return_info=True: (aggregated, info)
     """
     name = method.lower()
     if name == "fedavg":
-        return fedavg_aggregate(updates, weights)
+        aggregated = fedavg_aggregate(updates, weights)
+        info = {}
     elif name == "median":
-        return median_aggregate(updates)
+        aggregated = median_aggregate(updates)
+        info = {}
     elif name == "trimmed_mean":
         beta = trimmed_mean_beta if trimmed_mean_beta is not None else f
-        return trimmed_mean_aggregate(updates, beta)
+        aggregated = trimmed_mean_aggregate(updates, beta)
+        info = {}
     elif name == "krum":
-        aggregated, _ = krum_aggregate(updates, f, multi_k=krum_multi_k)
-        return aggregated
+        aggregated, selected_idx = krum_aggregate(updates, f, multi_k=krum_multi_k)
+        info = {"selected_idx": selected_idx}
     elif name == "bulyan":
-        aggregated, _ = bulyan_aggregate(updates, f)
-        return aggregated
+        aggregated, selected_idx = bulyan_aggregate(updates, f)
+        info = {"selected_idx": selected_idx}
     else:
         raise ValueError(f"未対応の aggregation method です: {method!r}（対応: {SUPPORTED_METHODS}）")
+
+    if return_info:
+        return aggregated, info
+    return aggregated

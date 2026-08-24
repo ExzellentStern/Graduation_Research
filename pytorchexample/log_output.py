@@ -157,6 +157,75 @@ def log_results_csv(
         ])
 
 
+# =========================
+# メカニズム分析用ログ（report/mechanism_analysis_plan.tex 対応）
+# =========================
+DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
+
+_DIAGNOSTICS_COLUMNS = [
+    "run_id",
+    "round",
+    "aggregation_method",
+    "data_split",
+    "malicious_ratio",
+    "seed",
+    "n_malicious",
+    "n_benign",
+    "benign_spread",
+    "malicious_push_dist",
+    "push_ratio",
+    "frac_selected_malicious",
+]
+
+
+def log_diagnostics_csv(
+    run_id: str,
+    round_: int,
+    aggregation_method: str,
+    data_split: str,
+    malicious_ratio: float,
+    seed: int,
+    n_malicious: int,
+    n_benign: int,
+    benign_spread: float | None,
+    malicious_push_dist: float | None,
+    push_ratio: float | None,
+    frac_selected_malicious: float | None,
+):
+    """
+    honestクラスタの分散・maliciousの押し出し距離・Krum/Bulyanの選択結果を、
+    ラウンドごとに logs/diagnostics.csv へ追記する。
+
+    - benign_spread: honest更新の重心からの平均距離
+    - malicious_push_dist: malicious（攻撃適用後）更新のhonest重心からの平均距離
+    - push_ratio: malicious_push_dist / benign_spread
+    - frac_selected_malicious: krum/bulyanで選択されたクライアントのうちmaliciousの割合
+      （fedavg/median/trimmed_meanはNone）
+    malicious_push_dist / push_ratio / frac_selected_malicious は該当しない条件（n_malicious=0など）
+    ではNoneのまま書き込む。
+    """
+    _ensure_dir()
+    file_exists = os.path.exists(DIAGNOSTICS_CSV)
+    with open(DIAGNOSTICS_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_DIAGNOSTICS_COLUMNS)
+        w.writerow([
+            run_id,
+            round_,
+            aggregation_method,
+            data_split,
+            malicious_ratio,
+            seed,
+            n_malicious,
+            n_benign,
+            benign_spread,
+            malicious_push_dist,
+            push_ratio,
+            frac_selected_malicious,
+        ])
+
+
 def log_summary_csv(
     run_id: str,
     final_round: int,
