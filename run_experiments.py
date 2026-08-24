@@ -132,6 +132,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="実験計画書7.6：全実験条件の自動実行")
     parser.add_argument("--quick", action="store_true", help="動作確認用の小規模設定で試す")
     parser.add_argument("--federation", default="local-simulation", help="flwr run に渡すfederation名")
+    parser.add_argument(
+        "--aggregations",
+        default=None,
+        help="実行対象のaggregation_methodをカンマ区切りで指定（未指定時は全手法）。"
+        "例：--aggregations fedavg で再実験など一部手法のみ再実行したい場合に使う。",
+    )
     args = parser.parse_args()
 
     if args.quick:
@@ -148,6 +154,10 @@ def main() -> None:
         seeds = SEEDS
         num_clients = NUM_CLIENTS
         num_rounds = NUM_SERVER_ROUNDS
+
+    if args.aggregations is not None:
+        selected = [a.strip() for a in args.aggregations.split(",")]
+        aggregations = [a for a in aggregations if a in selected]
 
     total = len(aggregations) * len(data_splits) * len(ratios) * len(seeds)
     print(f"=== 実験条件数: {total} ===\n")

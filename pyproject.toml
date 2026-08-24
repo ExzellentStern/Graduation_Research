@@ -54,7 +54,7 @@ attack-type = "none"        # "sign_flip" or "scale"
 poison-rate = 0.2
 
 # 追加：悪性クライアント生成（実験計画書 7.3 対応）
-num-clients = 10          # クライアント総数（federationのnum-supernodesと一致させること）
+num-clients = 100          # クライアント総数（federationのnum-supernodesと一致させること）
 malicious-ratio = 0.1      # 悪性クライアント割合（0.0 / 0.1 / 0.2 / 0.3）
 malicious-seed = 42        # malicious-ratioから自動生成する際のseed
 malicious-ids = ""         # 手動指定したい場合はここに "0,1" のように書く（空なら自動生成を使う）

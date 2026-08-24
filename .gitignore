@@ -212,6 +212,10 @@ logs/
 
 out/
 
+# LaTeX build artifacts (keep .tex source only)
+sotsuron_plan.pdf
+sotsuron_plan.dvi
+
 # 実験計画書7.6/7.7：run_experiments.pyの出力（実験ごとの final_model.pt / fixed_eval）
 experiments/
 fixed_eval/
