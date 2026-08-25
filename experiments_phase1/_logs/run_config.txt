@@ -1,0 +1,1969 @@
+=================================
+timestamp     : 2026-08-24T15:28:34
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T15:32:17
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T15:35:55
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T15:39:35
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T15:43:20
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T15:47:02
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T15:50:42
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T15:54:23
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T15:58:01
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:01:39
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:05:22
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:09:00
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:12:41
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:16:23
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:20:01
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:23:42
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:27:23
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:29:55
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:33:34
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:37:18
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:40:59
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:44:41
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:48:19
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:51:59
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:55:42
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T16:59:28
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:03:06
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:06:47
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:10:30
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:14:15
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:17:55
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:21:39
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:25:24
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:29:05
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:32:51
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:36:34
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:40:18
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:43:59
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:47:40
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:51:23
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:55:06
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T17:58:51
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:02:33
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:06:21
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:10:09
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:13:52
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:17:37
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:21:22
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:25:09
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:28:51
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:32:33
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:36:22
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:40:09
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:43:54
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:47:39
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:51:21
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:55:04
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T18:59:18
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:03:14
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:05:29
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:09:16
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:13:00
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:16:46
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:20:33
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:24:20
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:28:07
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:31:52
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:35:36
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:39:57
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:43:39
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:47:24
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:51:09
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:54:55
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T19:58:44
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:02:30
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:06:19
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:10:06
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:13:53
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:17:37
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:21:23
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:25:08
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:28:49
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:32:36
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:36:22
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:40:06
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:43:54
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:47:39
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:51:25
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:55:19
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T20:59:07
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:02:52
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:06:38
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:11:00
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:15:02
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:18:53
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:22:43
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:26:31
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:30:18
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:34:06
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:37:55
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:41:44
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:45:33
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:49:20
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:53:56
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T21:58:30
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:03:08
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:07:47
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:12:23
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:16:58
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:21:35
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:26:13
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:30:50
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:35:30
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:40:06
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:44:41
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:49:20
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:53:58
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T22:58:36
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:03:14
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:07:51
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:12:30
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:16:18
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:20:07
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:23:55
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:28:32
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:33:10
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:37:48
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:42:25
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:47:02
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:51:41
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-24T23:56:19
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:00:56
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:05:36
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:10:11
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:14:52
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:19:29
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:24:07
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:28:43
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:33:20
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:38:00
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:42:42
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:47:21
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:49:59
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:52:36
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T00:56:26
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:02:39
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:08:58
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:11:05
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:14:04
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:20:21
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:24:17
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:30:28
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:36:36
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:42:48
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:48:49
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T01:54:49
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:00:55
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:04:45
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:08:38
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:12:29
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:18:52
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:25:14
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:31:32
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:37:50
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:44:08
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:50:24
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T02:56:33
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T03:02:47
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T03:08:57
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T03:15:06
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T03:21:12
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T12:18:44
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T12:22:55
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : False
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T12:26:53
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T12:30:45
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T12:34:38
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 2
+=================================
+
+=================================
+timestamp     : 2026-08-25T12:38:30
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+
+=================================
+timestamp     : 2026-08-25T12:44:46
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 1
+=================================
+
+=================================
+timestamp     : 2026-08-25T12:51:01
+rounds        : 20
+local_epochs  : 1
+batch_size    : 25
+learning_rate : 0.001
+optimizer     : AdamW
+IID           : True
+seed          : 3
+=================================
+

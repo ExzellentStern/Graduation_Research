@@ -39,6 +39,13 @@ import os
 import subprocess
 from datetime import datetime
 
+def _utf8_env() -> dict:
+    """flwr CLIの絵文字混じり出力がWindowsのcp932コンソールで落ちるのを防ぐ。"""
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    return env
+
+
 AGGREGATION_METHODS = ["fedavg", "median", "trimmed_mean", "krum", "bulyan"]
 MALICIOUS_RATIOS = [0.0, 0.1, 0.2, 0.3]
 DATA_SPLITS = ["iid", "non_iid"]
@@ -92,6 +99,55 @@ def phase1_conditions():
                     yield aggregation, data_split, ratio, seed
 
 
+# ============================================================
+# report/mechanism_analysis_plan.tex：Phase 2（検証）の条件定義
+#
+# Phase 1（171条件、Seed3）の結果（experiments_phase1/analysis/seed_variance.csv）から、
+# Seed間の最終Accuracy標準偏差が閾値0.02以上だった23条件のみを対象に、
+# Seedを4〜10まで追加実行する（Phase 1のSeed1-3と合わせて計10Seedにする）。
+# 全Ratio×全手法に一律でSeedを増やすことはしない（実験計画書5.2）。
+# 出力先は experiments_phase1/ とは別の experiments_phase2/ に分ける
+# （Phase 1のSeed1-3の結果を上書き・混同しないため）。
+# ============================================================
+PHASE2_EXPERIMENTS_DIR = "experiments_phase2"
+PHASE2_SEEDS = [4, 5, 6, 7, 8, 9, 10]
+
+# (aggregation_method, data_split, malicious_ratio)
+# experiments_phase1/analysis/seed_variance.csv の acc_std >= 0.02 の23件（2026-08-25時点）
+PHASE2_CONDITIONS = [
+    ("bulyan", "non_iid", 0.2),
+    ("fedavg", "iid", 0.1),
+    ("fedavg", "iid", 0.125),
+    ("fedavg", "iid", 0.15),
+    ("fedavg", "iid", 0.175),
+    ("fedavg", "iid", 0.2),
+    ("fedavg", "iid", 0.3),
+    ("fedavg", "non_iid", 0.1),
+    ("fedavg", "non_iid", 0.15),
+    ("fedavg", "non_iid", 0.175),
+    ("fedavg", "non_iid", 0.2),
+    ("fedavg", "non_iid", 0.3),
+    ("krum", "iid", 0.15),
+    ("krum", "iid", 0.2),
+    ("krum", "iid", 0.25),
+    ("krum", "iid", 0.3),
+    ("krum", "non_iid", 0.0),
+    ("krum", "non_iid", 0.15),
+    ("krum", "non_iid", 0.2),
+    ("krum", "non_iid", 0.25),
+    ("krum", "non_iid", 0.3),
+    ("median", "non_iid", 0.3),
+    ("trimmed_mean", "non_iid", 0.3),
+]
+
+
+def phase2_conditions():
+    """(aggregation, data_split, ratio, seed) を Phase 2 の条件分だけ列挙する。"""
+    for aggregation, data_split, ratio in PHASE2_CONDITIONS:
+        for seed in PHASE2_SEEDS:
+            yield aggregation, data_split, ratio, seed
+
+
 def condition_name(aggregation: str, data_split: str, ratio: float, seed: int) -> str:
     return f"{aggregation}_{data_split}_ratio{ratio}_seed{seed}"
 
@@ -116,6 +172,28 @@ def record_failure(name: str, cmd: list, output_tail: str, experiments_dir: str 
         ])
 
 
+def ensure_simulation_config(federation: str, num_clients: int) -> None:
+    """SuperLink接続（federation）のシミュレーション設定（クライアント数）を確定させる。
+
+    新しいflwr（SuperLink接続方式）では `flwr run --federation-config` は非推奨で無視される
+    ため、`flwr federation simulation-config` で事前に num-supernodes を設定しておく必要が
+    ある（未設定時のデフォルトは2クライアントで、実験条件と食い違ってしまう）。
+    """
+    # 第1位置引数はfederation ID（クラウド用、`@account/name`形式）、第2位置引数が
+    # SuperLink接続名。ローカルシミュレーションではfederation IDを使わないため空文字を渡す。
+    cmd = [
+        "flwr", "federation", "simulation-config", "", federation,
+        "--num-supernodes", str(num_clients),
+    ]
+    print(f"[SETUP] {' '.join(cmd)}")
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=_utf8_env())
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"federation '{federation}' の simulation-config 設定に失敗しました:\n"
+            f"{(proc.stdout or '') + (proc.stderr or '')}"
+        )
+
+
 def run_one(
     aggregation: str,
     data_split: str,
@@ -136,6 +214,12 @@ def run_one(
 
     os.makedirs(output_dir, exist_ok=True)
 
+    # --run-config はTOML文字列として解釈されるため、Windowsのバックスラッシュ区切り
+    # パスをそのまま埋め込むと "\f" 等がエスケープシーケンスとして解釈され、
+    # パスが壊れてしまう（例: "\fedavg" -> フォームフィード文字+"edavg"）。
+    # スラッシュ区切りに変換して渡す（Windows/Pythonのos.path系はスラッシュも受理する）。
+    output_dir_for_config = output_dir.replace(os.sep, "/")
+
     run_config = (
         f'num-server-rounds={num_rounds} '
         f'aggregation-method="{aggregation}" '
@@ -145,18 +229,19 @@ def run_one(
         f'seed={seed} '
         f'attack-type="{ATTACK_TYPE}" '
         f'num-clients={num_clients} '
-        f'output-dir="{output_dir}"'
+        f'output-dir="{output_dir_for_config}"'
     )
 
+    # 新しいflwr（SuperLink接続方式）では --federation-config は非推奨で無視される。
+    # クライアント数はあらかじめ ensure_simulation_config() で federation 側に設定しておく。
     cmd = [
         "flwr", "run", ".", federation,
         "--run-config", run_config,
-        "--federation-config", f"num-supernodes={num_clients}",
         "--stream",  # --streamを付けないと flwr run は完了を待たずに即座に返ってしまう
     ]
 
     print(f"[RUN] {name}")
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=_utf8_env())
 
     if is_done(output_dir):
         print(f"[DONE] {name}")
@@ -180,7 +265,14 @@ def main() -> None:
         help="report/mechanism_analysis_plan.tex のPhase 1（全条件＋臨界点探索用のRatio細分化、Seed3）を実行する。"
         "出力先は experiments/ とは別の experiments_phase1/ に分ける。",
     )
-    parser.add_argument("--federation", default="local-simulation", help="flwr run に渡すfederation名")
+    parser.add_argument(
+        "--phase2",
+        action="store_true",
+        help="report/mechanism_analysis_plan.tex のPhase 2（Phase 1でSeed間ばらつきが大きかった"
+        "PHASE2_CONDITIONSの23条件のみ、Seed4-10を追加実行）を実行する。"
+        "出力先は experiments_phase1/ とは別の experiments_phase2/ に分ける。",
+    )
+    parser.add_argument("--federation", default="local", help="flwr run に渡すSuperLink接続名（~/.flwr/config.tomlに定義されたもの）")
     parser.add_argument(
         "--aggregations",
         default=None,
@@ -209,6 +301,11 @@ def main() -> None:
         num_rounds = NUM_SERVER_ROUNDS
         experiments_dir = PHASE1_EXPERIMENTS_DIR
         conditions = list(phase1_conditions())
+    elif args.phase2:
+        num_clients = NUM_CLIENTS
+        num_rounds = NUM_SERVER_ROUNDS
+        experiments_dir = PHASE2_EXPERIMENTS_DIR
+        conditions = list(phase2_conditions())
     else:
         num_clients = NUM_CLIENTS
         num_rounds = NUM_SERVER_ROUNDS
@@ -226,6 +323,8 @@ def main() -> None:
 
     total = len(conditions)
     print(f"=== 実験条件数: {total}（出力先: {experiments_dir}/） ===\n")
+
+    ensure_simulation_config(args.federation, num_clients)
 
     counts = {"done": 0, "skipped": 0, "failed": 0}
     for i, (aggregation, data_split, ratio, seed) in enumerate(conditions, start=1):

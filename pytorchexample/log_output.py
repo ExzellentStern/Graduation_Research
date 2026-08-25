@@ -19,6 +19,33 @@ PLOT_DIR = os.path.join(LOG_DIR, "plots")
 RESULTS_CSV = os.path.join(LOG_DIR, "results.csv")
 SUMMARY_CSV = os.path.join(LOG_DIR, "summary.csv")
 
+# 実験計画書 7.5/7.6 対応：メカニズム分析用の診断ログCSV
+DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
+
+
+def configure_log_dir(log_dir: str) -> None:
+    """
+    ログの出力先を切り替える。
+
+    デフォルトの LOG_DIR="logs" はプロジェクト直下の固定パスで、
+    run_experiments.py が条件ごとに分ける output_dir とは独立している。
+    そのため output_dir を変えても全条件のログが同じ logs/ に混ざってしまい、
+    後から解析する際に条件の切り分けや掃除が困難になる（実際に発生した問題）。
+    server_app.py から output_dir に対応する場所を渡すことで、
+    そのスイープ専用のログディレクトリに自己完結させる。
+    """
+    global LOG_DIR, CLIENT_CSV, SERVER_CSV, CONFIG_TXT, PLOT_DIR
+    global RESULTS_CSV, SUMMARY_CSV, DIAGNOSTICS_CSV
+
+    LOG_DIR = log_dir
+    CLIENT_CSV = os.path.join(LOG_DIR, "client_metrics.csv")
+    SERVER_CSV = os.path.join(LOG_DIR, "server_metrics.csv")
+    CONFIG_TXT = os.path.join(LOG_DIR, "run_config.txt")
+    PLOT_DIR = os.path.join(LOG_DIR, "plots")
+    RESULTS_CSV = os.path.join(LOG_DIR, "results.csv")
+    SUMMARY_CSV = os.path.join(LOG_DIR, "summary.csv")
+    DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
+
 
 # =========================
 # 内部ユーティリティ
@@ -160,8 +187,6 @@ def log_results_csv(
 # =========================
 # メカニズム分析用ログ（report/mechanism_analysis_plan.tex 対応）
 # =========================
-DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
-
 _DIAGNOSTICS_COLUMNS = [
     "run_id",
     "round",
