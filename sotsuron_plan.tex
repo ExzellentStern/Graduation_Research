@@ -1,0 +1,847 @@
+\documentclass[a4j, twocolumn, dvipdfmx]{jsarticle}  % 研究計画は1段組が読みやすい（日本語対応）
+
+\usepackage[a4paper, left=2.0cm, right=2.0cm, top=2.0cm, bottom=2.0cm]{geometry} % 余白を標準寄りに
+\usepackage{amsmath}   % 数式用
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{titlesec}  % 見出し調整
+\usepackage{enumitem}  % 箇条書きの余白調整（見やすさ改善）
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{float}
+\usepackage{flushend}  % 最終ページの左右コラムの高さを自動でそろえる（余白の偏り対策）
+
+% =========================================================
+% 見出し設定
+% =========================================================
+\titleformat{\section}[block]
+  {\normalfont\large\bfseries}
+  {\thesection}{0.7em}{}
+
+\titleformat{\subsection}[block]
+  {\normalfont\normalsize\bfseries}
+  {\thesubsection}{0.7em}{}
+
+\titleformat{\subsubsection}[block]
+  {\normalfont\normalsize\bfseries}
+  {\thesubsubsection}{0.7em}{}
+
+% 見出し前後の余白
+\titlespacing*{\section}
+  {0pt}{1.5ex plus 0.5ex minus 0.2ex}{0.8ex}
+
+\titlespacing*{\subsection}
+  {0pt}{1.2ex plus 0.4ex minus 0.2ex}{0.6ex}
+
+% =========================================================
+% 箇条書き設定
+% =========================================================
+\setlist[itemize]{
+  topsep=3pt,
+  itemsep=1pt,
+  parsep=0pt,
+  leftmargin=*
+}
+
+
+% 箇条書きの詰まりを軽減
+\setlist[itemize]{topsep=4pt, itemsep=2pt, leftmargin=*}
+
+\title{
+Federated LearningにおけるAdaptive Model Poisoning AttackとRobust Aggregationの評価に関する実験計画書
+}
+\author{3CDA2216 笠原秀星}
+\date{\today}
+
+\begin{document}
+
+\maketitle  % タイトルを表示
+
+\section{研究背景・概要}
+
+Federated Learning（以下, FL）は, 生データを共有することなく複数のデバイスや組織が協調して機械学習モデルを学習する分散学習の枠組みである\cite{mammen2021fl}.
+FLは, ユーザのプライバシー保護と機械学習の両立を可能にする技術として注目されており, スマートフォンにおける単語予測や顔認識, 音声認識技術の向上に利用されている. また, 厳格なプライバシー規制によりデータ共有が困難な医療分野や, 自動運転車におけるリアルタイムデータの活用など, 幅広い分野への応用が期待されている\cite{li2019fl}.
+
+一方で, FLには収束性, データ分布の不均一性（Non-I.I.D.）, 通信コスト, 大規模環境への適用, モデル集約手法など, さまざまな課題が存在する\cite{ma2020privacy}. 特に, FLでは多数の参加者が学習に関与するため, 悪意のあるクライアントによる攻撃への耐性を確保することが重要な研究課題となっている. 医療データや個人情報などの機密性の高いデータを扱う応用が想定されることから, 安全かつ信頼性の高い学習環境の実現が求められている.
+
+FLに対する代表的な攻撃としてPoisoning Attackが挙げられる. Poisoning Attackは大きくData Poisoning AttackとModel Poisoning Attackの2種類に分類される. Data Poisoning Attackは学習データそのものを改ざんする攻撃であり, ラベル反転攻撃やBackdoor Attackなどが含まれる. 一方, Model Poisoning Attackはクライアントがサーバへ送信するモデル更新や勾配情報を改ざんする攻撃であり, 勾配操作や最適化手法を利用した攻撃などが提案されている.
+
+これらの攻撃に対する防御手法としては, 異常検知, Robust Aggregation, 摂動機構の3つに大別される. 異常検知にはコサイン類似度やクラスタリング, スコアベース手法などが用いられる. また, Robust AggregationにはKrum, Trimmed Mean, Median, Bulyanなどの集約手法が提案されている. さらに, 摂動機構としては差分プライバシーを利用した手法が広く研究されている\cite{sagar2023survey}.
+
+本研究では, これらの中でもModel Poisoning Attackに着目する. Data Poisoning Attackに関してはこれまで多くの研究が行われており, 攻撃に対して頑健な集約手法や検知手法が多数提案されている. 一方で, Model Poisoning Attackは学習データではなくモデル更新そのものを改ざんするため, サーバ側から攻撃を識別することが困難であり, より深刻な脅威となる. また, その防御手法に関する研究はData Poisoning Attackと比較して十分に進んでいるとは言えない.
+
+さらに, FangらはAdaptive Model Poisoning Attackを提案し, 既存のRobust Aggregation手法を考慮した攻撃によって防御機構を回避できる可能性を示している\cite{fang2020local}. このことは, 従来の防御手法が必ずしも十分な耐性を有していないことを示唆しており, Adaptive Model Poisoning Attackに対する詳細な評価が必要である.
+
+そこで本研究では, IID環境およびNon-IID環境においてAdaptive Model Poisoning AttackがFLの学習性能に与える影響を評価する. また, KrumやTrimmed MeanなどのRobust Aggregation手法に対する攻撃の有効性を比較・分析し, 既存防御手法の限界を明らかにする. さらに, 攻撃が成立する要因について考察するとともに, Model Poisoning Attackに対する効果的な防御手法について検討することを目的とする.
+
+\section{事前知識}
+\subsection{Federated Learning}
+%FLとは何か.従来の機械学習とは何が違うのか.どういうアルゴリズムを用いるのかなど基礎的なFLの知識について述べる.
+%通信ラウンド,クライアント,サーバ
+%FLを攻撃と防御の観点からカテゴリー分けする.
+先に述べたようにFederated Learningは生データを共有することなく複数のデバイスや組織が協調して機械学習モデルを学習する分散学習の枠組みである\cite{mammen2021fl}.
+集約アルゴリズムとしてFederated Averaging (以下,FedAvg)を用いる.FedAvgはGoogleが2016年に発表した論文の中で示されたものである\cite{mcmahan2017fedavg}.
+
+\subsubsection{FedAvg}
+\begin{table}[t]
+\centering
+\caption{FedAvgで用いる主な記号}
+\begin{tabular}{ll}
+\hline
+記号 & 意味 \\
+\hline
+$K$ & 全クライアント数 \\
+$C$ & 各ラウンドで参加する割合 \\
+$S_t$ & ラウンド$t$で選択されたクライアント集合 \\
+$w_t$ & グローバルモデル \\
+$w_{t+1}^k$ & クライアント$k$が更新したモデル \\
+$n_k$ & クライアント$k$のデータ数 \\
+$E$ & ローカル学習のエポック数 \\
+$B$ & ミニバッチサイズ \\
+$\eta$ & 学習率 \\
+\hline
+\end{tabular}
+\label{tab:fedavg_symbol}
+\end{table}
+\begin{algorithm}[t]
+\caption{Federated Averaging (FedAvg)}
+\label{alg:fedavg}
+\begin{algorithmic}[1]
+
+\State \textbf{Server executes:}
+\State Initialize $w_0$
+
+\For{each round $t = 1,2,\ldots$}
+    \State $m \leftarrow \max(C \cdot K, 1)$
+    \State $S_t \leftarrow$ random set of $m$ clients
+
+    \ForAll{$k \in S_t$ in parallel}
+        \State $w_{t+1}^{k} \leftarrow \mathrm{ClientUpdate}(k,w_t)$
+    \EndFor
+
+    \State $
+    w_{t+1}
+    \leftarrow
+    \sum_{k \in S_t}
+    \frac{n_k}{n_t}
+    w_{t+1}^{k}
+    $
+\EndFor
+
+\Statex
+\State \textbf{ClientUpdate}$(k,w)$
+\State Split $P_k$ into batches of size $B$
+
+\For{$i=1$ to $E$}
+    \For{batch $b \in B$}
+        \State $
+        w \leftarrow
+        w-\eta\nabla\ell(w;b)
+        $
+    \EndFor
+\EndFor
+
+\State \Return $w$ to server
+
+\end{algorithmic}
+\end{algorithm}
+アルゴリズム\ref{alg:fedavg}にFedAvgの処理手順を示す。
+
+まず，サーバはグローバルモデル $w_0$ を初期化する。
+その後，各通信ラウンド $t$ において，全クライアント数 $K$ のうち割合 $C$ に応じた $m$ 個のクライアントをランダムに選択する。
+選択されたクライアント集合を $S_t$ とする。
+
+選択された各クライアントは，サーバから受け取ったグローバルモデル $w_t$ を用いてローカル学習を実施する。
+各クライアントは自身が保有するデータ集合 $P_k$ をミニバッチサイズ $B$ ごとに分割し，エポック数 $E$ 回の学習を行う。
+モデル更新には確率的勾配降下法（SGD）を用い，学習率を $\eta$ とすると，各ミニバッチ $b$ に対して次式によりパラメータを更新する。
+
+\begin{equation}
+w \leftarrow w-\eta\nabla \ell(w;b)
+\end{equation}
+
+ここで，$\ell(w;b)$ はミニバッチ $b$ に対する損失関数であり，$\nabla \ell(w;b)$ はその勾配を表す。
+
+ローカル学習終了後，各クライアントは更新後のモデル $w_{t+1}^{k}$ をサーバへ送信する。
+サーバは受信したモデルを，各クライアントの保有データ数 $n_k$ に応じて重み付け平均することで新たなグローバルモデル $w_{t+1}$ を生成する。
+
+\begin{equation}
+w_{t+1}
+=
+\sum_{k \in S_t}
+\frac{n_k}{n_t}
+w_{t+1}^{k}
+\end{equation}
+
+ただし，
+
+\begin{equation}
+n_t=\sum_{k\in S_t}n_k
+\end{equation}
+
+である。
+この処理を複数ラウンド繰り返すことで，生データを共有することなくグローバルモデルを学習する。
+\subsection{Data Poisoning Attack}
+
+Data Poisoning Attackは，攻撃者が学習データそのものを改ざんし，グローバルモデルの性能低下や誤動作を引き起こす攻撃である。Federated Learningでは，各クライアントが保有するローカルデータや学習過程をサーバが直接確認できないため，悪意のあるクライアントが改ざんしたデータを用いて学習を行うことで，モデルに悪影響を与えることが可能である\cite{sagar2023survey}。
+
+Data Poisoning Attackは，Label Flipping Attack，Poisoning Sample Attack，Backdoor Attackなどに分類される。Label Flipping Attackは，学習データのラベルを意図的に別のラベルへ変更する攻撃である。例えば，数字認識タスクにおいて「1」のラベルを「7」に変更して学習させることで，モデルの分類性能を低下させることができる。
+
+Poisoning Sample Attackは，学習データそのものを改ざんする攻撃であり，ノイズの付加や特定のパターンの埋め込みなどによって学習結果を操作する。
+
+一方，Backdoor Attackは，特定のトリガを含む入力に対してのみ誤分類を引き起こす攻撃である。攻撃者はトリガ付きデータを学習データへ混入させることで，通常の入力に対する性能を維持したまま，トリガを含む入力に対してのみ攻撃者が指定したラベルを出力するようモデルを誘導する。そのため，Backdoor Attackは高い攻撃成功率とステルス性を有しており，発見が困難であるという特徴を持つ。
+
+Data Poisoning Attackは実装が比較的容易である一方，異常なデータ分布やラベルの偏りを利用した検知手法によって防御できる場合がある。そのため近年では，学習データではなくモデル更新そのものを改ざんするModel Poisoning Attackに関する研究が盛んに行われている\cite{sagar2023survey}\cite{xie2020dba}\cite{nguyen2022flame}。
+
+
+
+\subsection{Model Poisoning Attack}
+
+Model Poisoning Attackは，悪意のあるクライアントがサーバへ送信するモデル更新や勾配情報を改ざんし，グローバルモデルの性能低下や誤動作を引き起こす攻撃である。Data Poisoning Attackが学習データそのものを改ざんするのに対し，Model Poisoning Attackは学習後のモデルパラメータを直接操作する点に特徴がある。そのため，サーバ側から攻撃の有無を判断することが困難であり，Federated Learningにおける深刻な脅威の一つとして注目されている\cite{sagar2023survey}。
+
+Model Poisoning Attackは，Gradient Manipulation，Optimization Methods，Untargeted Attackの3種類に分類される\cite{sagar2023survey}。Gradient Manipulationは，モデル更新の勾配を意図的に操作する攻撃であり，勾配反転（Sign Flipping Attack）やランダムな勾配の挿入などが代表例として知られている。これらの攻撃は，グローバルモデルの収束を妨害し，性能を低下させることを目的とする。
+
+Optimization Methodsは，攻撃効果を最大化するようにモデル更新を最適化する攻撃である。攻撃者は正常なモデル更新との差を小さく保ちながら，攻撃目的を達成するようにモデルを改ざんすることで，異常検知や防御機構による検出を回避する。Backdoor AttackやModel Replacement Attackの多くはこの分類に含まれる。
+
+Untargeted Attackは，特定の入力に対する誤分類ではなく，グローバルモデル全体の性能低下を目的とする攻撃である。攻撃者はモデル更新を大きく改ざんすることで，学習の収束を妨害し，モデルの可用性を低下させる。
+
+
+\subsection{Robust Aggregation}
+%Robust Aggregationとは何で,どんな種類があるのか述べる.数式などもあれば良い.
+%Krum,Mean,Trimmed Mean,Median,Bulyanなどについて論文で述べられていたはず.
+%それぞれの手法については\subsubsectionで書けばいいと思う.
+Robust Aggregationは，悪意のあるクライアントによる異常なモデル更新の影響を軽減することを目的とした集約手法である\cite{sagar2023survey}。従来のFedAvgでは，各クライアントから送信されたモデル更新を重み付き平均によって集約するため，悪意のあるクライアントが極端なモデル更新を送信した場合，グローバルモデルが大きな影響を受ける可能性がある。
+
+この問題に対処するため，Byzantine Fault Toleranceの考え方を取り入れたRobust Aggregationが提案されている。代表的な手法としてMean（FedAvg），Median，Trimmed Mean，Krum，Bulyanなどが知られており，異常なモデル更新を除外または影響を低減しながらグローバルモデルを更新する。
+
+\subsubsection{Mean (FedAvg)}
+
+FedAvgは，Federated Learningにおいて最も広く利用されている集約手法である。各クライアントから送信されたモデル更新を，保有するデータ数に応じて重み付け平均することで新たなグローバルモデルを生成する。
+
+FedAvgは実装が容易で計算コストも低いという利点を持つ一方，異常なモデル更新の影響を受けやすいという欠点がある。そのため，Model Poisoning Attackに対して脆弱であることが知られている。
+
+\subsubsection{Median}
+
+Medianは，各パラメータについて中央値を採用する集約手法である。平均値ではなく中央値を利用することで，極端に大きな値や小さな値の影響を受けにくくなる。
+
+そのため，悪意のあるクライアントが異常なモデル更新を送信した場合でも，その影響を軽減できる。しかし，多数のクライアントが攻撃に参加している場合には性能が低下する可能性がある。
+
+\subsubsection{Trimmed Mean}
+
+Trimmed Meanは，各パラメータについて極端に大きい値と小さい値を一定数除外した後に平均を計算する手法である。
+
+この手法は外れ値の影響を低減できるため，単純な平均よりもModel Poisoning Attackに対して頑健である。一方で，正常なクライアントの更新が除外される場合もあり，学習性能が低下する可能性がある。
+
+\subsubsection{Krum}
+
+Krumは，各クライアントのモデル更新と他のクライアントとの距離を計算し，最も多くのクライアントと類似しているモデル更新を選択する手法である。
+
+平均を取るのではなく，信頼できると判断された単一のモデル更新を採用するため，異常なモデル更新を排除しやすいという特徴を持つ。しかし，クライアント数が増加すると計算コストが大きくなるという課題がある。
+
+\subsubsection{Bulyan}
+
+Bulyanは，KrumとTrimmed Meanを組み合わせた集約手法である。まずKrumを用いて信頼できるモデル更新を選択し，その後Trimmed Meanによって集約を行う。
+
+複数のByzantine攻撃に対して高い耐性を持つことが報告されているが，計算コストが大きく，クライアント数が多い環境では実行時間が増加するという欠点がある。
+
+本研究では，FedAvgを基準手法とし，Median，Trimmed Mean，KrumおよびBulyanをRobust Aggregationとして採用する。また，Adaptive Model Poisoning Attackを適用した場合の攻撃成功率やモデル精度の変化を比較し，各集約手法の有効性を評価する。
+
+
+%あとでそれぞれの手法の代表論文についても確認して示さなきゃいけないと思うけど,とりあえずはこれで.
+%まだ論文を読んでないので必要に応じて収集する.
+\section{関連研究}
+
+Subhash Sagarらは，Federated LearningにおけるPoisoning Attackおよび防御手法に関する包括的なサーベイを行っている。彼らは攻撃をData Poisoning AttackとModel Poisoning Attackに分類し，さらに防御手法についてもRobust Aggregationや異常検知手法などの観点から体系的に整理している。また，各攻撃手法および防御手法の特徴や課題を比較し，Federated Learningにおけるセキュリティ研究の方向性を示している\cite{sagar2023survey}.
+
+Minghong Fangらは，Byzantine-robust Federated Learningに対するLocal Model Poisoning Attackを提案した。従来のData Poisoning Attackとは異なり，攻撃者は学習データではなく悪意あるクライアントのモデル更新そのものを操作する。攻撃を最適化問題として定式化することで，Krum，Bulyan，Median，Trimmed MeanといったByzantine-robust Aggregation手法に対しても有効な攻撃を実現し，既存の防御手法が十分ではないことを示した\cite{fang2020local}.
+
+Chulin Xieらは，DBA (Distributed Backdoor Attacks) を提案した。従来のBackdoor Attackでは全ての攻撃者が同一のトリガを学習するのに対し，DBAではグローバルトリガを複数のローカルトリガへ分割し，各悪意あるクライアントへ分散して埋め込む。この手法により，従来手法と比較して高い攻撃成功率とステルス性を実現できることを示した\cite{xie2020dba}.
+
+Eugene Bagdasaryanらは，Model Replacement Attackを提案した。この攻撃では，攻撃者が生成した悪意あるモデル更新を拡大して送信することで，集約後のグローバルモデルへBackdoorを埋め込むことが可能となる。また，Federated Learningで用いられるSecure Aggregation環境では各クライアントの更新内容を詳細に観測できないため，異常検知による防御が困難であることを示した\cite{bagdasaryan2020model}.
+
+Tuan D. Nguyenらは，Backdoor Attackに対する防御手法であるFLAMEを提案した。FLAMEはモデルクラスタリングによる異常なモデル更新の検出，重みクリッピングによる影響の抑制，およびノイズ付与を組み合わせることで，正常なモデル性能を維持しながらBackdoorの影響を低減できることを示した\cite{nguyen2022flame}.
+
+これらの研究では，Poisoning AttackおよびBackdoor Attackの有効性や防御手法について検討されている。しかし，Adaptive Model Poisoning Attackに対する各種Robust Aggregation手法の耐性については十分な比較評価が行われていない。そこで本研究では，Median，Trimmed Mean，Krum，BulyanなどのRobust Aggregation手法を対象としてAdaptive Model Poisoning Attackを適用し，IID環境およびNon-IID環境における防御性能を評価する。
+
+
+
+
+\section{実験方法}
+
+\subsection{実験概要}
+
+本研究では，Federated Learning環境においてAdaptive Model Poisoning Attackを実施し，各種Robust Aggregation手法の耐性を評価する．
+
+実験では，全100クライアントから構成されるFederated Learning環境を構築し，悪性クライアント割合およびデータ分布を変化させながら学習を行う．
+
+また，FedAvg，Median，Trimmed Mean，Krum，Bulyanの
+5種類の集約手法を対象とし，攻撃下におけるモデル性能の変化を比較する．
+
+\subsection{データセット}
+
+本研究では，画像分類タスクの代表的なデータセットであるMNISTを用いる．MNISTは手書き数字画像から構成される10クラス分類データセットであり，訓練データ60,000件，テストデータ10,000件を含む．
+
+データ分布が攻撃および防御性能に与える影響を評価するため，IID環境およびNon-IID環境の両方で実験を行う．IID環境では各クライアントへデータを均等に分配する．一方，Non-IID環境ではクライアントごとに保有ラベルを偏らせることで，不均一なデータ分布を再現する．
+
+\subsection{学習モデル}
+
+学習モデルには，全結合型Deep Neural Network（DNN）を用いる．モデル構造は，入力層，128ノードの全結合層，64ノードの全結合層，および10クラス分類のための出力層から構成される．活性化関数にはReLUを用いる．
+
+本モデルは，ロジスティック回帰より高い表現能力を有しながら，CNNやResNetと比較して実装および実験管理が容易であるため採用する．
+
+\subsection{攻撃設定}
+
+攻撃手法には，Fangらが提案したAdaptive Model Poisoning Attackを用いる．
+
+Adaptive Model Poisoning Attackは，従来のModel Poisoning Attackとは異なり，サーバで用いられる集約手法の特性を考慮して悪意あるモデル更新を生成する攻撃である．攻撃者は，グローバルモデルの性能低下を目的としてモデル更新を最適化し，Robust Aggregationによる防御を回避しながら攻撃を行う．
+
+本研究では，悪性クライアントが正常なローカル学習を実施した後，学習結果をそのまま送信する代わりに，Adaptive Model Poisoning Attackによって生成した悪意あるモデル更新をサーバへ送信する．
+
+また，攻撃の影響を評価するため，全100クライアント中の悪性クライアント数を0，10，20，30と変化させる．これに対応する悪性クライアント割合はそれぞれ0\%，10\%，20\%，30\%である．
+
+さらに，IID環境およびNon-IID環境の両方において実験を実施し，データ分布の違いが攻撃効果に与える影響についても評価する．
+
+\subsection{防御設定}
+
+防御手法として，Robust Aggregationに分類されるFedAvg，Median，Trimmed Mean，Krum，Bulyanを用いる．
+
+FedAvgは全クライアントのモデル更新の平均を用いる集約手法である．Medianは各パラメータについて中央値を採用する．Trimmed Meanは極端な値を除外した後に平均を計算する．Krumは他のクライアントとの距離に基づいて信頼できるモデル更新を選択する手法である．
+BulyanはKrumによる候補選択とTrimmed Meanによる集約を組み合わせた手法であり，高いByzantine耐性を有することが報告されている．
+これら5手法を比較することで，
+Adaptive Model Poisoning Attackに対する耐性の違いを評価する．
+
+\section{評価方法}
+
+\subsection{評価指標}
+
+評価指標にはAccuracyおよびLossを用いる．
+
+Accuracyはテストデータに対する分類精度を表す指標であり，学習されたグローバルモデルの性能を評価するために用いる．
+
+Lossは損失関数の値を表す指標であり，学習の収束状況を評価するために用いる．Lossが小さいほどモデルの予測結果と正解ラベルとの差が小さく，学習が適切に進行していることを示す．
+
+実験では，各通信ラウンドにおけるAccuracyおよびLossの推移を記録する．Adaptive Model Poisoning AttackによってAccuracyが低下し，Lossが増加するほど，攻撃の影響が大きいと判断する．
+
+
+
+\subsection{比較条件}
+
+本研究では，
+
+\begin{itemize}
+\item 集約手法（FedAvg，Median，Trimmed Mean，Krum，Bulyan）
+\item 悪性クライアント割合（0\%，10\%，20\%，30\%）
+\item データ分布（IID，Non-IID）
+\end{itemize}
+
+を組み合わせて比較を行う．
+
+実験条件数は
+
+\[
+5 \times 4 \times 2 = 40
+\]
+
+条件である。
+
+各条件について3回ずつ実験を行うため，
+
+\[
+40 \times 3 = 120
+\]
+
+回の実験を実施する。
+
+\section{実験環境}
+
+実験はPythonを用いて実装する．深層学習フレームワークにはPyTorchを使用し，Federated Learningの実装にはFlowerを用いる．
+
+全クライアント数は100とし，各通信ラウンドでは全クライアントが学習へ参加する．
+
+通信ラウンド数，ローカルエポック数，バッチサイズ，学習率などのハイパーパラメータは予備実験により決定する．
+
+\section{実験結果}
+\subsection{FedAvg（IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+FedAvgを用いたIID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} FedAvg
+    \item \textbf{Data Split：} IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2，0.3
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+Malicious Ratio 0.0，0.1ではSeed間に大きな差は見られなかったが，
+Malicious Ratio 0.2以上ではRoundごとにAccuracy・Lossが大きく
+振動する不安定な挙動が見られ，Seed間のばらつきも拡大した．
+本文中の結果には他章との表記統一のためSeed 1の結果を採用するが，
+この不安定性はSeedによらず共通して観測された傾向である．
+詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:fedavg_iid_seed1_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/fedavg_iid_seed1_by_ratio.png}
+    \caption{FedAvg・IID・Seed 1 における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移}
+    \label{fig:fedavg_iid_seed1_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{FedAvg(Non-IID環境)における悪性クライアント比率別の評価}
+FedAvgを用いたNon-IID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+\begin{itemize}
+    \item \textbf{Aggregation Method：} FedAvg
+    \item \textbf{Data Split：} Non-IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2，0.3
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+IID環境の場合と同様に，Malicious Ratio 0.2以上ではRoundごとに
+Accuracy・Lossが大きく振動する不安定な挙動が見られ，
+Seed間のばらつきも拡大した．
+本文中の結果には他章との表記統一のためSeed 1の結果を採用するが，
+この不安定性はSeedによらず共通して観測された傾向である．
+詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:fedavg_noniid_seed1_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/fedavg_noniid_seed1_by_ratio.png}
+    \caption{FedAvg・Non-IID・Seed 1 における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移}
+    \label{fig:fedavg_noniid_seed1_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{Median（IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+Medianを用いたIID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} Median
+    \item \textbf{Data Split：} IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2，0.3
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+いずれの条件においてもSeed間に大きな差は見られなかったため，
+本文中の結果にはSeed 1の結果を採用する．詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:median_iid_seed1_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/median_iid_seed1_by_ratio.png}
+    \caption{Median・IID・Seed 1 における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移}
+    \label{fig:median_iid_seed1_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{Median（Non-IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+Medianを用いたNon-IID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} Median
+    \item \textbf{Data Split：} Non-IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2，0.3
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+Malicious Ratio 0.3を除き，いずれの条件においてもSeed間に大きな差は見られなかったため，
+本文中の結果にはSeed 1の結果を採用する．
+ただし，Malicious Ratio 0.3のSeed 1はRound 1でログが途切れているため，
+該当条件のみSeed 2の結果を参考として付記する．
+詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:median_noniid_seed1_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/median_noniid_seed1_by_ratio.png}
+    \caption{Median・Non-IID・Seed 1 における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移（malicious ratio 0.3 は
+    Round 0--1 のみ）}
+    \label{fig:median_noniid_seed1_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{Trimmed Mean（IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+Trimmed Meanを用いたIID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} Trimmed Mean
+    \item \textbf{Data Split：} IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2，0.3
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+いずれの条件においてもSeed間に大きな差は見られなかったため，
+本文中の結果にはSeed 1の結果を採用する．詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:trimmed_mean_iid_seed1_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/trimmed_mean_iid_seed1_by_ratio.png}
+    \caption{Trimmed Mean・IID・Seed 1 における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移}
+    \label{fig:trimmed_mean_iid_seed1_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{Trimmed Mean（Non-IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+Trimmed Meanを用いたNon-IID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} Trimmed Mean
+    \item \textbf{Data Split：} Non-IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2，0.3
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+本条件ではMalicious Ratio 0.3において最終Accuracyが
+Seed間で約0.74--0.84と大きくばらつき，他のMalicious Ratio
+（Seed間の差はいずれも0.01未満）とは性質が異なることが確認された．
+そのため本節ではSeed 1のみの結果ではなく，Malicious Ratioごとに
+Seed 1，2，3の平均値と標準偏差を算出し，平均線と標準偏差の帯を
+重ねて比較する．詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:trimmed_mean_noniid_seedmean_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/trimmed_mean_noniid_seedmean_by_ratio.png}
+    \caption{Trimmed Mean・Non-IID における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移（Seed 1, 2, 3 の平均 $\pm$
+    標準偏差）}
+    \label{fig:trimmed_mean_noniid_seedmean_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{Krum（IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+Krumを用いたIID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} Krum
+    \item \textbf{Data Split：} IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2，0.3
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+Krumは複数クライアントの更新を平均せず1クライアントの更新のみを
+採用するため，Malicious Ratio 0.0の場合でもRoundごとの変動が
+大きい．そのため本節でもSeed 1のみの結果ではなく，Malicious Ratio
+ごとにSeed 1，2，3（一部Roundでログが途切れたSeedを除く）の
+平均値と標準偏差を算出し，平均線と標準偏差の帯を重ねて比較する．
+詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:krum_iid_seedmean_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/krum_iid_seedmean_by_ratio.png}
+    \caption{Krum・IID における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移（Seed 平均 $\pm$
+    標準偏差）}
+    \label{fig:krum_iid_seedmean_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{Krum（Non-IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+Krumを用いたNon-IID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} Krum
+    \item \textbf{Data Split：} Non-IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2，0.3
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+IID環境の場合と同様，Krum自体がRoundごとの変動が大きい集約手法
+であるため，本節でもMalicious RatioごとにSeed 1，2，3（一部Round
+でログが途切れたSeedを除く）の平均値と標準偏差を算出し，平均線と
+標準偏差の帯を重ねて比較する．詳細な結果（全Seedの推移）は付録に
+記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:krum_noniid_seedmean_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/krum_noniid_seedmean_by_ratio.png}
+    \caption{Krum・Non-IID における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移（Seed 平均 $\pm$
+    標準偏差）}
+    \label{fig:krum_noniid_seedmean_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{Bulyan（IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+Bulyanを用いたIID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} Bulyan
+    \item \textbf{Data Split：} IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+Malicious Ratio 0.3（$f=30$）はBulyanの頑健性条件
+$n \geq 4f+3$（$100 < 123$）を満たさず，Round 0以降のログが
+存在しないため，本節の比較対象から除外する．Malicious Ratio
+0.0--0.2についてはSeed間に大きな差は見られなかったが，他章との
+表記統一のためMalicious Ratioごとに Seed 1，2，3 の平均値と
+標準偏差を算出し，平均線と標準偏差の帯を重ねて比較する．
+詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:bulyan_iid_seedmean_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/bulyan_iid_seedmean_by_ratio.png}
+    \caption{Bulyan・IID における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移（Seed 平均 $\pm$
+    標準偏差，malicious ratio 0.3 は頑健性条件を満たさないため
+    対象外）}
+    \label{fig:bulyan_iid_seedmean_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+\subsection{Bulyan（Non-IID環境）における悪性クライアント比率別の評価}
+
+\subsubsection{実験条件}
+
+Bulyanを用いたNon-IID環境において，悪性クライアント比率を変化させ，
+悪性クライアント比率がモデルの性能に与える影響を比較する．
+以下の条件はすべての実験で共通とした．
+
+\begin{itemize}
+    \item \textbf{Aggregation Method：} Bulyan
+    \item \textbf{Data Split：} Non-IID
+    \item \textbf{Attack：} Adaptive Attack
+    \item \textbf{Number of Rounds：} 20
+    \item \textbf{Seeds：} 1，2，3
+\end{itemize}
+
+比較対象とする悪性クライアント比率を以下に示す．
+
+\begin{itemize}
+    \item \textbf{Malicious Ratio：} 0.0，0.1，0.2
+\end{itemize}
+乱数の影響を考慮し，Seed値を1，2，3の3通り設定して実験を行った．
+IID環境の場合と同様，Malicious Ratio 0.3（$f=30$）はBulyanの
+頑健性条件 $n \geq 4f+3$（$100 < 123$）を満たさず，Round 0以降の
+ログが存在しないため，本節の比較対象から除外する．Malicious Ratio
+0.0--0.2についてはMalicious Ratioごとに Seed 1，2，3 の平均値と
+標準偏差を算出し，平均線と標準偏差の帯を重ねて比較する．
+詳細な結果（全Seedの推移）は付録に記載する．
+\subsubsection{実験結果}
+実験結果を図\ref{fig:bulyan_noniid_seedmean_by_ratio}に示す．
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{result/bulyan_noniid_seedmean_by_ratio.png}
+    \caption{Bulyan・Non-IID における malicious ratio 別の
+    Round-Accuracy および Round-Loss の推移（Seed 平均 $\pm$
+    標準偏差，malicious ratio 0.3 は頑健性条件を満たさないため
+    対象外）}
+    \label{fig:bulyan_noniid_seedmean_by_ratio}
+\end{figure}
+%ここ後で記載する.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\begin{thebibliography}{99}
+
+\bibitem{mammen2021fl}
+Priyanka Mary Mammen,
+``Federated Learning: Opportunities and Challenges,''
+Proceedings of ACM Conference,
+2021.
+\bibitem{li2019fl}
+Tian Li,
+Anit Kumar Sahu,
+Ameet Talwalkar,
+Virginia Smith,
+``Federated Learning: Challenges, Methods, and Future Directions,''
+arXiv preprint arXiv:1908.07873,
+2019.
+\bibitem{ma2020privacy}
+Chuan Ma,
+Jun Li,
+Ming Ding,
+Howard H. Yang,
+Feng Shu,
+Tony Q. S. Quek,
+H. Vincent Poor,
+``On Safeguarding Privacy and Security in the Framework of Federated Learning,''
+arXiv preprint arXiv:1909.06512,
+2020.
+
+\bibitem{sagar2023survey}
+Subhash Sagar,
+Chang-Tsun Li,
+Seng W. Loke,
+Jinho Choi,
+``Poisoning Attacks and Defenses in Federated Learning: A Survey,''
+IEEE Security \& Privacy,
+2023.
+
+\bibitem{fang2020local}
+Minghong Fang,
+Xiaoyu Cao,
+Jinyuan Jia,
+Neil Zhenqiang Gong,
+``Local Model Poisoning Attacks to Byzantine-Robust Federated Learning,''
+Proceedings of the 29th USENIX Security Symposium (USENIX Security 2020),
+pp. 1605--1622,
+2020.
+\bibitem{mcmahan2017fedavg}
+H. Brendan McMahan,
+Eider Moore,
+Daniel Ramage,
+Seth Hampson,
+Blaise Aguera y Arcas,
+``Communication-Efficient Learning of Deep Networks from Decentralized Data,''
+Proceedings of the 20th International Conference on Artificial Intelligence and Statistics (AISTATS),
+pp. 1273--1282,
+2017.
+\bibitem{xie2020dba}
+Chulin Xie,
+Keli Huang,
+Pin-Yu Chen,
+Bo Li,
+``DBA: Distributed Backdoor Attacks against Federated Learning,''
+International Conference on Learning Representations (ICLR),
+2020.
+\bibitem{nguyen2022flame}
+Tuan D. Nguyen et al.,
+``FLAME: Taming Backdoors in Federated Learning,''
+31st USENIX Security Symposium (USENIX Security 2022),
+pp. 1415--1432,
+2022.
+\bibitem{bagdasaryan2020model}
+Eugene Bagdasaryan,
+Andreas Veit,
+Yiqing Hua,
+Deborah Estrin,
+Vitaly Shmatikov,
+``How To Backdoor Federated Learning,''
+Proceedings of the 23rd International Conference on Artificial Intelligence and Statistics (AISTATS),
+pp. 2938--2948,
+2020.
+\end{thebibliography}
+
+
+\end{document}

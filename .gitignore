@@ -212,6 +212,30 @@ logs/
 
 out/
 
+# LaTeX build artifacts (keep .tex source only)
+sotsuron_plan.pdf
+sotsuron_plan.dvi
+report/*.pdf
+report/*.dvi
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.bbl
+report/*.blg
+
 # 実験計画書7.6/7.7：run_experiments.pyの出力（実験ごとの final_model.pt / fixed_eval）
 experiments/
 fixed_eval/
+
+# report/mechanism_analysis_plan.tex：Phase 1/2の出力のうち、モデル重みと予測画像は
+# 容量が大きいため除外する（_logs/*.csv と analysis/ は解析用データとして追跡する）。
+experiments_phase1/*
+!experiments_phase1/_logs/
+!experiments_phase1/analysis/
+!experiments_phase1/analyze_phase1.py
+!experiments_phase1/failures.csv
+
+experiments_phase2/*
+!experiments_phase2/_logs/
+!experiments_phase2/analysis/

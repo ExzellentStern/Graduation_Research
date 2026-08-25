@@ -19,6 +19,33 @@ PLOT_DIR = os.path.join(LOG_DIR, "plots")
 RESULTS_CSV = os.path.join(LOG_DIR, "results.csv")
 SUMMARY_CSV = os.path.join(LOG_DIR, "summary.csv")
 
+# 実験計画書 7.5/7.6 対応：メカニズム分析用の診断ログCSV
+DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
+
+
+def configure_log_dir(log_dir: str) -> None:
+    """
+    ログの出力先を切り替える。
+
+    デフォルトの LOG_DIR="logs" はプロジェクト直下の固定パスで、
+    run_experiments.py が条件ごとに分ける output_dir とは独立している。
+    そのため output_dir を変えても全条件のログが同じ logs/ に混ざってしまい、
+    後から解析する際に条件の切り分けや掃除が困難になる（実際に発生した問題）。
+    server_app.py から output_dir に対応する場所を渡すことで、
+    そのスイープ専用のログディレクトリに自己完結させる。
+    """
+    global LOG_DIR, CLIENT_CSV, SERVER_CSV, CONFIG_TXT, PLOT_DIR
+    global RESULTS_CSV, SUMMARY_CSV, DIAGNOSTICS_CSV
+
+    LOG_DIR = log_dir
+    CLIENT_CSV = os.path.join(LOG_DIR, "client_metrics.csv")
+    SERVER_CSV = os.path.join(LOG_DIR, "server_metrics.csv")
+    CONFIG_TXT = os.path.join(LOG_DIR, "run_config.txt")
+    PLOT_DIR = os.path.join(LOG_DIR, "plots")
+    RESULTS_CSV = os.path.join(LOG_DIR, "results.csv")
+    SUMMARY_CSV = os.path.join(LOG_DIR, "summary.csv")
+    DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
+
 
 # =========================
 # 内部ユーティリティ
@@ -141,6 +168,73 @@ def log_results_csv(
             malicious_ratio,
             attack_type,
             seed,
+        ])
+
+
+# =========================
+# メカニズム分析用ログ（report/mechanism_analysis_plan.tex 対応）
+# =========================
+_DIAGNOSTICS_COLUMNS = [
+    "run_id",
+    "round",
+    "aggregation_method",
+    "data_split",
+    "malicious_ratio",
+    "seed",
+    "n_malicious",
+    "n_benign",
+    "benign_spread",
+    "malicious_push_dist",
+    "push_ratio",
+    "frac_selected_malicious",
+]
+
+
+def log_diagnostics_csv(
+    run_id: str,
+    round_: int,
+    aggregation_method: str,
+    data_split: str,
+    malicious_ratio: float,
+    seed: int,
+    n_malicious: int,
+    n_benign: int,
+    benign_spread: float | None,
+    malicious_push_dist: float | None,
+    push_ratio: float | None,
+    frac_selected_malicious: float | None,
+):
+    """
+    honestクラスタの分散・maliciousの押し出し距離・Krum/Bulyanの選択結果を、
+    ラウンドごとに logs/diagnostics.csv へ追記する。
+
+    - benign_spread: honest更新の重心からの平均距離
+    - malicious_push_dist: malicious（攻撃適用後）更新のhonest重心からの平均距離
+    - push_ratio: malicious_push_dist / benign_spread
+    - frac_selected_malicious: krum/bulyanで選択されたクライアントのうちmaliciousの割合
+      （fedavg/median/trimmed_meanはNone）
+    malicious_push_dist / push_ratio / frac_selected_malicious は該当しない条件（n_malicious=0など）
+    ではNoneのまま書き込む。
+    """
+    _ensure_dir()
+    file_exists = os.path.exists(DIAGNOSTICS_CSV)
+    with open(DIAGNOSTICS_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_DIAGNOSTICS_COLUMNS)
+        w.writerow([
+            run_id,
+            round_,
+            aggregation_method,
+            data_split,
+            malicious_ratio,
+            seed,
+            n_malicious,
+            n_benign,
+            benign_spread,
+            malicious_push_dist,
+            push_ratio,
+            frac_selected_malicious,
         ])
 
 

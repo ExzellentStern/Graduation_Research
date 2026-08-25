@@ -31,6 +31,9 @@ Model Poisoning Attack の実装（実験計画書 7.4 対応）
         攻撃方向へ「最大/最小のさらに外側」の値を割り当てる境界値攻撃。
       - Krum / Bulyan: 悪性クライアントを一点に密集させ、Krumに選ばれる範囲で
         グローバルモデルから最大限離れるように攻撃強度λを探索する。
+      - FedAvg など防御機構を持たない集約手法: 外れ値を除外する仕組みが
+        無いため、選択回避のためのλ探索は不要で、真の更新量を
+        scale_factor 倍に拡大するだけの Scale Attack を用いる。
     卒論で原論文との厳密な数式対応を主張する場合は、原論文の該当箇所と
     本実装の差分を別途確認・記載すること。
 """
@@ -175,6 +178,27 @@ def _craft_krum_attack(
     return best_crafted
 
 
+def _craft_scale_attack(
+    vectors: np.ndarray,
+    malicious_idx: np.ndarray,
+    global_vector: np.ndarray,
+    scale_factor: float = 10.0,
+) -> np.ndarray:
+    """
+    FedAvg など防御機構を持たない集約手法を狙った攻撃。
+    各悪性クライアントの真の更新量 delta = local - global を scale_factor 倍に
+    拡大した値を採用する（client_app.py の scale_delta と同じ考え方を，
+    サーバ側で vectors 全体に対して適用したもの）。単純平均は外れ値を一切
+    除外しないため，Krum/Bulyan攻撃のような「選ばれる範囲でのλ探索」は不要で，
+    このように大きくスケールするだけで平均を大きく歪められる。
+    """
+    crafted = vectors.copy()
+    for idx in malicious_idx:
+        delta = vectors[idx] - global_vector
+        crafted[idx] = global_vector + scale_factor * delta
+    return crafted
+
+
 def adaptive_attack(
     vectors: np.ndarray,
     malicious_idx: Sequence[int],
@@ -208,5 +232,6 @@ def adaptive_attack(
     elif method in ("krum", "bulyan"):
         return _craft_krum_attack(vectors, malicious_idx, benign_idx, global_vector, f=f)
     else:
-        # fedavg などrobustでない集約手法は adaptive攻撃の対象外（sign_flip/scaleで十分効く）
-        return vectors.copy()
+        # fedavg など防御機構を持たない集約手法には Scale Attack を適用する
+        # （外れ値を除外する仕組みが無いため，選択回避のためのλ探索は不要）
+        return _craft_scale_attack(vectors, malicious_idx, global_vector)
