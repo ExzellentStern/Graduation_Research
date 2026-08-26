@@ -218,6 +218,8 @@ class RobustFedAvg(FedAvg):
                 global_vector=self._last_global_vector,
                 aggregation_method=self.aggregation_method,
                 f=self.num_malicious_assumed,
+                # Krum/Bulyan攻撃のε-ball摂動用：seedとラウンド番号から決定的に再現可能にする
+                seed=(self.seed * 1_000_003 + server_round) % (2**32 - 1),
             )
 
         # --- report/mechanism_analysis_plan.tex 対応：honestクラスタの分散とmaliciousの押し出し距離 ---
