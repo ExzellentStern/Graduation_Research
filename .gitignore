@@ -212,9 +212,18 @@ logs/
 
 out/
 
-# LaTeX build artifacts (keep .tex source only)
+# LaTeX build artifacts (keep .tex source only; sotsuron.pdf is committed intentionally)
 sotsuron_plan.pdf
 sotsuron_plan.dvi
+sotsuron_plan.aux
+sotsuron_plan.fdb_latexmk
+sotsuron_plan.fls
+sotsuron_plan.synctex.gz
+sotsuron.aux
+sotsuron.dvi
+sotsuron.fdb_latexmk
+sotsuron.fls
+sotsuron.synctex.gz
 report/*.pdf
 report/*.dvi
 report/*.aux

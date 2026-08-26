@@ -46,7 +46,7 @@ Fang ら\cite{fang2020local}のAdaptive Model Poisoning Attackは，Robust Aggre
   \item Krum / Bulyanは，Malicious Ratio 0.0（悪性クライアント不在）の場合でもラウンドごとの精度変動が大きい。
   \item FedAvgは，Malicious Ratio 0.2以上でAccuracy・Lossがラウンドごとに大きく振動する。
   \item Trimmed MeanをNon-IID環境で用いた場合，Malicious Ratio 0.3のときのみSeed間で最終Accuracyが0.74--0.84と大きくばらつく（他のMalicious Ratioでは Seed間差は0.01未満）。
-  \item Bulyanは頑健性条件 $n \geq 4f+3$ を満たさないMalicious Ratio 0.3（$100 < 123$）において，原理的に動作しない。
+  \item Bulyanはロバスト性条件 $n \geq 4f+3$ を満たさないMalicious Ratio 0.3（$100 < 123$）において，原理的に動作しない。
 \end{itemize}
 
 4点目は集約手法の数式上の制約から自明に説明できるため考察のみで扱い，1--3点目について新たな定量指標を導入して分析する。

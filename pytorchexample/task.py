@@ -246,7 +246,7 @@ def load_centralized_dataset():
 def train(net, trainloader, epochs, lr, device):
     net.to(device)
     criterion = torch.nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.AdamW(net.parameters(), lr=lr)
+    optimizer = torch.optim.AdamW(net.parameters(), lr=lr)  #AdamWを最適化手法として用いている
 
     net.train()
     running_loss = 0.0
