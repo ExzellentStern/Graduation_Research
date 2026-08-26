@@ -224,9 +224,8 @@ def _craft_krum_attack(
         anchor=global_vector, direction=-progress_direction,
         lambda_init=primary_lambda_init, n_search_steps=n_search_steps,
     )
-    if best_lambda is not None:
-        w1 = global_vector - best_lambda * progress_direction
-    else:
+    anchor = global_vector
+    if best_lambda is None:
         # 2) w_Re起点で解が無い場合は，honestクラスタ重心を起点にフォールバックする
         #    （押し出す方向は同じ「自然な進行方向の逆」のまま）
         if lambda_init is None:
@@ -235,15 +234,26 @@ def _craft_krum_attack(
         else:
             fallback_lambda_init = lambda_init
 
-        fallback_lambda = _search_krum_lambda(
+        best_lambda = _search_krum_lambda(
             vectors, malicious_idx, f,
             anchor=benign_center, direction=-progress_direction,
             lambda_init=fallback_lambda_init, n_search_steps=n_search_steps,
         )
-        if fallback_lambda is None:
+        anchor = benign_center
+        if best_lambda is None:
             # どちらの起点でもどのλでもKrumに選ばれない場合は攻撃を諦める
             return vectors.copy()
-        w1 = benign_center - fallback_lambda * progress_direction
+
+    # best_lambda はKrumに選ばれる／選ばれないの境界ぎりぎりの値であり，このあと
+    # epsilon分の摂動を加えると境界を超えて選ばれなくなることがある（実測で確認済み）。
+    # そのため，わずかに手前へ戻した値を実際の押し出し量として使う。
+    # epsilonについても，Fang et al. (2020)のデフォルト値(0.01)を上限としつつ，
+    # 実際の押し出し距離(best_lambda)に対して十分小さくなるようスケールする
+    # （固定値のままだと，honestクラスタの間隔がFangの想定より小さいモデル・
+    #   データセットでは，摂動がKrumの選択結果自体を覆してしまうことがある）。
+    safety_margin = 0.98
+    w1 = anchor - (best_lambda * safety_margin) * progress_direction
+    epsilon = min(epsilon, 0.05 * best_lambda)
 
     crafted = vectors.copy()
     rng = np.random.default_rng(seed)
