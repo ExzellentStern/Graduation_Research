@@ -147,8 +147,9 @@ def main(grid: Grid, context: Context) -> None:
     batch_size = context.run_config["batch-size"]
 
     # ---- 追加：データ分割 / 攻撃 設定（無ければデフォルト） ----
-    data_split = context.run_config.get("data-split", "iid")                 # "iid" / "non_iid" / "dirichlet"
-    alpha = float(context.run_config.get("dirichlet-alpha", 0.5))            # Dirichlet 用
+    data_split = context.run_config.get("data-split", "iid")                 # "iid" / "non_iid"（Fang方式） / "dirichlet"（旧方式，参考用）
+    alpha = float(context.run_config.get("dirichlet-alpha", 0.5))            # dirichlet（旧方式）用
+    non_iid_p = float(context.run_config.get("non-iid-p", 0.5))              # non_iid（Fang方式）用：ラベルlを対応グループへ割り当てる確率
     attack_type = context.run_config.get("attack-type", "none")              # "none" / "sign_flip" / "scale" / "adaptive"
     poison_rate = float(context.run_config.get("poison-rate", 0.0))          # label_flip 等で利用する想定
     seed = int(context.run_config.get("seed", 42))                           # 実験計画書7.5：データ分割の再現性用シード
@@ -193,8 +194,8 @@ def main(grid: Grid, context: Context) -> None:
     print("local_epochs  :", local_epochs)
     print("batch_size    :", batch_size)
     print("learning_rate :", lr)
-    print("optimizer     : AdamW")
-    print("data_split    :", data_split, f"(alpha={alpha})")
+    print("optimizer     : SGD")
+    print("data_split    :", data_split, f"(p={non_iid_p}, alpha={alpha})")
     print("attack_type   :", attack_type)
     print("num_clients   :", num_clients)
     print("malicious_ratio:", malicious_ratio, f"(seed={malicious_seed}, manual={malicious_ids_raw!r})")
@@ -210,7 +211,7 @@ def main(grid: Grid, context: Context) -> None:
         local_epochs=local_epochs,
         batch_size=batch_size,
         learning_rate=lr,
-        optimizer="AdamW",
+        optimizer="SGD",
         iid=(data_split == "iid"),
         seed=seed,
     )
@@ -233,6 +234,7 @@ def main(grid: Grid, context: Context) -> None:
         lr=lr,
         data_split=data_split,
         alpha=alpha,
+        p=non_iid_p,
         attack_type=attack_type,
         malicious_ids=malicious_ids,
         poison_rate=poison_rate,

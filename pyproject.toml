@@ -32,7 +32,7 @@ num-server-rounds = 5
 fraction-evaluate = 0.2
 local-epochs = 1
 learning-rate = 0.001
-batch-size = 25
+batch-size = 32          # Fang et al. (2020) のデフォルト（Fashion-MNIST以外は32）に合わせた
 aggregation-method = "fedavg"   # "fedavg" / "median" / "trimmed_mean" / "krum" / "bulyan"
 # 防御側が想定する悪性クライアント数の上限 f。
 # -1 は「未指定」を意味し、実際の malicious_ids の数がそのまま使われる。
@@ -46,8 +46,9 @@ num-malicious-assumed = -1
 seed = 42
 
 # 追加：IID / non-IID
-data-split = "non_iid"          # "non_iid" または "dirichlet" に変える
-dirichlet-alpha = 0.6     # non_iid/dirichlet の時に効く（0.1で激偏り）
+data-split = "non_iid"          # "iid" / "non_iid"（Fang方式） / "dirichlet"（旧方式，参考用）
+non-iid-p = 0.5            # non_iid（Fang方式）の時に効く：ラベルlを対応クライアント群へ割り当てる確率（Fangのデフォルトと同じp=0.5）
+dirichlet-alpha = 0.6      # dirichlet（旧方式）の時のみ効く（0.1で激偏り）。比較用に残す。
 
 # 追加：攻撃設定（今の実装に合わせる）
 attack-type = "none"        # "sign_flip" or "scale"

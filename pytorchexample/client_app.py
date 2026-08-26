@@ -47,6 +47,7 @@ def train(msg: Message, context: Context):
     # --- IID / non-IID 用設定（データ分割）---
     data_split = cfg.get("data_split", "iid")
     alpha = float(cfg.get("alpha", 0.5))
+    p = float(cfg.get("p", 0.5))
     seed = int(cfg.get("seed", 42))  # 実験計画書7.5：データ分割の再現性用シード
 
     # --- 攻撃用設定（保持：将来の拡張のため消さない）---
@@ -87,6 +88,7 @@ def train(msg: Message, context: Context):
         batch_size,
         data_split=data_split,
         alpha=alpha,
+        p=p,
         seed=seed,
     )
 
@@ -102,7 +104,7 @@ def train(msg: Message, context: Context):
     if server_round == 0:
         seen, dist = summarize(trainloader, n_batches=20)
         print(
-            f"[Client {partition_id}] (train) round={server_round} split={data_split} alpha={alpha} "
+            f"[Client {partition_id}] (train) round={server_round} split={data_split} alpha={alpha} p={p} "
             f"seen={seen} label_dist={dist}"
         )
 
@@ -197,6 +199,7 @@ def evaluate(msg: Message, context: Context):
 
     data_split = cfg.get("data_split", "iid")
     alpha = float(cfg.get("alpha", 0.5))
+    p = float(cfg.get("p", 0.5))
     seed = int(cfg.get("seed", 42))  # 実験計画書7.5：データ分割の再現性用シード
     server_round = cfg.get("server_round", -1)
 
@@ -227,6 +230,7 @@ def evaluate(msg: Message, context: Context):
         batch_size,
         data_split=data_split,
         alpha=alpha,
+        p=p,
         seed=seed,
     )
 
@@ -241,7 +245,7 @@ def evaluate(msg: Message, context: Context):
     if server_round <= 0:
         seen, dist = summarize(valloader, n_batches=20)
         print(
-            f"[Client {partition_id}] (eval) round={server_round} split={data_split} alpha={alpha} "
+            f"[Client {partition_id}] (eval) round={server_round} split={data_split} alpha={alpha} p={p} "
             f"seen={seen} label_dist={dist}"
         )
 
@@ -254,7 +258,7 @@ def evaluate(msg: Message, context: Context):
     # 4) ログ出力（評価）
     # ============================================================
     print(
-        f"[Client {partition_id}] round={server_round} split={data_split} alpha={alpha} "
+        f"[Client {partition_id}] round={server_round} split={data_split} alpha={alpha} p={p} "
         f"attack={attack_type} malicious={is_malicious} poison={poison_rate}"
     )
 

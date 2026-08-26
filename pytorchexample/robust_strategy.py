@@ -52,8 +52,9 @@ class RobustFedAvg(FedAvg):
         trimmed_mean_beta: 指定があれば trimmed_mean の beta として f より優先
         krum_multi_k: krum で平均に使う候補数（1なら標準Krum）
 
-        lr / data_split / alpha / attack_type / malicious_ids / poison_rate:
+        lr / data_split / alpha / p / attack_type / malicious_ids / poison_rate:
             既存の FedAvgWithPerRoundConfig と同じ、毎ラウンド配布するconfig
+            （alpha は data_split="dirichlet" 用，p は data_split="non_iid"（Fang方式）用）
     """
 
     def __init__(
@@ -63,7 +64,8 @@ class RobustFedAvg(FedAvg):
         lr: float,
         data_split: str,
         alpha: float,
-        attack_type: str,
+        p: float = 0.5,
+        attack_type: str = "none",
         malicious_ids,
         poison_rate: float,
         seed: int = 42,
@@ -81,6 +83,7 @@ class RobustFedAvg(FedAvg):
         self.lr = lr
         self.data_split = data_split
         self.alpha = alpha
+        self.p = p
         self.attack_type = attack_type
         self.malicious_ids = list(malicious_ids)
         self.poison_rate = poison_rate
@@ -110,6 +113,7 @@ class RobustFedAvg(FedAvg):
         config["lr"] = self.lr
         config["data_split"] = self.data_split
         config["alpha"] = self.alpha
+        config["p"] = self.p
         config["attack_type"] = self.attack_type
         config["malicious_ids"] = self.malicious_ids
         config["poison_rate"] = self.poison_rate
