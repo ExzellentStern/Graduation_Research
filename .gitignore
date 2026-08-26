@@ -239,3 +239,10 @@ experiments_phase1/*
 experiments_phase2/*
 !experiments_phase2/_logs/
 !experiments_phase2/analysis/
+!experiments_phase2/combined_analysis/
+!experiments_phase2/analyze_combined.py
+!experiments_phase2/failures.csv
+
+# クリーンアップ前の一時バックアップ（ローカル作業用、追跡不要）
+experiments_phase1/_logs_backup_before_cleanup/
+experiments_phase2/_logs_backup_before_cleanup/
