@@ -3,16 +3,18 @@ run_experiments.py
 
 実験計画書 7.6 対応：全実験条件を自動で回すオーケストレーションスクリプト。
 
-- aggregation / malicious_ratio / data_split / seed の一覧を定義し、全組み合わせ
-  （5 x 4 x 2 x 3 = 120通り）について `flwr run` をサブプロセスとして実行する。
+- aggregation / malicious_ratio / data_split / trial の一覧を定義し、全組み合わせ
+  （5 x 4 x 2 x 20 = 800通り）について `flwr run` をサブプロセスとして実行する。
+  trial数は Fang et al. (2020) の "trial"（同一条件を50 trials繰り返して平均する）に
+  合わせた表記・考え方だが，計算コストの都合で20 trialsに設定している。
 - 実験計画書5.2の比較条件（集約手法・悪性クライアント割合・データ分布）に沿っており、
   attack-type は本研究の主眼である "adaptive"（Adaptive Model Poisoning Attack）に固定する
   （5.2の比較条件に攻撃種別は含まれていないため）。
 - 各実験は experiments/<条件名>/ に出力先を分ける（final_model.pt / fixed_eval が
   実験間で上書きされないようにする、実験計画書7.6「各実験ごとに出力ディレクトリを分ける」対応）。
-- 同一条件を3回繰り返す際、seed はデータ分割と悪性クライアント選出の両方に連動させる
-  （malicious-seed にも同じ値を渡す）。これにより「どのデータ分割か」「どのクライアントが
-  悪性か」の両方が3回の繰り返しで変わり、より代表性のある平均が得られる。
+- 同一条件をtrial回数分繰り返す際、trial番号はデータ分割と悪性クライアント選出の両方に
+  連動させる（malicious-seed にも同じ値を渡す）。これにより「どのデータ分割か」「どの
+  クライアントが悪性か」の両方がtrialごとに変わり、より代表性のある平均が得られる。
 
 【完了判定・再開について】
 `flwr run` はサブプロセスとしては例外発生時でも終了コード0を返すことがある
@@ -28,7 +30,7 @@ run_experiments.py
 robust_strategy.py が意図的にValueErrorを送出する（既知のBulyanの限界であり、バグではない）。
 
 実行方法:
-    python3 run_experiments.py            # 全120条件を実行（未完了分のみ）
+    python3 run_experiments.py            # 全800条件を実行（未完了分のみ）
     python3 run_experiments.py --quick     # 動作確認用の小規模設定で試す
     python3 run_experiments.py --phase1    # report/mechanism_analysis_plan.tex のPhase 1を実行
 """
@@ -42,7 +44,7 @@ from datetime import datetime
 AGGREGATION_METHODS = ["fedavg", "median", "trimmed_mean", "krum", "bulyan"]
 MALICIOUS_RATIOS = [0.0, 0.1, 0.2, 0.3]
 DATA_SPLITS = ["iid", "non_iid"]
-SEEDS = [1, 2, 3]  # 実験計画書5.2：各条件について3回ずつ
+TRIALS = list(range(1, 21))  # Fang et al. (2020)は50 trials。本実験は計算コストの都合で20 trials
 
 NUM_CLIENTS = 100
 NUM_SERVER_ROUNDS = 20  # 予備実験で決定した値に差し替えること（実験計画書6章）
@@ -55,7 +57,7 @@ FAILURES_CSV_NAME = "failures.csv"
 # report/mechanism_analysis_plan.tex：Phase 1（探索）の条件定義
 #
 # 全条件を対象に、既存4段階のMalicious Ratioに加えて、臨界点探索のため
-# 手法ごとにRatioを細分化する（Seedは全条件3のまま）。
+# 手法ごとにRatioを細分化する（trial数は全条件TRIALSのまま）。
 # 出力先は experiments/ とは別の experiments_phase1/ に分ける。
 # 既存 experiments/ の final_model.pt には診断ログ（logs/diagnostics.csv）が
 # 含まれていない（本セッションでロギングを追加する前の実行のため）ため、
@@ -84,16 +86,16 @@ def phase1_ratios_for(aggregation: str, data_split: str) -> list:
 
 
 def phase1_conditions():
-    """(aggregation, data_split, ratio, seed) を Phase 1 の条件分だけ列挙する。"""
+    """(aggregation, data_split, ratio, trial) を Phase 1 の条件分だけ列挙する。"""
     for aggregation in AGGREGATION_METHODS:
         for data_split in DATA_SPLITS:
             for ratio in phase1_ratios_for(aggregation, data_split):
-                for seed in SEEDS:
-                    yield aggregation, data_split, ratio, seed
+                for trial in TRIALS:
+                    yield aggregation, data_split, ratio, trial
 
 
-def condition_name(aggregation: str, data_split: str, ratio: float, seed: int) -> str:
-    return f"{aggregation}_{data_split}_ratio{ratio}_seed{seed}"
+def condition_name(aggregation: str, data_split: str, ratio: float, trial: int) -> str:
+    return f"{aggregation}_{data_split}_ratio{ratio}_trial{trial}"
 
 
 def is_done(output_dir: str) -> bool:
@@ -120,14 +122,14 @@ def run_one(
     aggregation: str,
     data_split: str,
     ratio: float,
-    seed: int,
+    trial: int,
     num_clients: int,
     num_rounds: int,
     federation: str,
     experiments_dir: str = EXPERIMENTS_DIR,
 ) -> str:
     """1条件を実行する。戻り値は "done" / "skipped" / "failed"。"""
-    name = condition_name(aggregation, data_split, ratio, seed)
+    name = condition_name(aggregation, data_split, ratio, trial)
     output_dir = os.path.join(experiments_dir, name)
 
     if is_done(output_dir):
@@ -141,8 +143,8 @@ def run_one(
         f'aggregation-method="{aggregation}" '
         f'data-split="{data_split}" '
         f'malicious-ratio={ratio} '
-        f'malicious-seed={seed} '
-        f'seed={seed} '
+        f'malicious-seed={trial} '
+        f'trial={trial} '
         f'attack-type="{ATTACK_TYPE}" '
         f'num-clients={num_clients} '
         f'output-dir="{output_dir}"'
@@ -177,7 +179,7 @@ def main() -> None:
     parser.add_argument(
         "--phase1",
         action="store_true",
-        help="report/mechanism_analysis_plan.tex のPhase 1（全条件＋臨界点探索用のRatio細分化、Seed3）を実行する。"
+        help="report/mechanism_analysis_plan.tex のPhase 1（全条件＋臨界点探索用のRatio細分化、trial数はTRIALS）を実行する。"
         "出力先は experiments/ とは別の experiments_phase1/ に分ける。",
     )
     parser.add_argument("--federation", default="local-simulation", help="flwr run に渡すfederation名")
@@ -198,11 +200,11 @@ def main() -> None:
         num_rounds = 1
         experiments_dir = EXPERIMENTS_DIR
         conditions = [
-            (aggregation, data_split, ratio, seed)
+            (aggregation, data_split, ratio, trial)
             for aggregation in ["fedavg", "median"]
             for data_split in ["iid"]
             for ratio in [0.0, 0.2]
-            for seed in [1]
+            for trial in [1]
         ]
     elif args.phase1:
         num_clients = NUM_CLIENTS
@@ -214,11 +216,11 @@ def main() -> None:
         num_rounds = NUM_SERVER_ROUNDS
         experiments_dir = EXPERIMENTS_DIR
         conditions = [
-            (aggregation, data_split, ratio, seed)
+            (aggregation, data_split, ratio, trial)
             for aggregation in AGGREGATION_METHODS
             for data_split in DATA_SPLITS
             for ratio in MALICIOUS_RATIOS
-            for seed in SEEDS
+            for trial in TRIALS
         ]
 
     if selected_aggregations is not None:
@@ -228,10 +230,10 @@ def main() -> None:
     print(f"=== 実験条件数: {total}（出力先: {experiments_dir}/） ===\n")
 
     counts = {"done": 0, "skipped": 0, "failed": 0}
-    for i, (aggregation, data_split, ratio, seed) in enumerate(conditions, start=1):
+    for i, (aggregation, data_split, ratio, trial) in enumerate(conditions, start=1):
         print(f"[{i}/{total}]", end=" ")
         status = run_one(
-            aggregation, data_split, ratio, seed,
+            aggregation, data_split, ratio, trial,
             num_clients, num_rounds, args.federation,
             experiments_dir=experiments_dir,
         )

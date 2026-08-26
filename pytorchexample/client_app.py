@@ -48,7 +48,7 @@ def train(msg: Message, context: Context):
     data_split = cfg.get("data_split", "iid")
     alpha = float(cfg.get("alpha", 0.5))
     p = float(cfg.get("p", 0.5))
-    seed = int(cfg.get("seed", 42))  # 実験計画書7.5：データ分割の再現性用シード
+    trial = int(cfg.get("trial", 1))  # Fang et al. (2020)の"trial"に対応：データ分割の再現性用シード兼繰り返し試行番号
 
     # --- 攻撃用設定（保持：将来の拡張のため消さない）---
     attack_type = cfg.get("attack_type", "none")
@@ -89,7 +89,7 @@ def train(msg: Message, context: Context):
         data_split=data_split,
         alpha=alpha,
         p=p,
-        seed=seed,
+        trial=trial,
     )
 
     # 悪性クライアント判定
@@ -200,7 +200,7 @@ def evaluate(msg: Message, context: Context):
     data_split = cfg.get("data_split", "iid")
     alpha = float(cfg.get("alpha", 0.5))
     p = float(cfg.get("p", 0.5))
-    seed = int(cfg.get("seed", 42))  # 実験計画書7.5：データ分割の再現性用シード
+    trial = int(cfg.get("trial", 1))  # Fang et al. (2020)の"trial"に対応：データ分割の再現性用シード兼繰り返し試行番号
     server_round = cfg.get("server_round", -1)
 
     # --- 攻撃設定（evaluateでは攻撃を適用しないが、表示・整合性確認用に読む）---
@@ -231,7 +231,7 @@ def evaluate(msg: Message, context: Context):
         data_split=data_split,
         alpha=alpha,
         p=p,
-        seed=seed,
+        trial=trial,
     )
 
     # 悪性クライアント判定（表示用）

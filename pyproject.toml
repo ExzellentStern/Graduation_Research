@@ -33,6 +33,10 @@ fraction-evaluate = 0.2
 local-epochs = 1
 learning-rate = 0.001
 batch-size = 32          # Fang et al. (2020) のデフォルト（Fashion-MNIST以外は32）に合わせた
+# 毎ラウンド・毎条件のfixed_eval画像（grid.png + 誤分類画像）を保存するか。
+# 大規模スイープではファイル数・ディスク容量を圧迫するためデフォルトはfalse。
+# 個別に可視化を見たい場合のみtrueにする。
+save-fixed-eval = false
 aggregation-method = "fedavg"   # "fedavg" / "median" / "trimmed_mean" / "krum" / "bulyan"
 # 防御側が想定する悪性クライアント数の上限 f。
 # -1 は「未指定」を意味し、実際の malicious_ids の数がそのまま使われる。
@@ -40,10 +44,12 @@ aggregation-method = "fedavg"   # "fedavg" / "median" / "trimmed_mean" / "krum" 
 #   デフォルト値として使うと「未指定」と区別できなくなる。そのため -1 を番兵値にする）
 num-malicious-assumed = -1
 
-# 追加：実験の再現性用シード（実験計画書 7.5 対応、data-splitに使用）
-# malicious-seedとは独立。run_experiments.py（7.6）で条件ごとに複数回実験する際、
-# このseedを変えることで「同一条件・異なるデータ分割」の繰り返し実験を行う。
-seed = 42
+# 追加：実験の繰り返し試行番号（実験計画書 7.5 対応、data-splitに使用）
+# Fang et al. (2020) の"trial"（同一条件を複数回繰り返す単位）に対応させた名称。
+# malicious-seedとは独立だが、run_experiments.pyは条件ごとに複数回実験する際、
+# このtrialの値をmalicious-seedにもそのまま渡している（データ分割・悪性クライアント
+# 選出の両方をtrialごとに変えるため）。
+trial = 1
 
 # 追加：IID / non-IID
 data-split = "non_iid"          # "iid" / "non_iid"（Fang方式） / "dirichlet"（旧方式，参考用）

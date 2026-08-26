@@ -68,7 +68,7 @@ class RobustFedAvg(FedAvg):
         attack_type: str = "none",
         malicious_ids,
         poison_rate: float,
-        seed: int = 42,
+        trial: int = 1,
         aggregation_method: str = "fedavg",
         num_malicious_assumed: int = 0,
         trimmed_mean_beta: Optional[int] = None,
@@ -87,7 +87,7 @@ class RobustFedAvg(FedAvg):
         self.attack_type = attack_type
         self.malicious_ids = list(malicious_ids)
         self.poison_rate = poison_rate
-        self.seed = seed
+        self.trial = trial
 
         # --- report/mechanism_analysis_plan.tex 対応：診断ログ用の実験条件識別子 ---
         self.malicious_ratio = malicious_ratio
@@ -117,7 +117,7 @@ class RobustFedAvg(FedAvg):
         config["attack_type"] = self.attack_type
         config["malicious_ids"] = self.malicious_ids
         config["poison_rate"] = self.poison_rate
-        config["seed"] = self.seed
+        config["trial"] = self.trial
 
     def configure_train(
         self, server_round: int, arrays: ArrayRecord, config: ConfigRecord, grid: Grid
@@ -218,8 +218,8 @@ class RobustFedAvg(FedAvg):
                 global_vector=self._last_global_vector,
                 aggregation_method=self.aggregation_method,
                 f=self.num_malicious_assumed,
-                # Krum/Bulyan攻撃のε-ball摂動用：seedとラウンド番号から決定的に再現可能にする
-                seed=(self.seed * 1_000_003 + server_round) % (2**32 - 1),
+                # Krum/Bulyan攻撃のε-ball摂動用：trial番号とラウンド番号から決定的に再現可能にする
+                seed=(self.trial * 1_000_003 + server_round) % (2**32 - 1),
             )
 
         # --- report/mechanism_analysis_plan.tex 対応：honestクラスタの分散とmaliciousの押し出し距離 ---
@@ -284,7 +284,7 @@ class RobustFedAvg(FedAvg):
             aggregation_method=self.aggregation_method,
             data_split=self.data_split,
             malicious_ratio=self.malicious_ratio,
-            seed=self.seed,
+            trial=self.trial,
             n_malicious=len(malicious_pos),
             n_benign=len(benign_pos),
             benign_spread=benign_spread,

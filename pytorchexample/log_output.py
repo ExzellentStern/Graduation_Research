@@ -38,7 +38,7 @@ def log_run_config(
     learning_rate: float,
     optimizer: str,
     iid: bool,
-    seed: int,
+    trial: int,
 ):
     _ensure_dir()
     with open(CONFIG_TXT, "a", encoding="utf-8") as f:
@@ -50,7 +50,7 @@ def log_run_config(
         f.write(f"learning_rate : {learning_rate}\n")
         f.write(f"optimizer     : {optimizer}\n")
         f.write(f"IID           : {iid}\n")
-        f.write(f"seed          : {seed}\n")
+        f.write(f"trial         : {trial}\n")
         f.write("=================================\n\n")
 
 
@@ -110,7 +110,7 @@ _RESULTS_COLUMNS = [
     "data_split",
     "malicious_ratio",
     "attack_type",
-    "seed",
+    "trial",
 ]
 
 _SUMMARY_COLUMNS = [
@@ -122,7 +122,7 @@ _SUMMARY_COLUMNS = [
     "data_split",
     "malicious_ratio",
     "attack_type",
-    "seed",
+    "trial",
 ]
 
 
@@ -135,7 +135,7 @@ def log_results_csv(
     data_split: str,
     malicious_ratio: float,
     attack_type: str,
-    seed: int,
+    trial: int,
 ):
     """ラウンドごとの Accuracy/Loss を、実験条件つきで logs/results.csv に追記する。"""
     _ensure_dir()
@@ -153,7 +153,7 @@ def log_results_csv(
             data_split,
             malicious_ratio,
             attack_type,
-            seed,
+            trial,
         ])
 
 
@@ -168,7 +168,7 @@ _DIAGNOSTICS_COLUMNS = [
     "aggregation_method",
     "data_split",
     "malicious_ratio",
-    "seed",
+    "trial",
     "n_malicious",
     "n_benign",
     "benign_spread",
@@ -184,7 +184,7 @@ def log_diagnostics_csv(
     aggregation_method: str,
     data_split: str,
     malicious_ratio: float,
-    seed: int,
+    trial: int,
     n_malicious: int,
     n_benign: int,
     benign_spread: float | None,
@@ -216,7 +216,7 @@ def log_diagnostics_csv(
             aggregation_method,
             data_split,
             malicious_ratio,
-            seed,
+            trial,
             n_malicious,
             n_benign,
             benign_spread,
@@ -235,7 +235,7 @@ def log_summary_csv(
     data_split: str,
     malicious_ratio: float,
     attack_type: str,
-    seed: int,
+    trial: int,
 ):
     """1回の実行につき1行、最終ラウンドの Accuracy/Loss を logs/summary.csv に追記する。"""
     _ensure_dir()
@@ -253,7 +253,7 @@ def log_summary_csv(
             data_split,
             malicious_ratio,
             attack_type,
-            seed,
+            trial,
         ])
 
 

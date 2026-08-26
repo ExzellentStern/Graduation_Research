@@ -6,7 +6,7 @@
 - サーバ側の共通テストデータローダ作成(load_centralized_dataset)
 
 ※ 注意：FLの実験では「再現性」が重要。
-  - データ分割の seed を固定（seed=42）
+  - データ分割の trial（Fang et al. (2020)の"trial"に対応する繰り返し試行番号）を固定
   - 前処理（Normalizeなど）はサーバ・クライアントで揃える
 
 【変更履歴】
@@ -142,14 +142,14 @@ def _load_train_dataset():
     return _TRAIN_DS
 
 
-def _build_iid_partitions(labels, num_partitions: int, seed: int):
-    rng = np.random.default_rng(seed)
+def _build_iid_partitions(labels, num_partitions: int, trial: int):
+    rng = np.random.default_rng(trial)
     all_idx = np.arange(len(labels))
     rng.shuffle(all_idx)
     return np.array_split(all_idx, num_partitions)
 
 
-def _build_fang_probabilistic_partitions(labels, num_partitions: int, p: float, seed: int):
+def _build_fang_probabilistic_partitions(labels, num_partitions: int, p: float, trial: int):
     """
     Fang et al. (2020) 4.1節の Non-IID 生成方式。
     - クライアントをクラス数 L 個のグループへ均等分割する
@@ -160,7 +160,7 @@ def _build_fang_probabilistic_partitions(labels, num_partitions: int, p: float, 
     p が大きいほど「そのラベルは対応グループに集中する」＝Non-IID度が高くなる。
     Fangのデフォルトは p=0.5。
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(trial)
     labels = np.asarray(labels)
     num_classes = int(labels.max()) + 1
     L = num_classes
@@ -204,13 +204,13 @@ def _build_fang_probabilistic_partitions(labels, num_partitions: int, p: float, 
     return [np.asarray(v, dtype=int) for v in client_indices]
 
 
-def _build_dirichlet_partitions(labels, num_partitions: int, alpha: float, seed: int):
+def _build_dirichlet_partitions(labels, num_partitions: int, alpha: float, trial: int):
     """
     Dirichlet Non-IID:
     - 各クラス c のサンプル集合を、Dirichlet(alpha) でクライアントへ配分する。
     - alpha が小さいほど「偏りが強い」(例: 0.1 は激偏り、10 はほぼIID)
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(trial)
     labels = np.asarray(labels)
     num_classes = int(labels.max()) + 1
 
@@ -251,7 +251,7 @@ def _build_dirichlet_partitions(labels, num_partitions: int, alpha: float, seed:
     return [np.asarray(v, dtype=int) for v in client_indices]
 
 
-def _get_partitions(num_partitions: int, data_split: str, alpha: float, p: float, seed: int):
+def _get_partitions(num_partitions: int, data_split: str, alpha: float, p: float, trial: int):
     """設定に応じた partitions を作成/取得する。
 
     data_split:
@@ -262,17 +262,17 @@ def _get_partitions(num_partitions: int, data_split: str, alpha: float, p: float
     train_ds = _load_train_dataset()
     labels = train_ds["label"]
 
-    key = (num_partitions, data_split, float(alpha), float(p), seed)
+    key = (num_partitions, data_split, float(alpha), float(p), trial)
     if key in _PARTITION_CACHE:
         return _PARTITION_CACHE[key]
 
     if data_split == "iid":
-        parts = _build_iid_partitions(labels, num_partitions=num_partitions, seed=seed)
+        parts = _build_iid_partitions(labels, num_partitions=num_partitions, trial=trial)
         parts = [np.asarray(part, dtype=int) for part in parts]
     elif data_split == "non_iid":
-        parts = _build_fang_probabilistic_partitions(labels, num_partitions=num_partitions, p=float(p), seed=seed)
+        parts = _build_fang_probabilistic_partitions(labels, num_partitions=num_partitions, p=float(p), trial=trial)
     elif data_split == "dirichlet":
-        parts = _build_dirichlet_partitions(labels, num_partitions=num_partitions, alpha=float(alpha), seed=seed)
+        parts = _build_dirichlet_partitions(labels, num_partitions=num_partitions, alpha=float(alpha), trial=trial)
     else:
         raise ValueError(f"Unknown data_split: {data_split} (expected: 'iid' / 'non_iid' / 'dirichlet')")
 
@@ -288,7 +288,7 @@ def load_data(
     data_split: str = "iid",
     alpha: float = 0.5,
     p: float = 0.5,
-    seed: int = 42,
+    trial: int = 1,
 ):
     """
     各クライアントが使うデータローダを作る（IID / Non-IID 切替対応）。
@@ -301,14 +301,14 @@ def load_data(
         alpha: Dirichlet の濃度パラメータ（data_split="dirichlet"の時のみ使用。小さいほど偏りが強い）
         p: ラベルlを対応クライアント群へ割り当てる確率（data_split="non_iid"の時のみ使用。
            Fang et al. (2020) のデフォルトはp=0.5）
-        seed: 再現性用シード（データ分割と train/test split に使用）
+        trial: 再現性用シード（データ分割と train/test split に使用）
 
     Returns:
         trainloader, testloader:
             このクライアントに割り当てられたデータを 80% train / 20% test に分けた DataLoader
     """
     train_ds = _load_train_dataset()
-    parts = _get_partitions(num_partitions=num_partitions, data_split=data_split, alpha=alpha, p=p, seed=seed)
+    parts = _get_partitions(num_partitions=num_partitions, data_split=data_split, alpha=alpha, p=p, trial=trial)
 
     if partition_id < 0 or partition_id >= num_partitions:
         raise ValueError(f"partition_id out of range: {partition_id}")
@@ -316,7 +316,7 @@ def load_data(
     indices = parts[partition_id]
     partition = train_ds.select(indices.tolist())
 
-    partition_train_test = partition.train_test_split(test_size=0.2, seed=seed)
+    partition_train_test = partition.train_test_split(test_size=0.2, seed=trial)
 
     trainloader = DataLoader(
         partition_train_test["train"],
