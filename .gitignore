@@ -212,9 +212,18 @@ logs/
 
 out/
 
-# LaTeX build artifacts (keep .tex source only)
+# LaTeX build artifacts (keep .tex source only; sotsuron.pdf is committed intentionally)
 sotsuron_plan.pdf
 sotsuron_plan.dvi
+sotsuron_plan.aux
+sotsuron_plan.fdb_latexmk
+sotsuron_plan.fls
+sotsuron_plan.synctex.gz
+sotsuron.aux
+sotsuron.dvi
+sotsuron.fdb_latexmk
+sotsuron.fls
+sotsuron.synctex.gz
 report/*.pdf
 report/*.dvi
 report/*.aux
@@ -225,11 +234,15 @@ report/*.bbl
 report/*.blg
 
 # 実験計画書7.6/7.7：run_experiments.pyの出力（実験ごとの final_model.pt / fixed_eval）
-experiments/
+# _logs/ と failures.csv は解析用データとして追跡する（モデル重み・予測画像は除外）。
+experiments/*
+!experiments/_logs/
+!experiments/failures.csv
 fixed_eval/
 
-# report/mechanism_analysis_plan.tex：Phase 1/2の出力のうち、モデル重みと予測画像は
-# 容量が大きいため除外する（_logs/*.csv と analysis/ は解析用データとして追跡する）。
+# report/mechanism_analysis_plan.tex：Phase 1/2（旧seedベース手法、2026-08時点の履歴データ）の
+# 出力のうち、モデル重みと予測画像は容量が大きいため除外する
+# （_logs/*.csv と analysis/ は解析用データとして追跡する）。
 experiments_phase1/*
 !experiments_phase1/_logs/
 !experiments_phase1/analysis/
@@ -244,5 +257,6 @@ experiments_phase2/*
 !experiments_phase2/failures.csv
 
 # クリーンアップ前の一時バックアップ（ローカル作業用、追跡不要）
+experiments/_logs_backup_before_cleanup/
 experiments_phase1/_logs_backup_before_cleanup/
 experiments_phase2/_logs_backup_before_cleanup/

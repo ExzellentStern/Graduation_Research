@@ -1,19 +1,26 @@
 """
 このファイルの役割
-- 全結合DNNモデル(Net)の定義（MNIST 用）
+- モデル(Net)の定義（MNIST 用）
 - Federated Learning 用データ分割（IID / Non-IID 切替）
 - 学習(train) / 評価(test) の基本ループ
 - サーバ側の共通テストデータローダ作成(load_centralized_dataset)
 
 ※ 注意：FLの実験では「再現性」が重要。
-  - データ分割の seed を固定（seed=42）
+  - データ分割の trial（Fang et al. (2020)の"trial"に対応する繰り返し試行番号）を固定
   - 前処理（Normalizeなど）はサーバ・クライアントで揃える
 
-【変更履歴】CIFAR-10+CNN 版から MNIST+DNN 版へ変更（実験計画書 7.1 対応）
-  - データセットを uoft-cs/cifar10 → ylecun/mnist に変更
-  - Normalize をグレースケール1chの値に変更
-  - Net を CNN → 全結合DNN（入力784 → 128 → 64 → 10）に変更
-  - forward 内で画像を flatten する処理を追加
+【変更履歴】
+  - CIFAR-10+CNN 版から MNIST+DNN 版へ変更（実験計画書 7.1 対応）
+    - データセットを uoft-cs/cifar10 → ylecun/mnist に変更
+    - Normalize をグレースケール1chの値に変更
+    - Net を CNN → 全結合DNN（入力784 → 128 → 64 → 10）に変更
+    - forward 内で画像を flatten する処理を追加
+  - Fang et al. (2020) との条件整合（対応関係の検証レポート対応）
+    - Net を全結合DNN → CNN（Fang Table 7a準拠）に変更（旧版は NetFC として残す）
+    - Non-IID分割を Dirichlet → Fang方式（ラベルlを確率pで対応グループへ割当）に変更
+      （旧Dirichlet実装は data_split="dirichlet" として参考用に残す）
+    - optimizer を AdamW → SGD に変更（Fangの式2.1 w<-w-η∇ℓ(w;b) に合わせた素朴なSGD）
+    - batch_size を 25 → 32 に変更（Fangのデフォルトに合わせた）
 """
 
 import torch
@@ -25,12 +32,41 @@ from torchvision.transforms import Compose, Normalize, ToTensor
 
 
 # ============================================================
-# 1) モデル定義（MNIST 用 全結合DNN）
-#    入力層(784) → 128 → 64 → 出力層(10), 活性化関数はReLU
+# 1) モデル定義（MNIST 用 CNN）
+#    Fang et al. (2020) Table 7a に準拠：
+#    Conv(3x3x30)+ReLU -> MaxPool(2x2) -> Conv(3x3x50)+ReLU -> MaxPool(2x2)
+#    -> FC(200)+ReLU -> FC(10)（Softmaxは CrossEntropyLoss 内で暗黙的に適用）
+#    28x28 入力 -> conv1:26x26x30 -> pool:13x13x30
+#              -> conv2:11x11x50 -> pool:5x5x50(=1250) -> FC(1250,200) -> FC(200,10)
 # ============================================================
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
+
+        self.conv1 = nn.Conv2d(1, 30, kernel_size=3)
+        self.conv2 = nn.Conv2d(30, 50, kernel_size=3)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.fc1 = nn.Linear(50 * 5 * 5, 200)
+        self.fc2 = nn.Linear(200, 10)
+
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.pool(self.relu(self.conv1(x)))
+        x = self.pool(self.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
+        x = self.relu(self.fc1(x))
+        return self.fc2(x)
+
+
+# ============================================================
+# 1b) (旧版・参考用) 全結合DNN
+#     Fangの``DNN''は実際にはCNN（Table 7a）だったため Net は CNN に置き換えた。
+#     卒論7章までの実験で使用していたモデルはこちら。実験では使用しない。
+# ============================================================
+class NetFC(nn.Module):
+    def __init__(self):
+        super(NetFC, self).__init__()
 
         self.fc1 = nn.Linear(28 * 28, 128)
         self.fc2 = nn.Linear(128, 64)
@@ -39,7 +75,6 @@ class Net(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        # (N, 1, 28, 28) -> (N, 784) にflatten
         x = x.view(x.size(0), -1)
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
@@ -107,20 +142,75 @@ def _load_train_dataset():
     return _TRAIN_DS
 
 
-def _build_iid_partitions(labels, num_partitions: int, seed: int):
-    rng = np.random.default_rng(seed)
+def _build_iid_partitions(labels, num_partitions: int, trial: int):
+    rng = np.random.default_rng(trial)
     all_idx = np.arange(len(labels))
     rng.shuffle(all_idx)
     return np.array_split(all_idx, num_partitions)
 
 
-def _build_dirichlet_partitions(labels, num_partitions: int, alpha: float, seed: int):
+def _build_fang_probabilistic_partitions(labels, num_partitions: int, p: float, trial: int):
+    """
+    Fang et al. (2020) 4.1節の Non-IID 生成方式。
+    - クライアントをクラス数 L 個のグループへ均等分割する
+    - ラベル l の学習データは，対応するグループ l へ確率 p で割り当て，
+      残り確率 (1-p) は他の L-1 グループへ均等に振り分ける
+    - グループ内では，割り当てられたデータをグループ内の各クライアントへ均等に配分する
+
+    p が大きいほど「そのラベルは対応グループに集中する」＝Non-IID度が高くなる。
+    Fangのデフォルトは p=0.5。
+    """
+    rng = np.random.default_rng(trial)
+    labels = np.asarray(labels)
+    num_classes = int(labels.max()) + 1
+    L = num_classes
+
+    # クライアントを L グループへ均等分割（m=100, L=10 なら1グループ10クライアント）
+    client_ids = np.arange(num_partitions)
+    groups = np.array_split(client_ids, L)
+
+    # 各ラベルのサンプルを，確率pで対応グループへ・残りを他グループへ均等に割当
+    group_indices = [[] for _ in range(L)]
+    for l in range(L):
+        idx_l = np.where(labels == l)[0]
+        rng.shuffle(idx_l)
+
+        if L > 1:
+            probs = np.full(L, (1.0 - p) / (L - 1))
+            probs[l] = p
+        else:
+            probs = np.array([1.0])
+        probs = probs / probs.sum()
+
+        assigned_groups = rng.choice(L, size=len(idx_l), p=probs)
+        for g in range(L):
+            group_indices[g].extend(idx_l[assigned_groups == g].tolist())
+
+    # 各グループ内で，割り当てられたサンプルをグループ内クライアントへ均等配分
+    client_indices = [[] for _ in range(num_partitions)]
+    for g in range(L):
+        idx_g = np.asarray(group_indices[g], dtype=int)
+        rng.shuffle(idx_g)
+        members = groups[g]
+        if len(members) == 0:
+            continue
+        splits = np.array_split(idx_g, len(members))
+        for member_id, split in zip(members, splits):
+            client_indices[member_id].extend(split.tolist())
+
+    for k in range(num_partitions):
+        rng.shuffle(client_indices[k])
+
+    return [np.asarray(v, dtype=int) for v in client_indices]
+
+
+def _build_dirichlet_partitions(labels, num_partitions: int, alpha: float, trial: int):
     """
     Dirichlet Non-IID:
     - 各クラス c のサンプル集合を、Dirichlet(alpha) でクライアントへ配分する。
     - alpha が小さいほど「偏りが強い」(例: 0.1 は激偏り、10 はほぼIID)
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(trial)
     labels = np.asarray(labels)
     num_classes = int(labels.max()) + 1
 
@@ -161,22 +251,30 @@ def _build_dirichlet_partitions(labels, num_partitions: int, alpha: float, seed:
     return [np.asarray(v, dtype=int) for v in client_indices]
 
 
-def _get_partitions(num_partitions: int, data_split: str, alpha: float, seed: int):
-    """設定に応じた partitions を作成/取得する。"""
+def _get_partitions(num_partitions: int, data_split: str, alpha: float, p: float, trial: int):
+    """設定に応じた partitions を作成/取得する。
+
+    data_split:
+        "iid"       : 均等分割
+        "non_iid"   : Fang et al. (2020) 方式（ラベルlを確率pで対応グループへ割当）。デフォルト。
+        "dirichlet" : (旧・参考用) Dirichlet(alpha) によるクラスごとの配分。
+    """
     train_ds = _load_train_dataset()
     labels = train_ds["label"]
 
-    key = (num_partitions, data_split, float(alpha), seed)
+    key = (num_partitions, data_split, float(alpha), float(p), trial)
     if key in _PARTITION_CACHE:
         return _PARTITION_CACHE[key]
 
     if data_split == "iid":
-        parts = _build_iid_partitions(labels, num_partitions=num_partitions, seed=seed)
-        parts = [np.asarray(p, dtype=int) for p in parts]
-    elif data_split in ("non_iid", "dirichlet"):
-        parts = _build_dirichlet_partitions(labels, num_partitions=num_partitions, alpha=float(alpha), seed=seed)
+        parts = _build_iid_partitions(labels, num_partitions=num_partitions, trial=trial)
+        parts = [np.asarray(part, dtype=int) for part in parts]
+    elif data_split == "non_iid":
+        parts = _build_fang_probabilistic_partitions(labels, num_partitions=num_partitions, p=float(p), trial=trial)
+    elif data_split == "dirichlet":
+        parts = _build_dirichlet_partitions(labels, num_partitions=num_partitions, alpha=float(alpha), trial=trial)
     else:
-        raise ValueError(f"Unknown data_split: {data_split} (expected: 'iid' or 'non_iid/dirichlet')")
+        raise ValueError(f"Unknown data_split: {data_split} (expected: 'iid' / 'non_iid' / 'dirichlet')")
 
     _PARTITION_CACHE[key] = parts
     return parts
@@ -189,7 +287,8 @@ def load_data(
     *,
     data_split: str = "iid",
     alpha: float = 0.5,
-    seed: int = 42,
+    p: float = 0.5,
+    trial: int = 1,
 ):
     """
     各クライアントが使うデータローダを作る（IID / Non-IID 切替対応）。
@@ -198,16 +297,18 @@ def load_data(
         partition_id: 何番目のクライアントか（0..num_partitions-1）
         num_partitions: クライアント総数
         batch_size: ミニバッチサイズ
-        data_split: "iid" or "non_iid" ("dirichlet" も可)
-        alpha: Dirichlet の濃度パラメータ（小さいほど偏りが強い）
-        seed: 再現性用シード（データ分割と train/test split に使用）
+        data_split: "iid" / "non_iid"（Fang方式，デフォルト） / "dirichlet"（旧方式，参考用）
+        alpha: Dirichlet の濃度パラメータ（data_split="dirichlet"の時のみ使用。小さいほど偏りが強い）
+        p: ラベルlを対応クライアント群へ割り当てる確率（data_split="non_iid"の時のみ使用。
+           Fang et al. (2020) のデフォルトはp=0.5）
+        trial: 再現性用シード（データ分割と train/test split に使用）
 
     Returns:
         trainloader, testloader:
             このクライアントに割り当てられたデータを 80% train / 20% test に分けた DataLoader
     """
     train_ds = _load_train_dataset()
-    parts = _get_partitions(num_partitions=num_partitions, data_split=data_split, alpha=alpha, seed=seed)
+    parts = _get_partitions(num_partitions=num_partitions, data_split=data_split, alpha=alpha, p=p, trial=trial)
 
     if partition_id < 0 or partition_id >= num_partitions:
         raise ValueError(f"partition_id out of range: {partition_id}")
@@ -215,7 +316,7 @@ def load_data(
     indices = parts[partition_id]
     partition = train_ds.select(indices.tolist())
 
-    partition_train_test = partition.train_test_split(test_size=0.2, seed=seed)
+    partition_train_test = partition.train_test_split(test_size=0.2, seed=trial)
 
     trainloader = DataLoader(
         partition_train_test["train"],
@@ -246,7 +347,7 @@ def load_centralized_dataset():
 def train(net, trainloader, epochs, lr, device):
     net.to(device)
     criterion = torch.nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.AdamW(net.parameters(), lr=lr)
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr)  # Fangの式(1) w<-w-η∇ℓ(w;b) に合わせた素朴なSGD
 
     net.train()
     running_loss = 0.0

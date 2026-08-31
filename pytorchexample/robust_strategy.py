@@ -52,8 +52,9 @@ class RobustFedAvg(FedAvg):
         trimmed_mean_beta: 指定があれば trimmed_mean の beta として f より優先
         krum_multi_k: krum で平均に使う候補数（1なら標準Krum）
 
-        lr / data_split / alpha / attack_type / malicious_ids / poison_rate:
+        lr / data_split / alpha / p / attack_type / malicious_ids / poison_rate:
             既存の FedAvgWithPerRoundConfig と同じ、毎ラウンド配布するconfig
+            （alpha は data_split="dirichlet" 用，p は data_split="non_iid"（Fang方式）用）
     """
 
     def __init__(
@@ -63,10 +64,11 @@ class RobustFedAvg(FedAvg):
         lr: float,
         data_split: str,
         alpha: float,
-        attack_type: str,
+        p: float = 0.5,
+        attack_type: str = "none",
         malicious_ids,
         poison_rate: float,
-        seed: int = 42,
+        trial: int = 1,
         aggregation_method: str = "fedavg",
         num_malicious_assumed: int = 0,
         trimmed_mean_beta: Optional[int] = None,
@@ -81,10 +83,11 @@ class RobustFedAvg(FedAvg):
         self.lr = lr
         self.data_split = data_split
         self.alpha = alpha
+        self.p = p
         self.attack_type = attack_type
         self.malicious_ids = list(malicious_ids)
         self.poison_rate = poison_rate
-        self.seed = seed
+        self.trial = trial
 
         # --- report/mechanism_analysis_plan.tex 対応：診断ログ用の実験条件識別子 ---
         self.malicious_ratio = malicious_ratio
@@ -110,10 +113,11 @@ class RobustFedAvg(FedAvg):
         config["lr"] = self.lr
         config["data_split"] = self.data_split
         config["alpha"] = self.alpha
+        config["p"] = self.p
         config["attack_type"] = self.attack_type
         config["malicious_ids"] = self.malicious_ids
         config["poison_rate"] = self.poison_rate
-        config["seed"] = self.seed
+        config["trial"] = self.trial
 
     def configure_train(
         self, server_round: int, arrays: ArrayRecord, config: ConfigRecord, grid: Grid
@@ -214,6 +218,8 @@ class RobustFedAvg(FedAvg):
                 global_vector=self._last_global_vector,
                 aggregation_method=self.aggregation_method,
                 f=self.num_malicious_assumed,
+                # Krum/Bulyan攻撃のε-ball摂動用：trial番号とラウンド番号から決定的に再現可能にする
+                seed=(self.trial * 1_000_003 + server_round) % (2**32 - 1),
             )
 
         # --- report/mechanism_analysis_plan.tex 対応：honestクラスタの分散とmaliciousの押し出し距離 ---
@@ -278,7 +284,7 @@ class RobustFedAvg(FedAvg):
             aggregation_method=self.aggregation_method,
             data_split=self.data_split,
             malicious_ratio=self.malicious_ratio,
-            seed=self.seed,
+            trial=self.trial,
             n_malicious=len(malicious_pos),
             n_benign=len(benign_pos),
             benign_spread=benign_spread,

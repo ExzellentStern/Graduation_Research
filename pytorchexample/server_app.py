@@ -146,13 +146,18 @@ def main(grid: Grid, context: Context) -> None:
     lr = context.run_config["learning-rate"]
     local_epochs = context.run_config["local-epochs"]
     batch_size = context.run_config["batch-size"]
+    # 大規模スイープ（800条件×20 Round）で毎ラウンド・毎条件の画像出力が
+    # ファイル数/ディスク容量を圧迫しないよう，デフォルトでは保存しない。
+    # 個別に可視化を見たい場合のみ run-config で save-fixed-eval=true を渡す。
+    save_fixed_eval = bool(context.run_config.get("save-fixed-eval", False))
 
     # ---- 追加：データ分割 / 攻撃 設定（無ければデフォルト） ----
-    data_split = context.run_config.get("data-split", "iid")                 # "iid" / "non_iid" / "dirichlet"
-    alpha = float(context.run_config.get("dirichlet-alpha", 0.5))            # Dirichlet 用
+    data_split = context.run_config.get("data-split", "iid")                 # "iid" / "non_iid"（Fang方式） / "dirichlet"（旧方式，参考用）
+    alpha = float(context.run_config.get("dirichlet-alpha", 0.5))            # dirichlet（旧方式）用
+    non_iid_p = float(context.run_config.get("non-iid-p", 0.5))              # non_iid（Fang方式）用：ラベルlを対応グループへ割り当てる確率
     attack_type = context.run_config.get("attack-type", "none")              # "none" / "sign_flip" / "scale" / "adaptive"
     poison_rate = float(context.run_config.get("poison-rate", 0.0))          # label_flip 等で利用する想定
-    seed = int(context.run_config.get("seed", 42))                           # 実験計画書7.5：データ分割の再現性用シード
+    trial = int(context.run_config.get("trial", 1))                          # Fang et al. (2020)の"trial"に対応：データ分割の再現性用シード兼繰り返し試行番号
 
     # ---- 追加：実験計画書7.6：実験ごとに出力先を分けるためのディレクトリ ----
     # run_experiments.py が実験条件ごとに別ディレクトリを渡すことで、
@@ -204,15 +209,15 @@ def main(grid: Grid, context: Context) -> None:
     print("local_epochs  :", local_epochs)
     print("batch_size    :", batch_size)
     print("learning_rate :", lr)
-    print("optimizer     : AdamW")
-    print("data_split    :", data_split, f"(alpha={alpha})")
+    print("optimizer     : SGD")
+    print("data_split    :", data_split, f"(p={non_iid_p}, alpha={alpha})")
     print("attack_type   :", attack_type)
     print("num_clients   :", num_clients)
     print("malicious_ratio:", malicious_ratio, f"(seed={malicious_seed}, manual={malicious_ids_raw!r})")
     print("malicious_ids :", malicious_ids)
     print("poison_rate   :", poison_rate)
     print("aggregation   :", aggregation_method, f"(f_assumed={num_malicious_assumed})")
-    print("seed          :", seed)
+    print("trial         :", trial)
     print("================================")
 
     # 実験ログ保存（あなたの log_run_config 仕様に合わせて iid を bool で渡す）
@@ -221,15 +226,15 @@ def main(grid: Grid, context: Context) -> None:
         local_epochs=local_epochs,
         batch_size=batch_size,
         learning_rate=lr,
-        optimizer="AdamW",
+        optimizer="SGD",
         iid=(data_split == "iid"),
-        seed=seed,
+        trial=trial,
     )
 
     # ---- 追加：実験計画書7.5：results.csv / summary.csv 用の実行識別子 ----
     run_id = (
         f"{aggregation_method}_{data_split}_ratio{malicious_ratio}"
-        f"_seed{seed}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        f"_trial{trial}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     )
     # 最終ラウンドの結果を summary.csv に書くために覚えておく入れ物
     last_eval = {}
@@ -244,10 +249,11 @@ def main(grid: Grid, context: Context) -> None:
         lr=lr,
         data_split=data_split,
         alpha=alpha,
+        p=non_iid_p,
         attack_type=attack_type,
         malicious_ids=malicious_ids,
         poison_rate=poison_rate,
-        seed=seed,
+        trial=trial,
         aggregation_method=aggregation_method,
         num_malicious_assumed=num_malicious_assumed,
         malicious_ratio=malicious_ratio,
@@ -256,7 +262,7 @@ def main(grid: Grid, context: Context) -> None:
 
     # ===================== 各ラウンド後のグローバル評価 =====================
     # 実験計画書7.5：results.csv に条件つきで書き込むため、main() 内のクロージャにして
-    # run_id / aggregation_method / data_split / malicious_ratio / attack_type / seed を
+    # run_id / aggregation_method / data_split / malicious_ratio / attack_type / trial を
     # そのまま参照できるようにしている。最終ラウンドの値は last_eval に残しておき、
     # strategy.start() 完了後に summary.csv へ1行だけ書き込むのに使う。
     def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
@@ -271,24 +277,25 @@ def main(grid: Grid, context: Context) -> None:
         test_dataloader = load_centralized_dataset()
         test_loss, test_acc = test(model, test_dataloader, device)
 
-        # ===================== 固定画像評価（可視化用） =====================
-        fixed_images_cpu, fixed_labels_cpu = _get_fixed_batch(n_images=32)
-        fixed_images = fixed_images_cpu.to(device)
-        fixed_labels = fixed_labels_cpu.to(device)
+        # ===================== 固定画像評価（可視化用，デフォルトでは無効） =====================
+        if save_fixed_eval:
+            fixed_images_cpu, fixed_labels_cpu = _get_fixed_batch(n_images=32)
+            fixed_images = fixed_images_cpu.to(device)
+            fixed_labels = fixed_labels_cpu.to(device)
 
-        with torch.no_grad():
-            logits = model(fixed_images)
-            probs = F.softmax(logits, dim=1)
-            confs, preds = torch.max(probs, dim=1)
+            with torch.no_grad():
+                logits = model(fixed_images)
+                probs = F.softmax(logits, dim=1)
+                confs, preds = torch.max(probs, dim=1)
 
-        _save_round_fixed_eval(
-            server_round=server_round,
-            images=fixed_images,
-            labels=fixed_labels,
-            preds=preds,
-            confs=confs,
-            out_root=os.path.join(output_dir, "fixed_eval"),
-        )
+            _save_round_fixed_eval(
+                server_round=server_round,
+                images=fixed_images,
+                labels=fixed_labels,
+                preds=preds,
+                confs=confs,
+                out_root=os.path.join(output_dir, "fixed_eval"),
+            )
 
         # ===================== ログ出力 =====================
         log_server_metrics(server_round, test_acc, test_loss)
@@ -303,7 +310,7 @@ def main(grid: Grid, context: Context) -> None:
             data_split=data_split,
             malicious_ratio=malicious_ratio,
             attack_type=attack_type,
-            seed=seed,
+            trial=trial,
         )
         last_eval["round"] = server_round
         last_eval["accuracy"] = test_acc
@@ -338,5 +345,5 @@ def main(grid: Grid, context: Context) -> None:
             data_split=data_split,
             malicious_ratio=malicious_ratio,
             attack_type=attack_type,
-            seed=seed,
+            trial=trial,
         )
