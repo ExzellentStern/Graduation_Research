@@ -234,5 +234,8 @@ report/*.bbl
 report/*.blg
 
 # 実験計画書7.6/7.7：run_experiments.pyの出力（実験ごとの final_model.pt / fixed_eval）
-experiments/
+# _logs/ と failures.csv は解析用データとして追跡する（モデル重み・予測画像は除外）。
+experiments/*
+!experiments/_logs/
+!experiments/failures.csv
 fixed_eval/

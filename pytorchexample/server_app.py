@@ -29,6 +29,7 @@ from flwr.app import ArrayRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 
 from pytorchexample.log_output import (
+    configure_log_dir,
     log_server_metrics,
     print_round_summary,
     log_run_config,
@@ -163,6 +164,16 @@ def main(grid: Grid, context: Context) -> None:
     # final_model.pt / fixed_eval の画像が実験間で上書きされないようにする。
     output_dir = str(context.run_config.get("output-dir", "."))
     os.makedirs(output_dir, exist_ok=True)
+
+    # ---- 追加：results.csv/summary.csv/diagnostics.csv の出力先を output_dir に紐付ける ----
+    # log_output.py のデフォルト（logs/、プロジェクト直下固定）のままだと、
+    # run_experiments.py で条件ごとに output_dir を分けても集計ログは全条件・全実行で
+    # 1つのファイルに混ざってしまい、あとから解析する際に条件の切り分けができない。
+    # output_dir が指定されている（"." 以外の）場合は、そのスイープの親ディレクトリ
+    # （例: experiments_phase1/<条件>/ -> experiments_phase1/_logs/）に集約する。
+    if output_dir not in (".", ""):
+        sweep_root = os.path.dirname(os.path.normpath(output_dir)) or "."
+        configure_log_dir(os.path.join(sweep_root, "_logs"))
 
     # ---- 追加：悪性クライアント生成（実験計画書 7.3 対応） ----
     # malicious-ids に手動指定（例: "0,1"）があればそちらを優先し、
