@@ -292,6 +292,55 @@ def _craft_scale_attack(
     return crafted
 
 
+def alie_attack(
+    vectors: np.ndarray,
+    malicious_idx: Sequence[int],
+    benign_idx: Sequence[int] = None,
+    z: float = 1.0,
+) -> np.ndarray:
+    """
+    ALIE 攻撃（Baruch et al., "A Little Is Enough", NeurIPS 2019）。
+    研究計画書（改訂版, research_plan_v2.tex）4.3 の A2。
+
+    正常クライアントの更新の「座標ごとの平均 mu・標準偏差 sigma」を求め，
+    悪性クライアント全員に同一の
+
+        g_mal = mu - z * sigma
+
+    を割り当てる。z は「正常のばらつきの範囲内に収まる最大の摂動」を狙う
+    パラメータで，本実装では走査対象の設定値をそのまま使う（実用上 0.5--1.5）。
+    集約手法に依存しない（aggregation-agnostic）ステルス攻撃であり，
+    adaptive_attack と異なり集約手法の情報を必要としない。
+
+    Args:
+        vectors: shape (n_clients, dim)。各クライアントの（攻撃前の）モデルベクトル。
+        malicious_idx: 悪性クライアントのインデックス（vectors内での位置）。
+        benign_idx: 正常クライアントのインデックス。None なら malicious_idx の補集合。
+        z: 摂動の強さ（標準偏差の何倍だけ平均からずらすか）。
+    """
+    vectors = np.asarray(vectors, dtype=np.float64)
+    malicious_idx = np.asarray(sorted(set(int(i) for i in malicious_idx)), dtype=int)
+    n = vectors.shape[0]
+    if benign_idx is None:
+        m_set = set(malicious_idx.tolist())
+        benign_idx = np.array([i for i in range(n) if i not in m_set], dtype=int)
+    else:
+        benign_idx = np.asarray(benign_idx, dtype=int)
+
+    if len(malicious_idx) == 0 or len(benign_idx) == 0:
+        return vectors.copy()
+
+    benign = vectors[benign_idx]
+    mu = benign.mean(axis=0)
+    sigma = benign.std(axis=0)  # 母標準偏差（ddof=0）
+
+    crafted = vectors.copy()
+    payload = mu - z * sigma
+    for idx in malicious_idx:
+        crafted[idx] = payload
+    return crafted
+
+
 def adaptive_attack(
     vectors: np.ndarray,
     malicious_idx: Sequence[int],

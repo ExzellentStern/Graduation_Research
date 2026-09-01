@@ -154,8 +154,9 @@ def main(grid: Grid, context: Context) -> None:
     data_split = context.run_config.get("data-split", "iid")                 # "iid" / "non_iid"（Fang方式） / "dirichlet"（旧方式，参考用）
     alpha = float(context.run_config.get("dirichlet-alpha", 0.5))            # dirichlet（旧方式）用
     non_iid_p = float(context.run_config.get("non-iid-p", 0.5))              # non_iid（Fang方式）用：ラベルlを対応グループへ割り当てる確率
-    attack_type = context.run_config.get("attack-type", "none")              # "none" / "sign_flip" / "scale" / "adaptive"
+    attack_type = context.run_config.get("attack-type", "none")              # "none" / "sign_flip" / "scale" / "adaptive" / "alie"
     poison_rate = float(context.run_config.get("poison-rate", 0.0))          # label_flip 等で利用する想定
+    alie_z = float(context.run_config.get("alie-z", 1.0))                    # ALIE攻撃（research_plan_v2.tex 4.3 A2）の摂動強度 z
     trial = int(context.run_config.get("trial", 1))                          # Fang et al. (2020)の"trial"に対応：データ分割の再現性用シード兼繰り返し試行番号
 
     # ---- 追加：実験計画書7.6：実験ごとに出力先を分けるためのディレクトリ ----
@@ -243,6 +244,7 @@ def main(grid: Grid, context: Context) -> None:
         malicious_ids=malicious_ids,
         poison_rate=poison_rate,
         trial=trial,
+        alie_z=alie_z,
         aggregation_method=aggregation_method,
         num_malicious_assumed=num_malicious_assumed,
         malicious_ratio=malicious_ratio,

@@ -37,8 +37,9 @@ from aggregation import (
     state_dict_to_vector,
     vector_to_state_dict,
 )
-from attack import adaptive_attack
-from pytorchexample.log_output import log_diagnostics_csv
+from attack import adaptive_attack, alie_attack
+from detection import DETECTOR_KEYS, all_detector_scores
+from pytorchexample.log_output import log_detection_csv, log_diagnostics_csv
 
 
 class RobustFedAvg(FedAvg):
@@ -69,6 +70,7 @@ class RobustFedAvg(FedAvg):
         malicious_ids,
         poison_rate: float,
         trial: int = 1,
+        alie_z: float = 1.0,
         aggregation_method: str = "fedavg",
         num_malicious_assumed: int = 0,
         trimmed_mean_beta: Optional[int] = None,
@@ -88,6 +90,7 @@ class RobustFedAvg(FedAvg):
         self.malicious_ids = list(malicious_ids)
         self.poison_rate = poison_rate
         self.trial = trial
+        self.alie_z = alie_z
 
         # --- report/mechanism_analysis_plan.tex 対応：診断ログ用の実験条件識別子 ---
         self.malicious_ratio = malicious_ratio
@@ -221,6 +224,15 @@ class RobustFedAvg(FedAvg):
                 # Krum/Bulyan攻撃のε-ball摂動用：trial番号とラウンド番号から決定的に再現可能にする
                 seed=(self.trial * 1_000_003 + server_round) % (2**32 - 1),
             )
+        # --- ALIE 攻撃（research_plan_v2.tex 4.3 A2）: サーバ側で正常更新の
+        #     座標ごと平均・標準偏差から悪性更新をクラフトする aggregation-agnostic 攻撃。
+        elif self.attack_type == "alie" and len(malicious_pos) > 0 and len(benign_pos) > 0:
+            updates = alie_attack(
+                updates,
+                malicious_idx=malicious_pos,
+                benign_idx=benign_pos,
+                z=self.alie_z,
+            )
 
         # --- report/mechanism_analysis_plan.tex 対応：honestクラスタの分散とmaliciousの押し出し距離 ---
         # 集約直前（攻撃適用後）のupdatesを使い、honest重心からの平均距離として定義する。
@@ -239,6 +251,44 @@ class RobustFedAvg(FedAvg):
                 )
                 if benign_spread > 1e-12:
                     push_ratio = malicious_push_dist / benign_spread
+
+        # --- research_plan_v2.tex 4.2--4.5 対応：更新ベクトルレベルの検知器スコアを
+        #     1クライアント1行で logs/detection_updates.csv へ記録する。
+        #     検知は更新ベクトル g_i = w_i - w_global に対して行うため、
+        #     受信した（攻撃適用後の）モデルベクトルからグローバルモデルを引いて渡す。
+        #     正解ラベル is_malicious は評価専用であり、検知器スコアの計算には使わない。
+        if self._last_global_vector is not None:
+            deltas = updates - self._last_global_vector[None, :]
+        else:
+            deltas = updates - updates.mean(axis=0, keepdims=True)
+        try:
+            scores = all_detector_scores(deltas)
+            delta_norms = np.linalg.norm(deltas, axis=1)
+            detection_rows = []
+            for pos in range(n):
+                pid = partition_ids[pos]
+                row = {
+                    "run_id": self.run_id,
+                    "round": server_round,
+                    "aggregation_method": self.aggregation_method,
+                    "data_split": self.data_split,
+                    "alpha": self.alpha,
+                    "attack_type": self.attack_type,
+                    "malicious_ratio": self.malicious_ratio,
+                    "trial": self.trial,
+                    "client_pos": pos,
+                    "partition_id": (int(pid) if pid is not None else None),
+                    "is_malicious": int(pos in malicious_pos_set),
+                    "delta_norm": float(delta_norms[pos]),
+                    "benign_spread": benign_spread,
+                    "push_ratio": push_ratio,
+                }
+                for key in DETECTOR_KEYS:
+                    row[key] = float(scores[key][pos])
+                detection_rows.append(row)
+            log_detection_csv(detection_rows)
+        except Exception as exc:  # 検知ログの失敗で学習自体は止めない
+            print(f"[RobustFedAvg] round={server_round}: 検知ログの記録に失敗しました: {exc}")
 
         # --- fedavg のみ num-examples による重み付けを行う ---
         weights = None

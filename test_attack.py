@@ -10,7 +10,7 @@ attack.py の単体テスト（実験計画書 7.4 対応）
 import numpy as np
 import torch
 
-from attack import sign_flip_delta, scale_delta, adaptive_attack
+from attack import sign_flip_delta, scale_delta, adaptive_attack, alie_attack
 from aggregation import krum_scores, median_aggregate, trimmed_mean_aggregate
 
 
@@ -177,6 +177,38 @@ def test_adaptive_attack_noop_when_no_malicious():
     check("悪性クライアントが0人なら無変更", np.allclose(crafted, vectors))
 
 
+# ============================================================
+# alie_attack（research_plan_v2.tex 4.3 A2）
+# ============================================================
+def test_alie_attack_payload_is_mu_minus_z_sigma():
+    vectors, _, malicious_idx, honest_idx = make_dummy_round(n_honest=8, n_malicious=3, dim=6, seed=1)
+    z = 1.0
+    crafted = alie_attack(vectors, malicious_idx, benign_idx=honest_idx, z=z)
+
+    benign = vectors[honest_idx]
+    expected = benign.mean(axis=0) - z * benign.std(axis=0)
+    for idx in malicious_idx:
+        check(f"malicious[{idx}] は mu - z*sigma", np.allclose(crafted[idx], expected))
+    check("悪性は全員同一ベクトル", np.allclose(crafted[malicious_idx[0]], crafted[malicious_idx[-1]]))
+    check("honest分は無変更", np.allclose(crafted[honest_idx], vectors[honest_idx]))
+
+
+def test_alie_attack_stays_within_benign_range():
+    vectors, _, malicious_idx, honest_idx = make_dummy_round(n_honest=10, n_malicious=3, dim=8, seed=2)
+    crafted = alie_attack(vectors, malicious_idx, benign_idx=honest_idx, z=1.0)
+    benign = vectors[honest_idx]
+    lo, hi = benign.min(axis=0), benign.max(axis=0)
+    for idx in malicious_idx:
+        within = np.all(crafted[idx] >= lo - 1e-9) and np.all(crafted[idx] <= hi + 1e-9)
+        check(f"malicious[{idx}] はhonestの座標ごと範囲内に収まる（ステルス）", within,
+              f"crafted={crafted[idx]}")
+
+
+def test_alie_attack_noop_when_no_malicious():
+    vectors, _, _, _ = make_dummy_round()
+    check("悪性0人なら無変更", np.allclose(alie_attack(vectors, [], z=1.0), vectors))
+
+
 if __name__ == "__main__":
     tests = [
         test_sign_flip_delta,
@@ -189,6 +221,9 @@ if __name__ == "__main__":
         test_adaptive_attack_bulyan_uses_krum_style,
         test_adaptive_attack_noop_for_fedavg,
         test_adaptive_attack_noop_when_no_malicious,
+        test_alie_attack_payload_is_mu_minus_z_sigma,
+        test_alie_attack_stays_within_benign_range,
+        test_alie_attack_noop_when_no_malicious,
     ]
     for t in tests:
         print(f"--- {t.__name__} ---")

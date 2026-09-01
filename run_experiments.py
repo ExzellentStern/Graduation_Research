@@ -38,8 +38,31 @@ robust_strategy.py が意図的にValueErrorを送出する（既知のBulyanの
 import argparse
 import csv
 import os
+import shutil
 import subprocess
+import sys
 from datetime import datetime
+
+
+def _flwr_bin() -> str:
+    """
+    実行する flwr コマンドのパスを決める。
+    venv を activate せずに `python3 run_experiments.py` を実行しても動くよう、
+    まず現在の Python と同じディレクトリの flwr を探し、無ければ PATH 上の flwr、
+    それも無ければ `python -m flwr` にフォールバックする。
+    """
+    cand = os.path.join(os.path.dirname(sys.executable), "flwr")
+    if os.path.exists(cand):
+        return cand
+    found = shutil.which("flwr")
+    if found:
+        return found
+    return None  # 呼び出し側で [sys.executable, "-m", "flwr"] に切り替える
+
+
+def _flwr_cmd_prefix() -> list:
+    b = _flwr_bin()
+    return [b] if b else [sys.executable, "-m", "flwr"]
 
 AGGREGATION_METHODS = ["fedavg", "median", "trimmed_mean", "krum", "bulyan"]
 MALICIOUS_RATIOS = [0.0, 0.1, 0.2, 0.3]
@@ -83,6 +106,95 @@ PHASE1_RATIOS = {
 def phase1_ratios_for(aggregation: str, data_split: str) -> list:
     table = PHASE1_RATIOS[aggregation]
     return table.get(data_split, table.get("default"))
+
+
+# ============================================================
+# research_plan_v2.tex 5.2：検知評価スイープ（最小構成）
+#
+# 更新ベクトルレベルの異常検知を，Non-IID度（Dirichlet alpha）× 攻撃 の2軸で評価する。
+# 集約手法は検知に非依存なため fedavg 固定。悪性割合は 0.2 固定。
+# 攻撃なし（none）は benign_spread の基準値を取るために各 alpha で1条件だけ回す。
+# 出力先は experiments_detection/ に分ける（検知ログ logs/detection_updates.csv を新規生成）。
+# ============================================================
+DETECTION_EXPERIMENTS_DIR = "experiments_detection"
+DETECTION_AGGREGATIONS = ["fedavg"]
+DETECTION_ALPHAS = [100.0, 0.5, 0.1]      # 100≒IID / 0.5 中程度 / 0.1 強い不均一
+DETECTION_ATTACKS = ["none", "sign_flip", "alie"]
+DETECTION_RATIO = 0.2
+DETECTION_TRIALS = [1, 2, 3]
+DETECTION_NUM_CLIENTS = 20
+DETECTION_NUM_ROUNDS = 30
+DETECTION_ALIE_Z = 1.0
+
+
+def detection_conditions():
+    """検知評価スイープの条件を dict で列挙する。"""
+    for aggregation in DETECTION_AGGREGATIONS:
+        for alpha in DETECTION_ALPHAS:
+            for attack in DETECTION_ATTACKS:
+                ratio = 0.0 if attack == "none" else DETECTION_RATIO
+                for trial in DETECTION_TRIALS:
+                    yield {
+                        "aggregation": aggregation,
+                        "alpha": alpha,
+                        "attack": attack,
+                        "ratio": ratio,
+                        "trial": trial,
+                    }
+
+
+def detection_condition_name(p: dict) -> str:
+    return (
+        f"{p['aggregation']}_dirichlet_a{p['alpha']}_{p['attack']}"
+        f"_ratio{p['ratio']}_trial{p['trial']}"
+    )
+
+
+def run_one_detection(p: dict, federation: str) -> str:
+    """検知評価スイープの1条件を実行する。戻り値は "done" / "skipped" / "failed"。"""
+    name = detection_condition_name(p)
+    output_dir = os.path.join(DETECTION_EXPERIMENTS_DIR, name)
+
+    if is_done(output_dir):
+        print(f"[SKIP] {name}（{output_dir}/final_model.pt が既に存在＝完了済み）")
+        return "skipped"
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    run_config = (
+        f'num-server-rounds={DETECTION_NUM_ROUNDS} '
+        f'aggregation-method="{p["aggregation"]}" '
+        f'data-split="dirichlet" '
+        f'dirichlet-alpha={p["alpha"]} '
+        f'malicious-ratio={p["ratio"]} '
+        f'malicious-seed={p["trial"]} '
+        f'trial={p["trial"]} '
+        f'attack-type="{p["attack"]}" '
+        f'alie-z={DETECTION_ALIE_Z} '
+        f'num-clients={DETECTION_NUM_CLIENTS} '
+        f'output-dir="{output_dir}"'
+    )
+
+    cmd = [
+        *_flwr_cmd_prefix(), "run", ".", federation,
+        "--run-config", run_config,
+        "--federation-config", f"num-supernodes={DETECTION_NUM_CLIENTS}",
+        "--stream",
+    ]
+
+    print(f"[RUN] {name}")
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+
+    if is_done(output_dir):
+        print(f"[DONE] {name}")
+        return "done"
+
+    combined_output = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    output_tail = "\n".join(combined_output.strip().splitlines()[-30:])
+    print(f"[FAILED] {name}")
+    print(output_tail)
+    record_failure(name, cmd, output_tail, experiments_dir=DETECTION_EXPERIMENTS_DIR)
+    return "failed"
 
 
 def phase1_conditions():
@@ -151,7 +263,7 @@ def run_one(
     )
 
     cmd = [
-        "flwr", "run", ".", federation,
+        *_flwr_cmd_prefix(), "run", ".", federation,
         "--run-config", run_config,
         "--federation-config", f"num-supernodes={num_clients}",
         "--stream",  # --streamを付けないと flwr run は完了を待たずに即座に返ってしまう
@@ -182,6 +294,13 @@ def main() -> None:
         help="report/mechanism_analysis_plan.tex のPhase 1（全条件＋臨界点探索用のRatio細分化、trial数はTRIALS）を実行する。"
         "出力先は experiments/ とは別の experiments_phase1/ に分ける。",
     )
+    parser.add_argument(
+        "--detection",
+        action="store_true",
+        help="research_plan_v2.tex 5.2 の検知評価スイープ（Dirichlet alpha × 攻撃、fedavg固定、"
+        f"{DETECTION_NUM_CLIENTS}クライアント・{DETECTION_NUM_ROUNDS}ラウンド・trial{DETECTION_TRIALS}）を実行する。"
+        "出力先は experiments_detection/。",
+    )
     parser.add_argument("--federation", default="local-simulation", help="flwr run に渡すfederation名")
     parser.add_argument(
         "--aggregations",
@@ -194,6 +313,23 @@ def main() -> None:
     selected_aggregations = None
     if args.aggregations is not None:
         selected_aggregations = {a.strip() for a in args.aggregations.split(",")}
+
+    # --- research_plan_v2.tex 5.2：検知評価スイープ（独立した実行パス） ---
+    if args.detection:
+        conditions = list(detection_conditions())
+        if selected_aggregations is not None:
+            conditions = [c for c in conditions if c["aggregation"] in selected_aggregations]
+        total = len(conditions)
+        print(f"=== 検知評価スイープ 条件数: {total}（出力先: {DETECTION_EXPERIMENTS_DIR}/） ===\n")
+        counts = {"done": 0, "skipped": 0, "failed": 0}
+        for i, p in enumerate(conditions, start=1):
+            print(f"[{i}/{total}]", end=" ")
+            counts[run_one_detection(p, args.federation)] += 1
+        print("\n=== 検知評価スイープ終了 ===")
+        print(f"完了: {counts['done']} / スキップ: {counts['skipped']} / 失敗: {counts['failed']} / 合計: {total}")
+        if counts["failed"] > 0:
+            print(f"失敗した条件は {os.path.join(DETECTION_EXPERIMENTS_DIR, FAILURES_CSV_NAME)} を参照してください。")
+        return
 
     if args.quick:
         num_clients = 10
