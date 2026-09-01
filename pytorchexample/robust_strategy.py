@@ -224,7 +224,7 @@ class RobustFedAvg(FedAvg):
                 # Krum/Bulyan攻撃のε-ball摂動用：trial番号とラウンド番号から決定的に再現可能にする
                 seed=(self.trial * 1_000_003 + server_round) % (2**32 - 1),
             )
-        # --- ALIE 攻撃（research_plan_v2.tex 4.3 A2）: サーバ側で正常更新の
+        # --- ALIE 攻撃（sotsuron_plan2.tex 4.3 A2）: サーバ側で正常更新の
         #     座標ごと平均・標準偏差から悪性更新をクラフトする aggregation-agnostic 攻撃。
         elif self.attack_type == "alie" and len(malicious_pos) > 0 and len(benign_pos) > 0:
             updates = alie_attack(
@@ -252,7 +252,7 @@ class RobustFedAvg(FedAvg):
                 if benign_spread > 1e-12:
                     push_ratio = malicious_push_dist / benign_spread
 
-        # --- research_plan_v2.tex 4.2--4.5 対応：更新ベクトルレベルの検知器スコアを
+        # --- sotsuron_plan2.tex 4.2--4.5 対応：更新ベクトルレベルの検知器スコアを
         #     1クライアント1行で logs/detection_updates.csv へ記録する。
         #     検知は更新ベクトル g_i = w_i - w_global に対して行うため、
         #     受信した（攻撃適用後の）モデルベクトルからグローバルモデルを引いて渡す。

@@ -1,6 +1,6 @@
 # 検知評価実験 — ファイル索引
 
-更新ベクトルレベルの悪性更新検知の実験（`research_plan_v2.pdf` / `manual.pdf`）。
+更新ベクトルレベルの悪性更新検知の実験（`sotsuron_plan2.pdf` / `manual.pdf`）。
 
 Flower アプリは `flwr run .` をリポジトリ直下で実行するため、ランタイムの
 Python モジュールは直下に置く必要がある（サブフォルダに移すと import が壊れる）。
@@ -34,7 +34,7 @@ Python モジュールは直下に置く必要がある（サブフォルダに�
 ※ `test_attack.py::test_adaptive_attack_noop_for_fedavg` は本実験以前からの既知失敗。
 
 ### ドキュメント
-`research_plan_v2.tex` / `.pdf` … 研究計画（目的・仮説・指標・スケジュール）
+`sotsuron_plan2.tex` / `.pdf` … 研究計画（目的・仮説・指標・スケジュール）
 `manual.tex` / `.pdf` … 本コードの操作マニュアル
 
 ## 出力先
@@ -58,7 +58,7 @@ python3 analyze_detection.py                               # 3. 指標CSV＋図
 - `report/` … 第7章の表・図生成物・`mechanism_analysis_plan.tex`・`fang_correspondence_audit.tex`
 - `result/` … 第7章の図（`sotsuron.tex` はここを参照するようパス変更済み）
 - `logs_experiments_sweep/` … 760 run の生データ
-- `sotsuron_plan.*` … 旧研究計画（`research_plan_v2` に置換）
+- `sotsuron_plan.*` … 旧研究計画（`sotsuron_plan2` に置換）
 - `analyze_logs.py` / `visualize_results.py` … 旧スイープ用スクリプト
 - `adaptive_model_poisoning_attack.pdf` … Fang 論文
 - `sotsuron_fang_ch7_snapshot.pdf` … 移動前にビルドした卒論 PDF

@@ -1,7 +1,7 @@
 """
 analyze_detection.py
 
-research_plan_v2.tex 4.5 / 5 対応：検知評価スイープの後処理。
+sotsuron_plan2.tex 4.5 / 5 対応：検知評価スイープの後処理。
 
 入力 : logs/detection_updates.csv（robust_strategy.py が1クライアント1行で追記）
 出力 :

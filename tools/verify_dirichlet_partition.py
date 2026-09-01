@@ -1,7 +1,7 @@
 """
 tools/verify_dirichlet_partition.py
 
-research_plan_v2.tex 5 実装手順(1) 対応：
+sotsuron_plan2.tex 5 実装手順(1) 対応：
 Dirichlet 分割の結果を「クライアント別のクラス数ヒストグラム」で目視確認する。
 
 pytorchexample/task.py の _get_partitions をそのまま呼ぶので，学習時と同一の分割

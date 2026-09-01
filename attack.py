@@ -300,7 +300,7 @@ def alie_attack(
 ) -> np.ndarray:
     """
     ALIE 攻撃（Baruch et al., "A Little Is Enough", NeurIPS 2019）。
-    研究計画書（改訂版, research_plan_v2.tex）4.3 の A2。
+    研究計画書（改訂版, sotsuron_plan2.tex）4.3 の A2。
 
     正常クライアントの更新の「座標ごとの平均 mu・標準偏差 sigma」を求め，
     悪性クライアント全員に同一の

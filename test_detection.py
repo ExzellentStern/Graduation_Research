@@ -1,7 +1,7 @@
 """
 test_detection.py
 
-detection.py の単体テスト（research_plan_v2.tex 4.2--4.5 対応）
+detection.py の単体テスト（sotsuron_plan2.tex 4.2--4.5 対応）
 - 検知器 D1--D4：悪性更新が正常クラスタから外れているとき，各検知器が
   悪性クライアントに高いスコアを与える（AUC=1.0 になる）ことを確認する。
 - ステルス攻撃（正常のばらつき内に収める）では AUC が 1.0 未満に落ちることを確認する。

@@ -239,7 +239,7 @@ experiments_phase1/
 experiments_detection/
 fixed_eval/
 
-# research_plan_v2.tex：検知評価スイープの図・表出力（analyze_detection.py / verify_dirichlet_partition.py）
+# sotsuron_plan2.tex：検知評価スイープの図・表出力（analyze_detection.py / verify_dirichlet_partition.py）
 results_detection/
 # LaTeX ビルド生成物（全ディレクトリ共通。*.log は上で指定済み）
 *.aux

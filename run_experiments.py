@@ -109,7 +109,7 @@ def phase1_ratios_for(aggregation: str, data_split: str) -> list:
 
 
 # ============================================================
-# research_plan_v2.tex 5.2：検知評価スイープ（最小構成）
+# sotsuron_plan2.tex 5.2：検知評価スイープ（最小構成）
 #
 # 更新ベクトルレベルの異常検知を，Non-IID度（Dirichlet alpha）× 攻撃 の2軸で評価する。
 # 集約手法は検知に非依存なため fedavg 固定。悪性割合は 0.2 固定。
@@ -297,7 +297,7 @@ def main() -> None:
     parser.add_argument(
         "--detection",
         action="store_true",
-        help="research_plan_v2.tex 5.2 の検知評価スイープ（Dirichlet alpha × 攻撃、fedavg固定、"
+        help="sotsuron_plan2.tex 5.2 の検知評価スイープ（Dirichlet alpha × 攻撃、fedavg固定、"
         f"{DETECTION_NUM_CLIENTS}クライアント・{DETECTION_NUM_ROUNDS}ラウンド・trial{DETECTION_TRIALS}）を実行する。"
         "出力先は experiments_detection/。",
     )
@@ -314,7 +314,7 @@ def main() -> None:
     if args.aggregations is not None:
         selected_aggregations = {a.strip() for a in args.aggregations.split(",")}
 
-    # --- research_plan_v2.tex 5.2：検知評価スイープ（独立した実行パス） ---
+    # --- sotsuron_plan2.tex 5.2：検知評価スイープ（独立した実行パス） ---
     if args.detection:
         conditions = list(detection_conditions())
         if selected_aggregations is not None:

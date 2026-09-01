@@ -178,7 +178,7 @@ def test_adaptive_attack_noop_when_no_malicious():
 
 
 # ============================================================
-# alie_attack（research_plan_v2.tex 4.3 A2）
+# alie_attack（sotsuron_plan2.tex 4.3 A2）
 # ============================================================
 def test_alie_attack_payload_is_mu_minus_z_sigma():
     vectors, _, malicious_idx, honest_idx = make_dummy_round(n_honest=8, n_malicious=3, dim=6, seed=1)

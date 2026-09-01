@@ -227,7 +227,7 @@ def log_diagnostics_csv(
 
 
 # =========================
-# 検知評価用ログ（research_plan_v2.tex 4.2--4.5 対応）
+# 検知評価用ログ（sotsuron_plan2.tex 4.2--4.5 対応）
 # =========================
 DETECTION_CSV = os.path.join(LOG_DIR, "detection_updates.csv")
 
