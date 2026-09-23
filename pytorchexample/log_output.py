@@ -35,7 +35,7 @@ def configure_log_dir(log_dir: str) -> None:
     そのスイープ専用のログディレクトリに自己完結させる。
     """
     global LOG_DIR, CLIENT_CSV, SERVER_CSV, CONFIG_TXT, PLOT_DIR
-    global RESULTS_CSV, SUMMARY_CSV, DIAGNOSTICS_CSV
+    global RESULTS_CSV, SUMMARY_CSV, DIAGNOSTICS_CSV, DETECTION_CSV
 
     LOG_DIR = log_dir
     CLIENT_CSV = os.path.join(LOG_DIR, "client_metrics.csv")
@@ -45,6 +45,7 @@ def configure_log_dir(log_dir: str) -> None:
     RESULTS_CSV = os.path.join(LOG_DIR, "results.csv")
     SUMMARY_CSV = os.path.join(LOG_DIR, "summary.csv")
     DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
+    DETECTION_CSV = os.path.join(LOG_DIR, "detection_updates.csv")
 
 
 # =========================

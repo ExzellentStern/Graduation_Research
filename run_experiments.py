@@ -193,6 +193,11 @@ def run_one_detection(p: dict, federation: str) -> str:
 
     os.makedirs(output_dir, exist_ok=True)
 
+    # --run-config はTOML文字列として解釈されるため、Windowsのバックスラッシュ区切り
+    # パスをそのまま埋め込むと "\f" 等がエスケープシーケンスとして解釈され、
+    # パスが壊れてしまう（run_one()と同じ問題）。スラッシュ区切りに変換して渡す。
+    output_dir_for_config = output_dir.replace(os.sep, "/")
+
     run_config = (
         f'num-server-rounds={DETECTION_NUM_ROUNDS} '
         f'aggregation-method="{p["aggregation"]}" '
@@ -204,7 +209,7 @@ def run_one_detection(p: dict, federation: str) -> str:
         f'attack-type="{p["attack"]}" '
         f'alie-z={DETECTION_ALIE_Z} '
         f'num-clients={DETECTION_NUM_CLIENTS} '
-        f'output-dir="{output_dir}"'
+        f'output-dir="{output_dir_for_config}"'
     )
 
     # 新しいflwr（SuperLink接続方式）では --federation-config は非推奨で無視される。
