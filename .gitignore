@@ -234,8 +234,21 @@ report/*.bbl
 report/*.blg
 
 # 実験計画書7.6/7.7：run_experiments.pyの出力（実験ごとの final_model.pt / fixed_eval）
-# _logs/ と failures.csv は解析用データとして追跡する（モデル重み・予測画像は除外）。
-experiments/*
-!experiments/_logs/
-!experiments/failures.csv
+experiments/
+experiments_phase1/
+experiments_diagnostic/
+experiments_detection/
 fixed_eval/
+
+# sotsuron_plan2.tex：検知評価スイープの図・表出力（analyze_detection.py / verify_dirichlet_partition.py）
+results_detection/
+# LaTeX ビルド生成物（全ディレクトリ共通。*.log は上で指定済み）
+*.aux
+*.dvi
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.out
+*.toc
+_run_*/
+_smoke/

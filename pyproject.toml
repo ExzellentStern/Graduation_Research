@@ -57,8 +57,9 @@ non-iid-p = 0.5            # non_iid（Fang方式）の時に効く：ラベルl
 dirichlet-alpha = 0.6      # dirichlet（旧方式）の時のみ効く（0.1で激偏り）。比較用に残す。
 
 # 追加：攻撃設定（今の実装に合わせる）
-attack-type = "none"        # "sign_flip" or "scale"
+attack-type = "none"        # "none" / "sign_flip" / "scale" / "adaptive" / "alie"
 poison-rate = 0.2
+alie-z = 1.0              # ALIE攻撃（sotsuron_plan2.tex 4.3 A2）の摂動強度 z（実用上 0.5--1.5）
 
 # 追加：悪性クライアント生成（実験計画書 7.3 対応）
 num-clients = 100          # クライアント総数（federationのnum-supernodesと一致させること）

@@ -1,0 +1,670 @@
+\documentclass[a4j, twocolumn, dvipdfmx]{jsarticle}
+
+\usepackage[a4paper, left=2.0cm, right=2.0cm, top=2.0cm, bottom=2.0cm]{geometry}
+\usepackage{amsmath}   % 数式用
+\usepackage{amssymb}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{booktabs}  % \toprule, \midrule, \bottomrule 等の表罫線用
+\usepackage{titlesec}  % 見出し調整
+\usepackage{enumitem}  % 箇条書きの余白調整
+\usepackage{array}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{float}
+\usepackage{flushend}  % 最終ページの左右コラムの高さをそろえる
+\raggedbottom
+
+% =========================================================
+% 見出し設定
+% =========================================================
+\titleformat{\section}[block]
+  {\normalfont\large\bfseries}
+  {\thesection}{0.7em}{}
+
+\titleformat{\subsection}[block]
+  {\normalfont\normalsize\bfseries}
+  {\thesubsection}{0.7em}{}
+
+\titleformat{\subsubsection}[block]
+  {\normalfont\normalsize\bfseries}
+  {\thesubsubsection}{0.7em}{}
+
+% titlesec は \paragraph も乗っ取るため runin 形式を明示（jsarticle での
+% "Entered in horizontal mode" エラー回避）
+\titleformat{\paragraph}[runin]
+  {\normalfont\normalsize\bfseries}
+  {\theparagraph}{0.5em}{}
+
+% 見出し前後の余白
+\titlespacing*{\section}
+  {0pt}{1.5ex plus 0.5ex minus 0.2ex}{0.8ex}
+\titlespacing*{\subsection}
+  {0pt}{1.2ex plus 0.4ex minus 0.2ex}{0.6ex}
+\titlespacing*{\paragraph}
+  {0pt}{1.0ex plus 0.3ex minus 0.1ex}{0.6em}
+
+% =========================================================
+% 箇条書き設定
+% =========================================================
+\setlist[itemize]{topsep=4pt, itemsep=2pt, parsep=0pt, leftmargin=*}
+\setlist[enumerate]{topsep=4pt, itemsep=2pt, parsep=0pt, leftmargin=1.8em}
+
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{
+Federated Learningにおける悪性更新の検知可能性の評価に関する研究計画書\\
+\large --- データ分布の不均一性と攻撃のステルス性を軸とした更新ベクトルレベルの評価 ---
+}
+\author{3CDA2216 笠原秀星}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+% =========================================================
+\section{研究背景・概要}
+
+Federated Learning（以下, FL）は, 生データを共有することなく複数のデバイスや組織が協調して機械学習モデルを学習する分散学習の枠組みである\cite{mammen2021fl}.
+FLは, ユーザのプライバシー保護と機械学習の両立を可能にする技術として注目されており, スマートフォンにおける単語予測や顔認識, 音声認識技術の向上に利用されている. また, 厳格なプライバシー規制によりデータ共有が困難な医療分野や, 自動運転車におけるリアルタイムデータの活用など, 幅広い分野への応用が期待されている\cite{li2019fl}.
+
+一方で, FLには収束性, データ分布の不均一性（Non-I.I.D.）, 通信コスト, 大規模環境への適用, モデル集約手法など, さまざまな課題が存在する\cite{ma2020privacy}. 特に, FLでは多数の参加者が学習に関与するため, 悪意のあるクライアントによる攻撃への耐性を確保することが重要な研究課題となっている. 医療データや個人情報などの機密性の高いデータを扱う応用が想定されることから, 安全かつ信頼性の高い学習環境の実現が求められている.
+
+FLに対する代表的な攻撃としてPoisoning Attackが挙げられる. Poisoning Attackは大きくData Poisoning AttackとModel Poisoning Attackの2種類に分類される. Data Poisoning Attackは学習データそのものを改ざんする攻撃であり, ラベル反転攻撃やBackdoor Attackなどが含まれる. 一方, Model Poisoning Attackはクライアントがサーバへ送信するモデル更新や勾配情報を改ざんする攻撃であり, 勾配操作や最適化手法を利用した攻撃などが提案されている.
+
+これらの攻撃に対する防御手法としては, 異常検知, Robust Aggregation, 摂動機構の3つに大別される. 異常検知にはコサイン類似度やクラスタリング, スコアベース手法などが用いられる. また, Robust AggregationにはKrum, Trimmed Mean, Median, Bulyanなどの集約手法が提案されている. さらに, 摂動機構としては差分プライバシーを利用した手法が広く研究されている\cite{sagar2023survey}.
+
+本研究では, これらの中でもModel Poisoning Attackに着目する. Data Poisoning Attackに関してはこれまで多くの研究が行われており, 攻撃に対してロバストな集約手法や検知手法が多数提案されている. 一方で, Model Poisoning Attackは学習データではなくモデル更新そのものを改ざんするため, サーバ側から攻撃を識別することが困難であり, より深刻な脅威となる. また, その防御手法に関する研究はData Poisoning Attackと比較して十分に進んでいるとは言えない.
+
+さらに, FangらはAdaptive Model Poisoning Attackを提案し, 既存のRobust Aggregation手法を考慮した攻撃によって防御機構を回避できる可能性を示している\cite{fang2020local}. このことは, 従来の防御手法が必ずしも十分な耐性を有していないことを示唆しており, Adaptive Model Poisoning Attackに対する詳細な評価が必要である.
+
+著者はこれまで, Fangら\cite{fang2020local}のAdaptive Model Poisoning Attackを再実装し, FedAvg, Median, Trimmed Mean, Krum, Bulyanの5種類のRobust Aggregation手法に対する耐性を, IID/Non-IID環境および悪性クライアント割合を振った大規模スイープ（38条件, 計760回の学習）で評価してきた. しかし, 計算資源の制約から通信ラウンド数を20に制限したため, 攻撃なしのベースラインですら学習が収束せず, 最終精度の絶対値も手法間の順位も結論できないという問題に直面した. 収束にはFangらと同等の2{,}000イテレーション相当が必要であり, 現有のCPU環境と残り時間では実行できない.
+
+この行き詰まりは研究テーマそのものではなく, 「最終精度」を主評価指標に据えたことに起因する. 攻撃と防御の本質的な攻防は, 各ラウンドでサーバが集約を行う直前の\textbf{更新ベクトル空間}で生じている. そこで本計画では, 評価の視点を最終精度から更新ベクトルレベルへ移し, 防御を「悪性更新を正常更新から見分けられるか」という\textbf{二値分類（異常検知）問題}として定式化する. 検知性能はモデルが最終精度に到達していなくても各ラウンドで測定できるため, 小規模・短ラウンドの実験でも科学的に妥当な結論が得られる. 本研究では, データ分布の不均一性（Non-IID度）と攻撃のステルス性を2軸に, 集約手法に依存しない代表的な検知器が悪性更新をどこまで見分けられるか, そしてどの条件で検知が破綻するかを明らかにする.
+
+% =========================================================
+\section{事前知識}
+
+\subsection{Federated Learning}
+先に述べたようにFederated Learningは生データを共有することなく複数のデバイスや組織が協調して機械学習モデルを学習する分散学習の枠組みである\cite{mammen2021fl}.
+集約アルゴリズムとしてFederated Averaging (以下, FedAvg)を用いる. FedAvgはGoogleが2016年に発表した論文の中で示されたものである\cite{mcmahan2017fedavg}.
+
+\subsubsection{FedAvg}
+\begin{table}[t]
+\centering
+\caption{FedAvgで用いる主な記号}
+\begin{tabular}{ll}
+\hline
+記号 & 意味 \\
+\hline
+$K$ & 全クライアント数 \\
+$C$ & 各ラウンドで参加する割合 \\
+$S_t$ & ラウンド$t$で選択されたクライアント集合 \\
+$w_t$ & グローバルモデル \\
+$w_{t+1}^k$ & クライアント$k$が更新したモデル \\
+$n_k$ & クライアント$k$のデータ数 \\
+$E$ & ローカル学習のエポック数 \\
+$B$ & ミニバッチサイズ \\
+$\eta$ & 学習率 \\
+\hline
+\end{tabular}
+\label{tab:fedavg_symbol}
+\end{table}
+\begin{algorithm}[t]
+\caption{Federated Averaging (FedAvg)}
+\label{alg:fedavg}
+\begin{algorithmic}[1]
+\State \textbf{Server executes:}
+\State Initialize $w_0$
+\For{each round $t = 1,2,\ldots$}
+    \State $m \leftarrow \max(C \cdot K, 1)$
+    \State $S_t \leftarrow$ random set of $m$ clients
+    \ForAll{$k \in S_t$ in parallel}
+        \State $w_{t+1}^{k} \leftarrow \mathrm{ClientUpdate}(k,w_t)$
+    \EndFor
+    \State $
+    w_{t+1}
+    \leftarrow
+    \sum_{k \in S_t}
+    \frac{n_k}{n_t}
+    w_{t+1}^{k}
+    $
+\EndFor
+\Statex
+\State \textbf{ClientUpdate}$(k,w)$
+\State Split $P_k$ into batches of size $B$
+\For{$i=1$ to $E$}
+    \For{batch $b \in B$}
+        \State $
+        w \leftarrow
+        w-\eta\nabla\ell(w;b)
+        $
+    \EndFor
+\EndFor
+\State \Return $w$ to server
+\end{algorithmic}
+\end{algorithm}
+アルゴリズム\ref{alg:fedavg}にFedAvgの処理手順を示す.
+
+まず, サーバはグローバルモデル $w_0$ を初期化する.
+その後, 各通信ラウンド $t$ において, 全クライアント数 $K$ のうち割合 $C$ に応じた $m$ 個のクライアントをランダムに選択する.
+選択されたクライアント集合を $S_t$ とする.
+
+選択された各クライアントは, サーバから受け取ったグローバルモデル $w_t$ を用いてローカル学習を実施する.
+各クライアントは自身が保有するデータ集合 $P_k$ をミニバッチサイズ $B$ ごとに分割し, エポック数 $E$ 回の学習を行う.
+モデル更新には確率的勾配降下法（SGD）を用い, 学習率を $\eta$ とすると, 各ミニバッチ $b$ に対して次式によりパラメータを更新する.
+
+\begin{equation}
+w \leftarrow w-\eta\nabla \ell(w;b)
+\end{equation}
+
+ここで, $\ell(w;b)$ はミニバッチ $b$ に対する損失関数であり, $\nabla \ell(w;b)$ はその勾配を表す.
+
+ローカル学習終了後, 各クライアントは更新後のモデル $w_{t+1}^{k}$ をサーバへ送信する.
+サーバは受信したモデルを, 各クライアントの保有データ数 $n_k$ に応じて重み付け平均することで新たなグローバルモデル $w_{t+1}$ を生成する.
+
+\begin{equation}
+w_{t+1}
+=
+\sum_{k \in S_t}
+\frac{n_k}{n_t}
+w_{t+1}^{k},
+\qquad
+n_t=\sum_{k\in S_t}n_k
+\end{equation}
+
+この処理を複数ラウンド繰り返すことで, 生データを共有することなくグローバルモデルを学習する.
+
+\subsection{Data Poisoning Attack}
+
+Data Poisoning Attackは, 攻撃者が学習データそのものを改ざんし, グローバルモデルの性能低下や誤動作を引き起こす攻撃である. Federated Learningでは, 各クライアントが保有するローカルデータや学習過程をサーバが直接確認できないため, 悪意のあるクライアントが改ざんしたデータを用いて学習を行うことで, モデルに悪影響を与えることが可能である\cite{sagar2023survey}.
+
+Data Poisoning Attackは, Label Flipping Attack, Poisoning Sample Attack, Backdoor Attackなどに分類される. Label Flipping Attackは, 学習データのラベルを意図的に別のラベルへ変更する攻撃である. 一方, Backdoor Attackは, 特定のトリガを含む入力に対してのみ誤分類を引き起こす攻撃であり, 通常の入力に対する性能を維持したままトリガ入力のみを誤らせるためステルス性が高い.
+
+Data Poisoning Attackは実装が比較的容易である一方, 異常なデータ分布やラベルの偏りを利用した検知手法によって防御できる場合がある. そのため近年では, 学習データではなくモデル更新そのものを改ざんするModel Poisoning Attackに関する研究が盛んに行われている\cite{sagar2023survey,xie2020dba,nguyen2022flame}.
+
+\subsection{Model Poisoning Attack}
+
+Model Poisoning Attackは, 悪意のあるクライアントがサーバへ送信するモデル更新や勾配情報を改ざんし, グローバルモデルの性能低下や誤動作を引き起こす攻撃である. Data Poisoning Attackが学習データそのものを改ざんするのに対し, Model Poisoning Attackは学習後のモデルパラメータを直接操作する点に特徴がある. そのため, サーバ側から攻撃の有無を判断することが困難であり, Federated Learningにおける深刻な脅威の一つとして注目されている\cite{sagar2023survey}.
+
+Model Poisoning Attackは, 勾配の符号反転やランダム勾配の挿入といった単純な操作から, 攻撃効果を最大化するようにモデル更新を最適化する手法までを含む. 特に後者は, 正常なモデル更新との差を小さく保ちながら攻撃目的を達成することで, 異常検知や防御機構による検出を回避しようとする\cite{bagdasaryan2020model}. Fangら\cite{fang2020local}のAdaptive Model Poisoning Attackや, Inner Product Manipulation\cite{xie2019fall}, min-max攻撃\cite{shejwalkar2021manipulating}はいずれもこの系譜に位置づけられる.
+
+\subsection{防御手法}
+
+前述のとおり, Poisoning Attackに対する防御は異常検知, Robust Aggregation, 摂動機構の3つに大別される\cite{sagar2023survey}. 本研究はこのうち\textbf{異常検知}を主対象とし, Robust Aggregationは比較・背景として扱う.
+
+\subsubsection{Robust Aggregation}
+Robust Aggregationは, 悪意のあるクライアントによる異常なモデル更新の影響を軽減することを目的とした集約手法である. 従来のFedAvgでは各クライアントの更新を重み付き平均するため, 極端な更新を送る悪性クライアントの影響を受けやすい. Byzantine Fault Toleranceの考え方を取り入れた代表的な手法として以下がある.
+
+\begin{itemize}
+  \item \textbf{Mean（FedAvg）:} 全更新の（データ数）重み付き平均. 実装が容易だが外れ値に脆弱.
+  \item \textbf{Median\cite{yin2018byzantine}:} 座標ごとに中央値を採用し, 極端な値の影響を抑える.
+  \item \textbf{Trimmed Mean\cite{yin2018byzantine}:} 座標ごとに上下 $\beta$ 個を除外してから平均する.
+  \item \textbf{Krum\cite{blanchard2017krum}:} 各更新と他更新との距離を計算し, 最も近傍が密な単一更新を採用する.
+  \item \textbf{Bulyan\cite{elmhamdi2018hidden}:} Krumで候補を絞り, その上でTrimmed Meanをかける. 高いByzantine耐性を持つが $n \geq 4f+3$ を要する.
+\end{itemize}
+
+\subsubsection{異常検知}
+異常検知は, サーバが受け取った各クライアントの更新ベクトルを調べ, 正常な更新の分布から外れたものを悪性候補として検出・除外・重み下げする防御である. 代表的な手掛かりとして, (i)更新ノルムの大きさ\cite{nguyen2022flame}, (ii)他クライアントや集約基準方向とのコサイン類似度\cite{fung2020limitations}, (iii)更新ベクトル集合のクラスタリング\cite{shen2016auror,sattler2020byzantine}, (iv)主成分・特異値分解によるスペクトル外れ値\cite{tran2018spectral,shejwalkar2021manipulating} がある. 本研究ではこれらを, 集約手法に依存しない汎用検知器として第\ref{sec:framework}章で定式化する.
+
+% =========================================================
+\section{関連研究}
+
+Subhash Sagarらは, Federated LearningにおけるPoisoning Attackおよび防御手法に関する包括的なサーベイを行っている. 彼らは攻撃をData Poisoning AttackとModel Poisoning Attackに分類し, 防御手法についてもRobust Aggregationや異常検知手法などの観点から体系的に整理している\cite{sagar2023survey}.
+
+Minghong Fangらは, Byzantine-robust Federated Learningに対するLocal Model Poisoning Attackを提案した. 攻撃を最適化問題として定式化することで, Krum, Bulyan, Median, Trimmed MeanといったByzantine-robust Aggregation手法に対しても有効な攻撃を実現し, 既存の防御手法が十分ではないことを示した\cite{fang2020local}.
+
+Robust Aggregationの基礎としては, BlanchardらのKrum\cite{blanchard2017krum}, Yinらの座標ごとMedian/Trimmed Mean\cite{yin2018byzantine}, El MhamdiらのBulyan\cite{elmhamdi2018hidden} がある. これらは一定割合以下のByzantineクライアントに対する理論的保証を与えるが, いずれも「正常更新が互いに近い」ことを暗に仮定しており, Non-IID環境では保証が弱まる.
+
+Baruchらは, 正常更新の座標ごとの標準偏差の範囲内に収まる小さな摂動を悪性クライアント全員が協調して送る``A Little Is Enough''（ALIE）攻撃を提案し, Krum/Median/Trimmed Meanを回避できることを示した\cite{baruch2019little}. Shejwalkar \& Houmansadrは, 集約手法非依存のmin-max/min-sum攻撃と, 特異値分解に基づく検知（Divide-and-Conquer）を提案した\cite{shejwalkar2021manipulating}.
+
+検知型防御としては, クライアント更新履歴間のコサイン類似度から結託sybilを検出するFoolsGold\cite{fung2020limitations}, コサイン距離のクラスタリングと重みクリッピングを組み合わせるFLAME\cite{nguyen2022flame}, サーバ上で更新ベクトルの異常検知器を学習するLi ら\cite{li2020learning}, 複数ラウンドの更新の整合性から悪性クライアントを特定するFLDetector\cite{zhang2022fldetector} がある.
+
+データ分布の不均一性の扱いとしては, Hsu らのディリクレ分布によるラベル分割\cite{hsu2019measuring} が標準的であり, NIID-Bench\cite{li2022federated} が各種分割方式を体系的に比較している.
+
+これらの研究の多くは, 最終精度や攻撃成功率で end-to-end に評価するか, 検知性能を単一のNon-IID水準でのみ報告している. 「Non-IID度」と「攻撃のステルス性」を2軸として, 更新ベクトルレベルの悪性検知可能性を学習ダイナミクスから切り離して系統的に評価した統制研究は少ない. 本研究はこの空白を, 小規模だが軸を明示した統制実験として埋める.
+
+% =========================================================
+\section{研究の問いと仮説}
+
+\subsection{研究の問い}
+
+\begin{enumerate}
+  \item \textbf{RQ1．} FLにおける悪性更新は, 更新ベクトルレベルの異常検知でどの程度見分けられるか. 検知性能は集約手法非依存の代表的な検知器の間でどう異なるか.
+  \item \textbf{RQ2．} データ分布の不均一性（Non-IID度）は検知性能をどう低下させるか. その低下は学習ダイナミクスとは独立に生じるか.
+  \item \textbf{RQ3．} 攻撃のステルス性（悪性更新を正常クラスタ内に収める度合い）は検知性能をどう左右するか. 検知が破綻する境界はどこか.
+\end{enumerate}
+
+\subsection{中心仮説}
+
+\begin{quote}
+悪性更新が検知可能かどうかは, \textbf{悪性更新の押し出し量が正常クライアント間のばらつきを超えているか}でほぼ決まる. Non-IIDは正常更新のばらつきを増大させるため, 学習ダイナミクスとは独立に, 攻撃を正常な多様性の中へ紛れ込ませ, 検知性能を低下させる.
+\end{quote}
+
+この仮説を検証するための説明変数として, 正常クラスタの広がり $\mathrm{spread}$, 悪性更新の押し出し距離 $\mathrm{push}$, およびその比 $\mathrm{push\_ratio}$（\S\ref{sec:metrics}で定義）を導入する. 仮説が正しければ, 検知性能（ROC-AUC）は $\mathrm{push\_ratio}$ が $1$ を下回る領域で急落し, Non-IID度が強いほど同じ攻撃強度でも $\mathrm{push\_ratio}$ が小さくなる, という関係が観測されるはずである.
+
+% =========================================================
+\section{脅威モデル}
+\label{sec:threat}
+
+\begin{itemize}
+  \item \textbf{攻撃者の知識:} full knowledge を仮定する. 悪性クライアントは各ラウンドで正常クライアントの更新を参照でき, 互いに結託できる. 本実験ではこれをサーバ側で模擬する（既存実装を踏襲）.
+  \item \textbf{悪性クライアント:} 各ラウンドで固定された集合. 割合は $f/n \le 0.3$.
+  \item \textbf{防御者:} サーバ側に位置し, 全クライアントの更新ベクトルを観測できる. \textbf{クリーンな検証データは持たない}（FLTrust\cite{cao2021fltrust}型の信頼ブートストラップは対象外）.
+  \item \textbf{正解ラベルの扱い:} どのクライアントが悪性かという正解は\textbf{評価専用}であり, 検知器には一切与えない.
+  \item \textbf{位置づけ:} 本脅威モデルは攻撃者に有利な楽観的設定である. Shejwalkarら\cite{shejwalkar2022back}は現実的な制約下ではpoisoningの脅威が限定的であると論じているが, 本研究は「検知性能の上限」を評価するものとして位置づける.
+\end{itemize}
+
+% =========================================================
+\section{評価枠組み}
+\label{sec:framework}
+
+\subsection{記法}
+
+通信ラウンド $t$ において, 参加クライアント $i \in \{1,\dots,n\}$ のモデル更新ベクトルを $g_i = w_i - w_{\text{global}}$ とする. 正常クライアントの添字集合を $B$, 悪性クライアントの添字集合を $M$（$|M| = f$）とし, $\bar{g}_B = \frac{1}{|B|}\sum_{i \in B} g_i$ を正常更新の重心とする.
+
+\subsection{検知器}
+\label{sec:detectors}
+
+いずれも集約手法に依存しない汎用的な検知器であり, 各クライアント $i$ に異常スコア $s_i$（大きいほど悪性らしい）を与える. 基本の3種（D1--D3）を実装し, D4は余力に応じて追加する.
+
+\paragraph{D1．ノルム偏差．}
+\begin{equation}
+s_i = \left|\; \|g_i\|_2 - \operatorname*{median}_{j}\|g_j\|_2 \;\right|
+\end{equation}
+最も素朴な検知器. ノルムを大きく変える攻撃（スケーリング, ランダムノイズ）に強く, ステルス攻撃には弱いと予想される. 重みクリッピング系防御（FLAME\cite{nguyen2022flame}）の系譜.
+
+\paragraph{D2．参照方向へのコサイン距離．}
+座標ごとの中央値 $r = \operatorname{median}(g_1,\dots,g_n)$ を参照方向とし,
+\begin{equation}
+s_i = 1 - \frac{g_i \cdot r}{\|g_i\|_2\,\|r\|_2}.
+\end{equation}
+更新の\textbf{向き}の異常を捉える. FoolsGold\cite{fung2020limitations}やFLAME\cite{nguyen2022flame}の系譜.
+
+\paragraph{D3．2クラスタリング．}
+特徴量 $\phi_i = [\,\|g_i\|_2,\; \text{(D2のスコア)},\; \text{(第1--2主成分への射影)}\,]$ に対して $k$-means（$k=2$）を適用し, 大きい方のクラスタを正常とみなして, その重心までの距離をスコアとする. Auror\cite{shen2016auror}やクラスタ化FL\cite{sattler2020byzantine}の系譜.
+
+\paragraph{D4．スペクトル残差（余力があれば）．}
+更新行列 $G = [g_1;\dots;g_n]$ を中心化し, その第1右特異ベクトル $v$ を求め,
+\begin{equation}
+s_i = (g_i \cdot v)^2
+\end{equation}
+とする. Spectral Signatures\cite{tran2018spectral}やDivide-and-Conquer\cite{shejwalkar2021manipulating}の系譜であり, ステルス攻撃（特にmin-max）がこの検知を回避するよう設計されているため, 攻撃との相性を見る対照として有用である.
+
+\subsection{攻撃}
+\label{sec:attacks}
+
+\paragraph{A1．符号反転攻撃（粗い攻撃・ベースライン）．}
+\begin{equation}
+g_i^{\text{mal}} = -\lambda\, \bar{g}_B \qquad (i \in M,\;\; \lambda \ge 1)
+\end{equation}
+ノルムも向きも正常から大きく外れるため, D1・D2で容易に検知できるはずの下限ケース. 実装上はクライアント側で自身の更新量 $\Delta$ の符号を反転する形をとる.
+
+\paragraph{A2．ALIE（``A Little Is Enough''，ステルス攻撃・主対象）．}
+Baruchら\cite{baruch2019little}の攻撃. 正常更新の座標ごとの平均 $\mu$ と標準偏差 $\sigma$ を求め,
+\begin{equation}
+g_i^{\text{mal}} = \mu - z\,\sigma \qquad (i \in M)
+\end{equation}
+とする（悪性クライアントは全員同一のベクトルを送る）. $z$ は $n, f$ から定まる上限の範囲で探索し, 実用上は $z \in [0.5, 1.5]$ を調整する. 「正常のばらつきの範囲内に収まる最大の摂動」を送る攻撃であり, $\mathrm{push\_ratio} \approx 1$ を人工的に作り出す. 本研究の仮説検証の中心に置く.
+
+\paragraph{A3．min-max／min-sum 攻撃（発展課題）．}
+Shejwalkar \& Houmansadr\cite{shejwalkar2021manipulating}の攻撃. 摂動方向を固定し, スケール $\gamma$ を二分探索で最大化する. min-max制約は「どの悪性更新から任意の正常更新までの距離も, 正常更新同士の最大距離を超えない」というもの. 集約手法非依存で強力であり, スケジュールに余裕がある場合に追加する.
+
+なお, Fangら\cite{fang2020local}の攻撃やInner Product Manipulation\cite{xie2019fall}も同じ枠組み（集約手法の特性を突く最適化型攻撃）に位置づけられるが, 本研究では関連研究として言及するにとどめる.
+
+\subsection{データ分布（Non-IID）}
+
+Hsuら\cite{hsu2019measuring}のディリクレ分布によるラベル分割を用いる. クラス $c$ ごとに $p_c \sim \mathrm{Dir}(\alpha \mathbf{1}_n)$ を引き, クラス $c$ の学習データを比率 $p_c$ で各クライアントへ配分する. $\alpha$ を大きくするとIIDに近づき, 小さくすると各クライアントの保有クラスが偏る. 本研究では $\alpha \in \{100\;(\approx\text{IID}),\; 0.5,\; 0.1\}$ の3水準を用いる. Fangらのグループ分割と異なり不均一性の強度を連続的に制御できる点が利点である. 方法論上の参照はNIID-Bench\cite{li2022federated}.
+
+\subsection{評価指標}
+\label{sec:metrics}
+
+各ラウンド $t$ で, 全クライアントについて $(s_i, y_i)$ の組が得られる（$y_i = 1$ なら悪性）.
+
+\begin{itemize}
+  \item \textbf{検知性能（主指標, 閾値非依存）:} ROC-AUC, Average Precision, および recall@$f$（スコア上位 $f$ 件を悪性と判定したときの悪性回収率）. ラウンドごとに算出し, 「AUC対ラウンド」の推移を示すとともに, 条件ごとに全ラウンドの平均$\pm$標準偏差で要約する.
+  \item \textbf{防御効用（橋渡し指標）:} スコア上位 $f$ 件を除外して残りを平均した $\hat{g}$ について, 真の正常重心とのずれ $\|\hat{g} - \bar{g}_B\|_2$ を測る. 「検知できること」と「実際に防御できること」を接続する.
+  \item \textbf{説明変数（仮説検証用）:}
+  \begin{align*}
+    \mathrm{spread} &= \tfrac{1}{|B|}\textstyle\sum_{i \in B}\|g_i - \bar{g}_B\|_2, \\
+    \mathrm{push}   &= \tfrac{1}{|M|}\textstyle\sum_{i \in M}\|g_i - \bar{g}_B\|_2, \\
+    \mathrm{push\_ratio} &= \mathrm{push}\,/\,\mathrm{spread}.
+  \end{align*}
+  \item \textbf{主図:} 横軸 $\mathrm{push\_ratio}$, 縦軸 ROC-AUC の散布図を, 点を $(\alpha,\ \text{攻撃})$ で色分けして描く. 「$\mathrm{push\_ratio}$ が $1$ を切るとAUCが崩れる」ことを1枚で示すことを目標とする.
+  \item \textbf{精度確認（補助）:} 代表条件を4--6セルだけ選び, 学習率を上げて概ね収束させ, 検知の失敗が実際の精度低下・防御効用の悪化に対応することを確認する.
+\end{itemize}
+
+\paragraph{収束を必要としない理由と検証ゲート．}
+検知は「そのラウンドの更新ベクトル集合が分離可能か」という問題であり, モデルが最終精度に到達している必要はない. ただし, 検知性能がラウンドをまたいで極端にドリフトすると解釈が困難になるため, \S\ref{sec:schedule}のゲートG1で, パイロット実験によりAUCの推移が解釈可能な範囲に収まることを確認する. 収まらない場合は学習率を $0.01$ へ上げ, 40ラウンドで概ね収束する設定へ切り替える（それでもCPUで一晩程度で完了する）.
+
+% =========================================================
+\section{実験計画}
+
+\subsection{基本設定}
+
+\begin{table}[t]
+\centering
+\caption{基本となる学習・環境設定}
+\begin{tabular}{@{}l@{\hspace{0.8em}}P{4.0cm}@{}}
+\toprule
+項目 & 値 \\
+\midrule
+データセット & MNIST（10クラス分類） \\
+モデル & 小型CNN（Fang準拠） \\
+クライアント数 $n$ & 20（毎ラウンド全参加） \\
+通信ラウンド数 & 30（パイロットで調整） \\
+ローカルエポック数 & 1 \\
+バッチサイズ & 32 \\
+学習率 & $0.001$（収束確認用のみ $0.01$） \\
+最適化 & 素朴なSGD \\
+実装 & PyTorch / Flower \\
+実行環境 & CPU \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{主スイープ（最小構成）}
+
+\begin{table}[t]
+\centering
+\caption{主スイープの条件. 検知器は同一の実行ログから事後的にすべて評価できる}
+\begin{tabular}{ll}
+\toprule
+軸 & 水準 \\
+\midrule
+Non-IID度 $\alpha$ & $100,\; 0.5,\; 0.1$ \\
+攻撃 & 符号反転（A1）, ALIE（A2） \\
+悪性割合 $f/n$ & $0.2$（固定, $f=4$） \\
+検知器 & D1, D2, D3（事後評価） \\
+trial & $3$（分割・初期値・悪性選出に連動） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent
+主スイープの実行数は $3 \times 2 \times 3 = 18$ 回. 加えて $\mathrm{spread}$ の基準値を得るための攻撃なし条件（$3\,\alpha \times 3\,\text{trial} = 9$ 回）を実行し, 合計 $27$ 回. 1回あたりCPUで数分であり一晩以内に完了する.
+
+\subsection{発展課題（余裕がある場合のみ）}
+
+\begin{itemize}
+  \item min-max攻撃（A3）を攻撃軸に追加（$+9$ 回）.
+  \item 悪性割合を $\{0.1,\; 0.3\}$ に拡張（$+36$ 回）.
+  \item 検知後に集約（Median, Trimmed Mean, Krum）まで行い, 検知フィルタの有無で最終防御効用がどう変わるかを比較.
+  \item 代表 $4$--$6$ セルを学習率 $0.01$・$200$ラウンドで収束させ, 検知失敗と精度低下の対応を確認.
+\end{itemize}
+
+% =========================================================
+\section{実装方針}
+
+\subsection{既存資産と新規作業の対応}
+\label{sec:asset-map}
+
+本計画は, これまでにFang再現実験で構築した実験基盤の大部分をそのまま再利用する. 変わるのは「何を測り, 何を図示するか」であり, FLの学習・攻撃機構そのものは変更しない. 対応を表\ref{tab:asset-map}に示す. 新規に書くコードは合計でおよそ100行であり, 既に完了している760回スイープの実装規模と比べて小さい差分である.
+
+\begin{table*}[t]
+\centering
+\caption{既存資産と新規作業の対応}
+\label{tab:asset-map}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}P{5.2cm} P{5.3cm} P{5.0cm}@{}}
+\toprule
+要素 & 状態 & 新規作業量 \\
+\midrule
+Flower + PyTorch のFLループ & 完成 & 0 \\
+FedAvg / Median / Trimmed Mean / Krum / Bulyan & \texttt{aggregation.py} に実装済み & 0（背景・比較で用いるのみ） \\
+full knowledge攻撃のサーバ側模擬・悪性選出 & \texttt{attack.py} / \texttt{malicious.py} に実装済み & 0 \\
+trial連動の再現性（分割・初期値・悪性選出） & 実装済み & 0 \\
+作図・集計基盤 & 既存スクリプトが完成 & 微修正 \\
+Non-IID分割 & Fang式・Dirichlet式とも実装済み & Dirichletへ切替のみ \\
+集約直前フックでの更新ベクトル要約ログ & 分析計画書で設計済み & 約20行 \\
+攻撃2種（符号反転／ALIE） & 符号反転は実装済み, ALIEを追加 & 数行 \\
+検知器3種（D1／D2／D3） & 新規 & 各5--15行 \\
+評価指標（ROC-AUC, AP, recall@$f$） & 新規 & numpyで自作, 約20行 \\
+\midrule
+\multicolumn{2}{@{}l}{新規コードの合計} & 約100行 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{新規に導入する数式の実装規模}
+
+\S\ref{sec:detectors}--\S\ref{sec:metrics}の式は記法の密度に対して実装は数行で済む. 実装が煩雑なKrumの $n-f-2$ 近傍距離和やYinの座標中央値は既に実装済みであり, 新規の式はいずれもそれより単純である. 検知器・検知性能指標はいずれも \texttt{detection.py} 内に numpy だけで実装し, scikit-learn は用いない.
+
+\begin{table*}[t]
+\centering
+\caption{新規に導入する量とその実装規模の目安}
+\begin{tabular}{@{}P{4.6cm} P{7.4cm} P{4.2cm}@{}}
+\toprule
+量 & 計算内容 & 実装規模 \\
+\midrule
+$\mathrm{spread}$ / $\mathrm{push}$ & 平均ベクトルからのユークリッド距離の平均 & 各1行 \\
+$\mathrm{push\_ratio}$ & 上記2量の比 & 1行 \\
+ALIE の $g^{\text{mal}} = \mu - z\sigma$ & 正常更新の座標ごと平均・標準偏差から生成 & 2行 \\
+D1（ノルム偏差） & ノルムと, その中央値との差の絶対値 & 2行 \\
+D2（コサイン距離） & $1-$（座標中央値ベクトルとのコサイン類似度） & 1行 \\
+D3（2クラスタリング） & 特徴量への $k$-means（$k=2$, 自作） & 3--5行 \\
+D4（スペクトル残差） & 第1右特異ベクトルへの射影の2乗（\texttt{numpy.linalg.svd}） & 3行 \\
+ROC-AUC 等 & Mann--Whitney 統計量に基づき自作 & 10--15行 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\noindent
+新たに理解が必要なのはROC／AUC／precision--recallという分類器評価の考え方と, 「なぜ検知AUCが本研究の妥当な指標か」を説明できることであり, 機械学習の基礎の範囲にとどまる.
+
+\subsection{実装手順}
+
+\begin{enumerate}
+  \item \textbf{データ分割:} データ分割方式をディリクレ分割へ切り替え, クライアント別のクラス数ヒストグラムで分割結果を目視確認する.
+  \item \textbf{ロギング:} 集約直前フック（攻撃適用後・集約前）で, 各クライアントについて $\|g_i\|_2$, 検知器スコア, 悪性フラグ $y_i$, および $\mathrm{spread}$, $\mathrm{push}$, $\mathrm{push\_ratio}$ をラウンドごとにCSVへ追記する. 更新ベクトル全体は保存せず要約統計のみ.
+  \item \textbf{検知器:} D1--D3（余力に応じてD4）を各5--20行程度で実装し, \texttt{test\_detection.py} を追加する（既存の \texttt{test\_*.py} と同じ方針）.
+  \item \textbf{攻撃:} 既存の符号反転に加えてALIEを追加する.
+  \item \textbf{評価:} ROC-AUC・AP・recall@$f$ を numpy だけで後処理として計算する. 検知器のハイパーパラメータに依存しないよう, 主指標は閾値非依存の量に統一する.
+  \item \textbf{作図:} 既存の作図スクリプトを再利用し, 「AUC対ラウンド」と「$\mathrm{push\_ratio}$--AUC」の図を生成する.
+\end{enumerate}
+
+% =========================================================
+\section{スケジュールと判定ゲート}
+\label{sec:schedule}
+
+目標は\textbf{11月末までに実験完了および本文ドラフト完成}. 以下は13週間の計画で, 11月後半の約2週間をバッファとする. 卒業論文の第1--3章（FLの基礎, 攻撃の分類, 防御の分類, 関連研究）は本計画書の第1--3章をおおむね流用でき, 新規に執筆するのは方法・結果・考察の各章である.
+
+\begin{table*}[t]
+\centering
+\caption{週次スケジュール（2026年9月1日--11月30日）}
+\begin{tabular}{@{}c P{2.6cm} P{8.6cm} P{4.0cm}@{}}
+\toprule
+週 & 期間 & 主な作業 & ゲート／中間成果 \\
+\midrule
+1 & 9/1--9/7 & ディリクレ分割へ切替, クライアント別クラス分布の確認. 集約直前フックに検知用ロギングを追加 & \\
+2 & 9/8--9/14 & 検知器D1--D3の実装と \texttt{test\_detection.py}. 符号反転・ALIE攻撃の実装 & \\
+3 & 9/15--9/21 & パイロット実行（$n=20$, 30ラウンド, ALIE, $\alpha=0.1$）. AUCのラウンド推移を確認 & \textbf{G1:} 未収束でも検知評価が成立するか. 不成立なら学習率$0.01$・40ラウンドへ切替 \\
+4 & 9/22--9/28 & 実験グリッドの最終確定と\textbf{凍結}. 集計・作図スクリプトの整備 & \textbf{G2:} グリッド凍結. 以降は条件を追加しない \\
+5 & 9/29--10/5 & 主スイープ 27 回の実行, 生データ確認と再実行 & 主スイープ完了 \\
+6 & 10/6--10/12 & 図表の生成. 方法章の執筆 & 方法章ドラフト \\
+7 & 10/13--10/19 & 結果章の執筆. 考察の骨子（$\mathrm{push\_ratio}$ とAUCの関係）を固める & \textbf{G3:} 主結果が1枚の図で言えるか. 言えれば発展課題に着手 \\
+8 & 10/20--10/26 & 考察章の執筆. 第1--3章を本テーマに合わせて改稿 & \\
+9 & 10/27--11/2 & 全体の通し読み. 序論・結論の書き直し.（先行していればmin-max攻撃を追加） & 全章ドラフト \\
+10 & 11/3--11/9 & 指導教員レビューと修正 & レビュー反映 \\
+11 & 11/10--11/16 & 図の清書, 参考文献の整備, 体裁 & \\
+12--13 & 11/17--11/30 & バッファ（追加実験・加筆・予稿作成） & 完成 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\noindent
+\textbf{最小構成とフル構成の線引き:} 第7週のゲートG3の時点で計画どおりに進んでいれば発展課題（min-max攻撃, 悪性割合の拡張, 検知＋集約の比較）へ進む. 遅れている場合は最小構成（主スイープ27回, 検知器3種, 攻撃2種, $\alpha$ 3水準）で確定させ, 発展課題はすべて「今後の課題」に回す.
+
+% =========================================================
+\section{想定される成果と妥当性への脅威}
+
+\subsection{想定される成果}
+
+\begin{itemize}
+  \item 3種の検知器について, Non-IID度と攻撃ステルス性の2軸で整理した検知性能マップ.
+  \item 「$\mathrm{push\_ratio} \lesssim 1$ で検知が破綻する」という定量的な破綻境界, およびNon-IIDが $\mathrm{push\_ratio}$ を押し下げることによる検知性能低下の実証.
+  \item 粗い攻撃（符号反転）とステルス攻撃（ALIE）の間で, どの検知器の優位性が逆転するかの整理.
+  \item 主結果がきれいな境界を示さない場合でも, 「明確な閾値はなく緩やかに劣化する」という形で問いには答えられる.
+\end{itemize}
+
+\subsection{妥当性への脅威（考察で明示する）}
+
+\begin{itemize}
+  \item \textbf{規模:} 20クライアント・MNISTの小規模設定であり, cross-device FL（多数・低参加率）への一般化は限定的.
+  \item \textbf{未収束モデル:} 検知性能をラウンドの関数として報告し, 収束サブセットでの確認を併用することで補う.
+  \item \textbf{正解ラベルの分離:} 正解は評価専用であり検知器へ漏らさないことを実装で担保する.
+  \item \textbf{検知器のハイパーパラメータ:} 主指標をROC等の閾値非依存量に統一し, $k=2$, スペクトルは第1成分に固定する.
+  \item \textbf{「検知」と「防御」の差:} 防御効用指標 $\|\hat{g} - \bar{g}_B\|$ を併記して橋渡しする.
+  \item \textbf{脅威モデルの楽観性:} full knowledge・悪性集合固定という前提を明示し, Shejwalkarら\cite{shejwalkar2022back}の批判を踏まえて「上限性能の評価」と位置づける.
+\end{itemize}
+
+% =========================================================
+\section{卒業論文の構成案}
+
+\begin{enumerate}
+  \item \textbf{序論:} FLとそのセキュリティ課題, 本研究の問いと貢献.
+  \item \textbf{事前知識:} FLとFedAvg, Poisoning Attackの分類, 防御の3分類（異常検知・ロバスト集約・摂動機構）, 本研究が扱う異常検知の位置づけ.
+  \item \textbf{関連研究:} ロバスト集約（Krum, Median, Trimmed Mean, Bulyan）, 集約手法を突く攻撃（Fang, ALIE, min-max, IPM）, 検知型防御（FoolsGold, FLAME, FLDetector, 学習型検知）, Non-IIDの扱い. 本研究との差分を明示.
+  \item \textbf{提案する評価枠組み:} 脅威モデル, 検知器D1--D3, 攻撃A1--A2, ディリクレNon-IID, 評価指標（ROC等, $\mathrm{spread}$/$\mathrm{push\_ratio}$）.
+  \item \textbf{実験:} 設定, 主スイープ, パイロットとゲートG1.
+  \item \textbf{結果:} 検知性能マップ, AUC対ラウンド, $\mathrm{push\_ratio}$--AUC 主図, 防御効用.
+  \item \textbf{考察:} 中心仮説の検証, 検知器間の優劣の逆転, Non-IIDの影響の機構, 妥当性への脅威.
+  \item \textbf{結論と今後の課題:} 得られた知見, min-max攻撃・大規模化・検知＋集約の統合など.
+\end{enumerate}
+
+% =========================================================
+\begin{thebibliography}{99}
+
+\bibitem{mammen2021fl}
+Priyanka Mary Mammen,
+``Federated Learning: Opportunities and Challenges,''
+Proceedings of ACM Conference, 2021.
+
+\bibitem{li2019fl}
+Tian Li, Anit Kumar Sahu, Ameet Talwalkar, Virginia Smith,
+``Federated Learning: Challenges, Methods, and Future Directions,''
+arXiv preprint arXiv:1908.07873, 2019.
+
+\bibitem{ma2020privacy}
+Chuan Ma, Jun Li, Ming Ding, Howard H. Yang, Feng Shu, Tony Q. S. Quek, H. Vincent Poor,
+``On Safeguarding Privacy and Security in the Framework of Federated Learning,''
+arXiv preprint arXiv:1909.06512, 2020.
+
+\bibitem{sagar2023survey}
+Subhash Sagar, Chang-Tsun Li, Seng W. Loke, Jinho Choi,
+``Poisoning Attacks and Defenses in Federated Learning: A Survey,''
+IEEE Security \& Privacy, 2023.
+
+\bibitem{fang2020local}
+Minghong Fang, Xiaoyu Cao, Jinyuan Jia, Neil Zhenqiang Gong,
+``Local Model Poisoning Attacks to Byzantine-Robust Federated Learning,''
+Proceedings of the 29th USENIX Security Symposium (USENIX Security 2020),
+pp.~1605--1622, 2020.
+
+\bibitem{mcmahan2017fedavg}
+H.~Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, Blaise Aguera y Arcas,
+``Communication-Efficient Learning of Deep Networks from Decentralized Data,''
+Proceedings of the 20th International Conference on Artificial Intelligence and Statistics (AISTATS),
+pp.~1273--1282, 2017.
+
+\bibitem{xie2020dba}
+Chulin Xie, Keli Huang, Pin-Yu Chen, Bo Li,
+``DBA: Distributed Backdoor Attacks against Federated Learning,''
+International Conference on Learning Representations (ICLR), 2020.
+
+\bibitem{bagdasaryan2020model}
+Eugene Bagdasaryan, Andreas Veit, Yiqing Hua, Deborah Estrin, Vitaly Shmatikov,
+``How To Backdoor Federated Learning,''
+Proceedings of the 23rd International Conference on Artificial Intelligence and Statistics (AISTATS),
+pp.~2938--2948, 2020.
+
+\bibitem{blanchard2017krum}
+Peva Blanchard, El Mahdi El Mhamdi, Rachid Guerraoui, Julien Stainer,
+``Machine Learning with Adversaries: Byzantine Tolerant Gradient Descent,''
+Advances in Neural Information Processing Systems (NeurIPS), 2017.
+
+\bibitem{yin2018byzantine}
+Dong Yin, Yudong Chen, Kannan Ramchandran, Peter Bartlett,
+``Byzantine-Robust Distributed Learning: Towards Optimal Statistical Rates,''
+Proceedings of the 35th International Conference on Machine Learning (ICML), 2018.
+
+\bibitem{elmhamdi2018hidden}
+El Mahdi El Mhamdi, Rachid Guerraoui, S\'ebastien Rouault,
+``The Hidden Vulnerability of Distributed Learning in Byzantium,''
+Proceedings of the 35th International Conference on Machine Learning (ICML), 2018.
+
+\bibitem{baruch2019little}
+Gilad Baruch, Moran Baruch, Yoav Goldberg,
+``A Little Is Enough: Circumventing Defenses For Distributed Learning,''
+Advances in Neural Information Processing Systems (NeurIPS), 2019.
+
+\bibitem{shejwalkar2021manipulating}
+Virat Shejwalkar, Amir Houmansadr,
+``Manipulating the Byzantine: Optimizing Model Poisoning Attacks and Defenses for Federated Learning,''
+Network and Distributed System Security Symposium (NDSS), 2021.
+
+\bibitem{xie2019fall}
+Cong Xie, Oluwasanmi Koyejo, Indranil Gupta,
+``Fall of Empires: Breaking Byzantine-tolerant SGD by Inner Product Manipulation,''
+Proceedings of the 35th Conference on Uncertainty in Artificial Intelligence (UAI), 2019.
+
+\bibitem{fung2020limitations}
+Clement Fung, Chris J.~M. Yoon, Ivan Beschastnikh,
+``The Limitations of Federated Learning in Sybil Settings,''
+23rd International Symposium on Research in Attacks, Intrusions and Defenses (RAID), 2020.
+
+\bibitem{li2020learning}
+Suyi Li, Yong Cheng, Wei Wang, Yang Liu, Tianjian Chen,
+``Learning to Detect Malicious Clients for Robust Federated Learning,''
+arXiv preprint arXiv:2002.00211, 2020.
+
+\bibitem{nguyen2022flame}
+Thien Duc Nguyen et al.,
+``FLAME: Taming Backdoors in Federated Learning,''
+31st USENIX Security Symposium (USENIX Security 2022), pp.~1415--1432, 2022.
+
+\bibitem{zhang2022fldetector}
+Zaixi Zhang, Xiaoyu Cao, Jinyuan Jia, Neil Zhenqiang Gong,
+``FLDetector: Defending Federated Learning Against Model Poisoning Attacks via Detecting Malicious Clients,''
+Proceedings of the 28th ACM SIGKDD Conference (KDD), 2022.
+
+\bibitem{cao2021fltrust}
+Xiaoyu Cao, Minghong Fang, Jia Liu, Neil Zhenqiang Gong,
+``FLTrust: Byzantine-robust Federated Learning via Trust Bootstrapping,''
+Network and Distributed System Security Symposium (NDSS), 2021.
+
+\bibitem{shejwalkar2022back}
+Virat Shejwalkar, Amir Houmansadr, Peter Kairouz, Daniel Ramage,
+``Back to the Drawing Board: A Critical Evaluation of Poisoning Attacks on Production Federated Learning,''
+IEEE Symposium on Security and Privacy (S\&P), 2022.
+
+\bibitem{hsu2019measuring}
+Tzu-Ming Harry Hsu, Hang Qi, Matthew Brown,
+``Measuring the Effects of Non-Identical Data Distribution for Federated Visual Classification,''
+arXiv preprint arXiv:1909.06335, 2019.
+
+\bibitem{li2022federated}
+Qinbin Li, Yiqun Diao, Quan Chen, Bingsheng He,
+``Federated Learning on Non-IID Data Silos: An Experimental Study,''
+Proceedings of the 38th IEEE International Conference on Data Engineering (ICDE), 2022.
+
+\bibitem{shen2016auror}
+Shiqi Shen, Shruti Tople, Prateek Saxena,
+``Auror: Defending Against Poisoning Attacks in Collaborative Deep Learning Systems,''
+Proceedings of the 32nd Annual Conference on Computer Security Applications (ACSAC), 2016.
+
+\bibitem{sattler2020byzantine}
+Felix Sattler, Klaus-Robert M\"uller, Thomas Wiegand, Wojciech Samek,
+``On the Byzantine Robustness of Clustered Federated Learning,''
+IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), 2020.
+
+\bibitem{tran2018spectral}
+Brandon Tran, Jerry Li, Aleksander Madry,
+``Spectral Signatures in Backdoor Attacks,''
+Advances in Neural Information Processing Systems (NeurIPS), 2018.
+
+\end{thebibliography}
+
+\end{document}

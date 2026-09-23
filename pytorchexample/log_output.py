@@ -251,6 +251,52 @@ def log_diagnostics_csv(
         ])
 
 
+# =========================
+# 検知評価用ログ（sotsuron_plan2.tex 4.2--4.5 対応）
+# =========================
+DETECTION_CSV = os.path.join(LOG_DIR, "detection_updates.csv")
+
+_DETECTION_COLUMNS = [
+    "run_id",
+    "round",
+    "aggregation_method",
+    "data_split",
+    "alpha",
+    "attack_type",
+    "malicious_ratio",
+    "trial",
+    "client_pos",       # updates 配列内での位置（0..n-1）
+    "partition_id",      # 実際のクライアントID
+    "is_malicious",      # 正解ラベル（評価専用。検知器には渡さない）
+    "delta_norm",        # ||g_i||（更新ベクトルのノルム）
+    "d1_norm",           # 検知器スコア（大きいほど悪性らしい）
+    "d2_cosine",
+    "d3_kmeans",
+    "d4_spectral",
+    "benign_spread",     # そのラウンドの正常クラスタの広がり（全行で同じ値）
+    "push_ratio",        # そのラウンドの push_ratio（全行で同じ値。該当なしは空）
+]
+
+
+def log_detection_csv(rows: list):
+    """
+    集約直前（攻撃適用後）の各クライアント更新について，検知器スコアと正解ラベルを
+    logs/detection_updates.csv へ1クライアント1行で追記する。
+
+    rows: dict のリスト。各 dict は _DETECTION_COLUMNS のキーを持つ。
+    """
+    if not rows:
+        return
+    _ensure_dir()
+    file_exists = os.path.exists(DETECTION_CSV)
+    with open(DETECTION_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_DETECTION_COLUMNS)
+        for r in rows:
+            w.writerow([r.get(col) for col in _DETECTION_COLUMNS])
+
+
 def log_summary_csv(
     run_id: str,
     final_round: int,

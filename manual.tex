@@ -1,0 +1,368 @@
+\documentclass[a4j, dvipdfmx]{jsarticle}  % 1段組
+
+\usepackage[a4paper, left=2.0cm, right=2.0cm, top=2.0cm, bottom=2.0cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{float}
+\usepackage{alltt}
+
+% =========================================================
+% 見出し設定
+% =========================================================
+\titleformat{\section}[block]
+  {\normalfont\large\bfseries}{\thesection}{0.7em}{}
+\titleformat{\subsection}[block]
+  {\normalfont\normalsize\bfseries}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}[block]
+  {\normalfont\normalsize\bfseries}{\thesubsubsection}{0.7em}{}
+
+% titlesec は \paragraph も乗っ取るため runin 形式を明示（jsarticle での
+% "Entered in horizontal mode" エラー回避）
+\titleformat{\paragraph}[runin]
+  {\normalfont\normalsize\bfseries}{\theparagraph}{0.5em}{}
+
+\titlespacing*{\section}{0pt}{1.6ex plus 0.5ex minus 0.2ex}{0.9ex}
+\titlespacing*{\subsection}{0pt}{1.2ex plus 0.4ex minus 0.2ex}{0.6ex}
+\titlespacing*{\paragraph}{0pt}{1.0ex plus 0.3ex minus 0.1ex}{0.6em}
+
+\setlist[itemize]{topsep=4pt, itemsep=2pt, leftmargin=1.4em}
+\setlist[enumerate]{topsep=4pt, itemsep=2pt, leftmargin=1.8em}
+
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% シェルコマンド用の簡易ボックス（alltt を枠なしで使う）
+\newenvironment{cmd}{\par\vspace{0.3em}\begin{alltt}\small}{\end{alltt}\vspace{0.3em}\par}
+
+\title{FL 実験コード 利用マニュアル\\
+\large 更新ベクトルレベルの悪性更新検知（研究計画書 v2 対応版）}
+\author{3CDA2216 笠原秀星}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{このマニュアルについて}
+
+本書は，\texttt{sotsuron\_plan2.tex}（研究計画書 改訂版）で定義した
+「Federated Learning における悪性更新の検知可能性」実験のコードの使い方をまとめる。
+旧版マニュアル（Fang らの Adaptive Model Poisoning Attack 再現実験用）を，
+検知評価スイープ用に作りなおしたものである。
+
+実験の目的・仮説・評価指標の定義は \texttt{sotsuron\_plan2.tex} を参照すること。
+本書はあくまで「どのコマンドで何が動き，どのファイルが出るか」を説明する。
+
+\paragraph{前提とする実験の骨子。}
+\begin{itemize}
+  \item データ分布の不均一性（Dirichlet の $\alpha$）と攻撃のステルス性を2軸に，
+        毎ラウンドの更新ベクトルから悪性クライアントを見分けられるか（ROC-AUC）を測る。
+  \item 集約手法は検知に非依存なため \texttt{fedavg} に固定する（旧実験の Median/Krum 等は使わない）。
+  \item 最終精度ではなく更新ベクトルレベルの検知性能を主指標にするため，
+        学習の収束は必須ではない（詳細は \S\ref{sec:g1}）。
+\end{itemize}
+
+\section{セットアップ}
+
+\subsection{必要なもの}
+
+\begin{itemize}
+  \item Python 3.10 以上
+  \item 依存パッケージ：\texttt{flwr[simulation]}，\texttt{flwr-datasets[vision]}，
+        \texttt{torch}，\texttt{torchvision}，\texttt{numpy}，\texttt{pandas}，\texttt{matplotlib}
+  \item \textbf{scikit-learn は不要}。検知器・検知性能指標はすべて \texttt{detection.py} 内に
+        numpy だけで実装してある。
+  \item GPU は不要（CPU のみで完結する規模に設定してある）。
+\end{itemize}
+
+\subsection{インストール}
+
+\begin{cmd}
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+\end{cmd}
+
+\texttt{pyproject.toml} の \texttt{dependencies} に \texttt{flwr} などが定義されている。
+\texttt{pandas} / \texttt{matplotlib} が未導入なら追加で \texttt{pip install pandas matplotlib}。
+
+\subsection{初回実行時の注意（MNIST ダウンロード）}
+
+初回の \texttt{flwr run} で HuggingFace Hub から MNIST（約 11\,MB）が自動ダウンロードされる。
+\texttt{Warning: You are sending unauthenticated requests to the HF Hub} が出ても動作に支障はない。
+レート制限が気になる場合のみ \texttt{export HF\_TOKEN=...} を設定する。
+
+\section{ファイル構成}
+
+\begin{table}[H]
+\centering
+\caption{本実験に関係するファイル（★＝今回の検知実験で新規／改修）}
+\small
+\begin{tabular}{@{}P{5.7cm} P{9.6cm}@{}}
+\toprule
+ファイル & 役割 \\
+\midrule
+\texttt{detection.py} ★ & 検知器 D1--D4 と検知性能指標（ROC-AUC / AP / recall@$f$ / precision@$f$）。純 numpy。 \\
+\texttt{attack.py} ★ & 攻撃の実装。今回 \texttt{alie\_attack}（ALIE ステルス攻撃）を追加。 \\
+\texttt{aggregation.py} & 集約手法（本実験では \texttt{fedavg} のみ使用）。 \\
+\texttt{pytorchexample/task.py} & モデル（CNN）とデータ分割（\texttt{iid} / \texttt{non\_iid} / \texttt{dirichlet}）。 \\
+\texttt{pytorchexample/client\_app.py} & クライアント側の学習。\texttt{sign\_flip} 攻撃はここで適用。 \\
+\texttt{pytorchexample/server\_app.py} ★ & サーバ側の全体制御。\texttt{alie-z} 等の設定読み込みを追加。 \\
+\texttt{pytorchexample/robust\_strategy.py} ★ & 集約直前フック。ALIE 攻撃の適用と，更新ベクトルへの D1--D4 スコア計算・記録。 \\
+\texttt{pytorchexample/log\_output.py} ★ & \texttt{log\_detection\_csv}（1クライアント1行の検知ログ）を追加。 \\
+\texttt{run\_experiments.py} ★ & スイープ実行。\texttt{-{}-detection} を追加。 \\
+\texttt{analyze\_detection.py} ★ & 検知ログの後処理（指標 CSV・図の生成）。 \\
+\texttt{tools/verify\_dirichlet\_partition.py} ★ & Dirichlet 分割の目視確認スクリプト。 \\
+\texttt{test\_detection.py} ★ & \texttt{detection.py} の単体テスト。 \\
+\texttt{test\_attack.py} / \texttt{test\_aggregation.py} / \texttt{test\_malicious.py} & 既存の単体テスト。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{設定パラメータ}
+\label{sec:config}
+
+すべて \texttt{pyproject.toml} の \texttt{[tool.flwr.app.config]} に既定値があり，
+\texttt{flwr run} の \texttt{-{}-run-config} で1回だけ上書きできる。
+本実験に関係するものを表\ref{tab:config}に示す。
+
+\begin{table}[H]
+\centering
+\caption{本実験で使う run-config キー}
+\label{tab:config}
+\begin{tabular}{@{}P{3.9cm} P{4.2cm} P{7.2cm}@{}}
+\toprule
+キー & 本実験での値 & 意味 \\
+\midrule
+\texttt{data-split} & \texttt{"dirichlet"} & データ分割方式。\texttt{iid} / \texttt{non\_iid}（Fang方式）/ \texttt{dirichlet}。 \\
+\texttt{dirichlet-alpha} & \texttt{100} / \texttt{0.5} / \texttt{0.1} & Dirichlet の濃度。大きいほど IID 寄り，小さいほど不均一。 \\
+\texttt{attack-type} & \texttt{"none"} / \texttt{"sign\_flip"} / \texttt{"alie"} & 攻撃。\texttt{none}＝攻撃なし（基準），\texttt{sign\_flip}＝粗い攻撃（A1，クライアント側で $\Delta$ 反転），\texttt{alie}＝ステルス攻撃（A2，サーバ側で $\mu-z\sigma$）。 \\
+\texttt{alie-z} & \texttt{1.0} & ALIE の摂動強度 $z$（正常の標準偏差の何倍ずらすか。実用上 0.5--1.5）。 \\
+\texttt{malicious-ratio} & \texttt{0.2}（攻撃なしは \texttt{0.0}） & 悪性クライアント割合。 \\
+\texttt{num-clients} & \texttt{20} & クライアント総数。\texttt{-{}-federation-config num-supernodes} と一致させる。 \\
+\texttt{num-server-rounds} & \texttt{30} & 通信ラウンド数。 \\
+\texttt{aggregation-method} & \texttt{"fedavg"} & 集約手法（本実験は固定）。 \\
+\texttt{trial} & \texttt{1} / \texttt{2} / \texttt{3} & 繰り返し試行番号。データ分割・モデル初期値・悪性選出のすべてに連動。 \\
+\texttt{malicious-seed} & \texttt{trial} と同じ値 & 悪性クライアント選出のシード。\texttt{run\_experiments.py} は \texttt{trial} と同値を渡す。 \\
+\texttt{output-dir} & 条件ごとの出力先 & \texttt{final\_model.pt} の保存先（CSV ログは常に \texttt{logs/} に出る）。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{実行手順}
+
+\subsection{手順0：単体テスト}
+
+コードに触れたら，まず検知器のテストを回す。
+
+\begin{cmd}
+python3 test_detection.py
+python3 test_aggregation.py
+python3 test_malicious.py
+\end{cmd}
+
+\texttt{test\_attack.py} は \texttt{test\_adaptive\_attack\_noop\_for\_fedavg} が失敗するが，
+これは本実験の前からある既知の失敗（旧 Fang 実験の古いテストと現行実装の不整合）であり，
+今回の検知実験には影響しない。ALIE の追加分だけ確認したい場合は次のようにする。
+
+\begin{cmd}
+python3 -c "import test_attack as T; \\
+  [getattr(T,n)() for n in dir(T) if n.startswith('test_alie')]"
+\end{cmd}
+
+\subsection{手順1：Dirichlet 分割の目視確認（ゲート G1 の前）}
+
+各 $\alpha$ で，クライアントごとの保有クラスがどれだけ偏るかを確認する。
+
+\begin{cmd}
+python3 tools/verify_dirichlet_partition.py --alpha 100 0.5 0.1 \\
+  --clients 20 --trial 1
+\end{cmd}
+
+\begin{itemize}
+  \item 標準出力：クライアント $\times$ クラスの件数表，1クライアントあたりのサンプル数と保有クラス数の要約。
+  \item 画像：\texttt{results\_detection/dirichlet\_partition\_a\{alpha\}\_trial1.png}（保有割合のヒートマップ）。
+  \item 期待：$\alpha=100$ はほぼ均一，$\alpha=0.1$ では一部クライアントの保有クラスが数個まで減る。
+\end{itemize}
+
+\subsection{手順2：動作確認（小規模の単発実行）}
+
+スイープ前に，1条件だけ短く回してログが出るか確認する。
+
+\begin{cmd}
+flwr run . local-simulation --stream \\
+  --federation-config num-supernodes=6 \\
+  --run-config 'num-server-rounds=2 aggregation-method="fedavg" \\
+    data-split="dirichlet" dirichlet-alpha=0.5 \\
+    attack-type="alie" alie-z=1.0 malicious-ratio=0.2 \\
+    malicious-seed=1 trial=1 num-clients=6 output-dir="_smoke"'
+\end{cmd}
+
+完了後，\texttt{logs/detection\_updates.csv} が生成され，1ラウンドあたり
+\texttt{num-clients} 行（\texttt{is\_malicious} 列に 0/1）が追記されていることを確認する。
+確認用の出力（\texttt{\_smoke/}，\texttt{logs/}）は消してよい。
+
+\subsection{手順3：検知評価スイープ}
+
+\begin{cmd}
+python3 run_experiments.py --detection
+\end{cmd}
+
+\begin{itemize}
+  \item 条件：$\alpha \in \{100, 0.5, 0.1\}$ $\times$ 攻撃 $\in \{$\texttt{none}, \texttt{sign\_flip}, \texttt{alie}$\}$
+        $\times$ \texttt{trial} $\in \{1,2,3\}$ ＝ \textbf{27 条件}。
+        \texttt{fedavg} 固定，悪性率 0.2（\texttt{none} のみ 0.0），20 クライアント，30 ラウンド。
+  \item 出力先：\texttt{experiments\_detection/<条件名>/final\_model.pt}。
+        このファイルがあれば「完了済み」としてスキップするので，中断→再実行で未完了分だけ再開できる。
+  \item 失敗した条件は \texttt{experiments\_detection/failures.csv} に記録され，スイープは止まらない。
+  \item CSV ログ（\texttt{logs/detection\_updates.csv} など）は全条件が追記していく。
+  \item 目安：1条件あたり CPU で数分，全体で 1--2 時間程度。
+\end{itemize}
+
+条件を絞りたい場合の例（\texttt{run\_experiments.py} 冒頭の \texttt{DETECTION\_*} 定数を編集する）：
+\texttt{DETECTION\_ALPHAS}，\texttt{DETECTION\_ATTACKS}，\texttt{DETECTION\_TRIALS}，
+\texttt{DETECTION\_NUM\_ROUNDS} など。
+
+\subsection{手順4：後処理と作図}
+
+\begin{cmd}
+python3 analyze_detection.py
+\end{cmd}
+
+\texttt{logs/detection\_updates.csv} を読み，条件 $\times$ ラウンド $\times$ 検知器ごとに
+ROC-AUC などを計算して，以下を出力する。
+
+\begin{itemize}
+  \item \texttt{logs/detection\_metrics.csv}
+  \item \texttt{results\_detection/detection\_auc\_by\_round.png}：検知器ごとの「AUC 対 ラウンド」（$\alpha$・攻撃別，trial 平均$\pm$標準偏差）。
+  \item \texttt{results\_detection/detection\_pushratio\_vs\_auc.png}：\textbf{横軸 \texttt{push\_ratio}・縦軸 AUC の散布図}（中心仮説の主図）。
+  \item \texttt{results\_detection/detection\_final\_auc\_table.csv}：最終数ラウンドの平均 AUC 一覧（$\alpha \times$ 攻撃 $\times$ 検知器）。
+\end{itemize}
+
+オプション：\texttt{-{}-updates}（入力 CSV），\texttt{-{}-outdir}（画像出力先），
+\texttt{-{}-last-k}（最終平均を取るラウンド数，既定 5）。
+
+\section{出力ファイルの内容}
+
+\subsection{\texttt{logs/detection\_updates.csv}（1クライアント1行）}
+
+集約直前（攻撃適用後・集約前）の各クライアント更新について記録する。
+検知の入力は更新ベクトル $g_i = w_i - w_{\text{global}}$（受信モデルからグローバルモデルを引いたもの）。
+
+\begin{table}[H]
+\centering
+\caption{\texttt{detection\_updates.csv} の列}
+\begin{tabular}{@{}P{3.5cm} P{12.0cm}@{}}
+\toprule
+列 & 内容 \\
+\midrule
+\texttt{run\_id} & 実行を一意に識別する文字列。 \\
+\texttt{round} & 通信ラウンド番号。 \\
+\texttt{aggregation\_method}, \texttt{data\_split}, \texttt{alpha}, \texttt{attack\_type}, \texttt{malicious\_ratio}, \texttt{trial} & 実験条件。 \\
+\texttt{client\_pos} & 集約時の配列内位置（0..$n-1$）。 \\
+\texttt{partition\_id} & 実際のクライアント ID。 \\
+\texttt{is\_malicious} & 正解ラベル（1＝悪性）。\textbf{評価専用}。検知器スコアの計算には使わない。 \\
+\texttt{delta\_norm} & $\|g_i\|_2$。 \\
+\texttt{d1\_norm} & 検知器 D1（ノルム偏差）のスコア。大きいほど悪性らしい。 \\
+\texttt{d2\_cosine} & 検知器 D2（座標中央値へのコサイン距離）。 \\
+\texttt{d3\_kmeans} & 検知器 D3（標準化特徴量への 2-means，正常クラスタ重心までの距離）。 \\
+\texttt{d4\_spectral} & 検知器 D4（第1右特異ベクトルへの射影の2乗）。 \\
+\texttt{benign\_spread} & そのラウンドの正常クラスタの広がり（全行で同じ値）。 \\
+\texttt{push\_ratio} & そのラウンドの push / spread（全行で同じ値。悪性0人の行は空）。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{\texttt{logs/detection\_metrics.csv}}
+
+\texttt{analyze\_detection.py} が生成する。1行＝（条件, ラウンド, 検知器）。
+主な列：\texttt{auc}，\texttt{ap}，\texttt{recall\_at\_f}，\texttt{precision\_at\_f}，
+\texttt{benign\_spread}，\texttt{push\_ratio}，\texttt{n\_malicious}。
+ここで $f$ は各条件の実際の悪性数。攻撃なし（\texttt{attack\_type="none"}）の行は
+悪性が0人なので \texttt{auc} は NaN になる（\texttt{benign\_spread} の基準値としてのみ使う）。
+
+\subsection{その他のログ（既存）}
+
+\begin{itemize}
+  \item \texttt{logs/diagnostics.csv}：ラウンドごとの \texttt{benign\_spread} / \texttt{push\_ratio} /
+        \texttt{frac\_selected\_malicious}（旧実験からのメカニズム分析用）。
+  \item \texttt{logs/results.csv} / \texttt{logs/summary.csv}：ラウンドごと／最終の Accuracy・Loss。
+        本実験の主指標ではないが，収束確認（\S\ref{sec:g1}）に使う。
+  \item \texttt{experiments\_detection/<条件名>/final\_model.pt}：最終グローバルモデル。
+\end{itemize}
+
+\section{検知器と攻撃の対応}
+
+\subsection{検知器（\texttt{detection.py}）}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{2.4cm} P{7.0cm} P{5.9cm}@{}}
+\toprule
+記号 & スコア & 想定される得手・不得手 \\
+\midrule
+D1 \texttt{d1\_norm} & $|\,\|g_i\| - \mathrm{median}_j\|g_j\|\,|$ & ノルムを変える攻撃に強い。ステルス攻撃に弱い。 \\
+D2 \texttt{d2\_cosine} & $1 - \cos(g_i, r)$，$r=$ 座標中央値 & 向きの異常に強い。正常に共通方向が無いと効かない。 \\
+D3 \texttt{d3\_kmeans} & 標準化 \texttt{[norm, D2, PC1, PC2]} への 2-means，正常重心までの距離 & 総合的。クラスタが分離しないと退化。 \\
+D4 \texttt{d4\_spectral} & $(g_i \cdot v)^2$，$v=$ 第1右特異ベクトル & 悪性が同一ベクトルだと強い。min-max 型攻撃はこれを回避する設計。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{攻撃（\texttt{attack.py} / \texttt{robust\_strategy.py}）}
+
+\begin{itemize}
+  \item \texttt{sign\_flip}（A1）：クライアント側で更新量 $\Delta = \text{local} - \text{global}$ の符号を反転して送る粗い攻撃。
+  \item \texttt{alie}（A2）：サーバ側で正常更新の座標ごと平均 $\mu$・標準偏差 $\sigma$ から
+        $g^{\text{mal}} = \mu - z\sigma$ を作り，悪性クライアント全員に同じ値を割り当てる。
+        集約手法非依存のステルス攻撃（Baruch ら, ``A Little Is Enough'', 2019）。
+  \item （参考）\texttt{adaptive}：旧 Fang 実験の集約手法特化攻撃。本実験では使わない。
+\end{itemize}
+
+\section{ゲート G1：収束を必要としないことの確認}
+\label{sec:g1}
+
+検知は「そのラウンドの更新ベクトル集合が分離可能か」の問題であり，
+モデルが最終精度に達している必要はない。ただし，検知性能（AUC）がラウンドをまたいで
+極端にドリフトすると解釈が難しくなる。
+
+\texttt{results\_detection/detection\_auc\_by\_round.png} を見て，AUC の推移が解釈可能な範囲に
+収まっているかを確認する。大きく暴れる場合は，学習率を上げて収束を早める。
+
+\begin{cmd}
+# 例：学習率を 0.01 に上げて 40 ラウンドにする
+python3 run_experiments.py --detection      # の前に run_experiments.py の
+                                            # DETECTION_NUM_ROUNDS と，
+# pyproject.toml の learning-rate 既定値，または -{}-run-config で learning-rate=0.01 を渡す
+\end{cmd}
+
+\section{トラブルシューティング}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{5.2cm} P{10.1cm}@{}}
+\toprule
+症状 & 対処 \\
+\midrule
+\texttt{flwr run} が一見成功するのにログが出ない & \texttt{flwr run} は内部エラーでも終了コード0を返すことがある。\texttt{-{}-stream} を付け，
+\texttt{experiments\_detection/<条件名>/final\_model.pt} の有無で成否を判断する（\texttt{run\_experiments.py} はこの方式）。 \\
+\texttt{num-supernodes} と \texttt{num-clients} の不一致 & \texttt{-{}-federation-config num-supernodes=N} と run-config の \texttt{num-clients=N} を必ず一致させる。 \\
+MNIST ダウンロードの警告 & \texttt{HF\_TOKEN} 未設定の警告は無視してよい。完全にオフラインなら事前に \texttt{datasets} でキャッシュしておく。 \\
+検知ログの記録に失敗した旨のメッセージ & 検知スコア計算で例外が出ても学習自体は止めない設計。標準出力に理由が出るので確認する。 \\
+\texttt{detection\_metrics.csv} の \texttt{auc} が NaN & その条件が \texttt{attack\_type="none"}（悪性0人）なら正常。攻撃ありで NaN なら悪性ラベルが付いていない可能性（\texttt{malicious-ratio} と \texttt{num-clients} を確認）。 \\
+メモリ不足 & \texttt{num-clients} を下げる。更新ベクトルは（クライアント数 $\times$ モデル次元）の行列としてサーバ上に載る。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{再現性について}
+
+\texttt{trial} 番号は，データ分割・モデル初期値・悪性クライアント選出のすべてに連動する。
+同じ \texttt{trial} なら常に同じ設定が再現され，\texttt{trial} を変えると
+悪性として選ばれるクライアント ID 自体も変わる。
+\texttt{run\_experiments.py -{}-detection} は \texttt{malicious-seed} に \texttt{trial} と同じ値を渡している。
+
+\end{document}
