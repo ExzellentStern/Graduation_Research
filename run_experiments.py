@@ -86,7 +86,9 @@ def ensure_simulation_config(federation: str, num_clients: int) -> None:
         "--num-supernodes", str(num_clients),
     ]
     print(f"[SETUP] {' '.join(cmd)}")
-    proc = subprocess.run(cmd, capture_output=True, text=True, env=_utf8_env())
+    proc = subprocess.run(
+        cmd, capture_output=True, encoding="utf-8", errors="replace", env=_utf8_env()
+    )
     if proc.returncode != 0:
         raise RuntimeError(
             f"federation '{federation}' の simulation-config 設定に失敗しました:\n"
@@ -214,7 +216,9 @@ def run_one_detection(p: dict, federation: str) -> str:
     ]
 
     print(f"[RUN] {name}")
-    proc = subprocess.run(cmd, capture_output=True, text=True, env=_utf8_env())
+    proc = subprocess.run(
+        cmd, capture_output=True, encoding="utf-8", errors="replace", env=_utf8_env()
+    )
 
     if is_done(output_dir):
         print(f"[DONE] {name}")
@@ -308,7 +312,9 @@ def run_one(
     ]
 
     print(f"[RUN] {name}")
-    proc = subprocess.run(cmd, capture_output=True, text=True, env=_utf8_env())
+    proc = subprocess.run(
+        cmd, capture_output=True, encoding="utf-8", errors="replace", env=_utf8_env()
+    )
 
     if is_done(output_dir):
         print(f"[DONE] {name}")
