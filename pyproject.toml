@@ -32,28 +32,71 @@ num-server-rounds = 5
 fraction-evaluate = 0.2
 local-epochs = 1
 learning-rate = 0.001
-batch-size = 25
+batch-size = 32          # Fang et al. (2020) のデフォルト（Fashion-MNIST以外は32）に合わせた
+# 毎ラウンド・毎条件のfixed_eval画像（grid.png + 誤分類画像）を保存するか。
+# 大規模スイープではファイル数・ディスク容量を圧迫するためデフォルトはfalse。
+# 個別に可視化を見たい場合のみtrueにする。
+save-fixed-eval = false
+aggregation-method = "fedavg"   # "fedavg" / "median" / "trimmed_mean" / "krum" / "bulyan"
+# 防御側が想定する悪性クライアント数の上限 f。
+# -1 は「未指定」を意味し、実際の malicious_ids の数がそのまま使われる。
+# （0は「防御側は悪性クライアントがいないと想定する」という有効な設定のため、
+#   デフォルト値として使うと「未指定」と区別できなくなる。そのため -1 を番兵値にする）
+num-malicious-assumed = -1
+
+# 追加：実験の繰り返し試行番号（実験計画書 7.5 対応、data-splitに使用）
+# Fang et al. (2020) の"trial"（同一条件を複数回繰り返す単位）に対応させた名称。
+# malicious-seedとは独立だが、run_experiments.pyは条件ごとに複数回実験する際、
+# このtrialの値をmalicious-seedにもそのまま渡している（データ分割・悪性クライアント
+# 選出の両方をtrialごとに変えるため）。
+trial = 1
 
 # 追加：IID / non-IID
-data-split = "non_iid"          # "non_iid" または "dirichlet" に変える
-dirichlet-alpha = 0.6     # non_iid/dirichlet の時に効く（0.1で激偏り）
+data-split = "non_iid"          # "iid" / "non_iid"（Fang方式） / "dirichlet"（旧方式，参考用）
+non-iid-p = 0.5            # non_iid（Fang方式）の時に効く：ラベルlを対応クライアント群へ割り当てる確率（Fangのデフォルトと同じp=0.5）
+dirichlet-alpha = 0.6      # dirichlet（旧方式）の時のみ効く（0.1で激偏り）。比較用に残す。
 
 # 追加：攻撃設定（今の実装に合わせる）
-attack-type = "none"        # "sign_flip" or "scale"
-malicious-ids = "0,1"      # 攻撃クライアントID
+attack-type = "none"        # "none" / "sign_flip" / "scale" / "adaptive" / "alie"
 poison-rate = 0.2
+alie-z = 1.0              # ALIE攻撃（sotsuron_plan2.tex 4.3 A2）の摂動強度 z（実用上 0.5--1.5）
 
-[tool.flwr.federations]
-default = "local-simulation"
+# 追加：悪性クライアント生成（実験計画書 7.3 対応）
+num-clients = 100          # クライアント総数（federationのnum-supernodesと一致させること）
+malicious-ratio = 0.1      # 悪性クライアント割合（0.0 / 0.1 / 0.2 / 0.3）
+malicious-seed = 42        # malicious-ratioから自動生成する際のseed
+malicious-ids = ""         # 手動指定したい場合はここに "0,1" のように書く（空なら自動生成を使う）
 
-[tool.flwr.federations.local-simulation]
-options.num-supernodes = 10
+# 追加：実験ごとの出力先分離（実験計画書 7.6 対応）
+output-dir = "."          # run_experiments.py が実験条件ごとに別ディレクトリを渡す
 
-[tool.flwr.federations.local-simulation-gpu]
-options.num-supernodes = 10
-options.backend.client-resources.num-cpus = 2 # each ClientApp assumes to use 2CPUs
-options.backend.client-resources.num-gpus = 0.2 # at most 5 ClientApp will run in a given GPU
 
-[tool.flwr.federations.supergrid-deployment]
-address = "supergrid.flower.ai"
-enable-account-auth = true
+#######################################################################
+# CONFIGURATION MIGRATION NOTICE:
+#
+# What was previously called "federation config" for SuperLink
+# connections in pyproject.toml has been renamed and moved.
+#
+# These settings are now **SuperLink connection configuration**
+# and are defined in the Flower configuration file.
+#
+# The entries below are commented out intentionally and are kept
+# only as a migration reference.
+#
+# Docs: https://flower.ai/docs/framework/ref-flower-configuration.html
+#######################################################################
+
+# [tool.flwr.federations]
+# default = "local-simulation"
+
+# [tool.flwr.federations.local-simulation]
+# options.num-supernodes = 10
+
+# [tool.flwr.federations.local-simulation-gpu]
+# options.num-supernodes = 10
+# options.backend.client-resources.num-cpus = 2 # each ClientApp assumes to use 2CPUs
+# options.backend.client-resources.num-gpus = 0.2 # at most 5 ClientApp will run in a given GPU
+
+# [tool.flwr.federations.supergrid-deployment]
+# address = "supergrid.flower.ai"
+# enable-account-auth = true

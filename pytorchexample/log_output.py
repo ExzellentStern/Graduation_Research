@@ -1,5 +1,4 @@
-#これは提出しなくていい.ログの出力だけであって村松先生の課題とは一切関係ない.
-#笠原がレポートを書きやすくするために作成しているものであり,FLの動作に一才の影響を及ぼさない.
+
 import os
 import csv
 from datetime import datetime
@@ -13,6 +12,40 @@ CLIENT_CSV = os.path.join(LOG_DIR, "client_metrics.csv")
 SERVER_CSV = os.path.join(LOG_DIR, "server_metrics.csv")
 CONFIG_TXT = os.path.join(LOG_DIR, "run_config.txt")
 PLOT_DIR = os.path.join(LOG_DIR, "plots")
+
+# 実験計画書 7.5 対応：実験条件を区別できる形のCSV
+# （server_metrics.csv は round/accuracy/loss_func のみで、複数条件・複数実行の
+#   結果を一つのファイルに貯めていく run_experiments.py（7.6）では条件を区別できない）
+RESULTS_CSV = os.path.join(LOG_DIR, "results.csv")
+SUMMARY_CSV = os.path.join(LOG_DIR, "summary.csv")
+
+# 実験計画書 7.5/7.6 対応：メカニズム分析用の診断ログCSV
+DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
+
+
+def configure_log_dir(log_dir: str) -> None:
+    """
+    ログの出力先を切り替える。
+
+    デフォルトの LOG_DIR="logs" はプロジェクト直下の固定パスで、
+    run_experiments.py が条件ごとに分ける output_dir とは独立している。
+    そのため output_dir を変えても全条件のログが同じ logs/ に混ざってしまい、
+    後から解析する際に条件の切り分けや掃除が困難になる（実際に発生した問題）。
+    server_app.py から output_dir に対応する場所を渡すことで、
+    そのスイープ専用のログディレクトリに自己完結させる。
+    """
+    global LOG_DIR, CLIENT_CSV, SERVER_CSV, CONFIG_TXT, PLOT_DIR
+    global RESULTS_CSV, SUMMARY_CSV, DIAGNOSTICS_CSV, DETECTION_CSV
+
+    LOG_DIR = log_dir
+    CLIENT_CSV = os.path.join(LOG_DIR, "client_metrics.csv")
+    SERVER_CSV = os.path.join(LOG_DIR, "server_metrics.csv")
+    CONFIG_TXT = os.path.join(LOG_DIR, "run_config.txt")
+    PLOT_DIR = os.path.join(LOG_DIR, "plots")
+    RESULTS_CSV = os.path.join(LOG_DIR, "results.csv")
+    SUMMARY_CSV = os.path.join(LOG_DIR, "summary.csv")
+    DIAGNOSTICS_CSV = os.path.join(LOG_DIR, "diagnostics.csv")
+    DETECTION_CSV = os.path.join(LOG_DIR, "detection_updates.csv")
 
 
 # =========================
@@ -33,7 +66,7 @@ def log_run_config(
     learning_rate: float,
     optimizer: str,
     iid: bool,
-    seed: int,
+    trial: int,
 ):
     _ensure_dir()
     with open(CONFIG_TXT, "a", encoding="utf-8") as f:
@@ -45,7 +78,7 @@ def log_run_config(
         f.write(f"learning_rate : {learning_rate}\n")
         f.write(f"optimizer     : {optimizer}\n")
         f.write(f"IID           : {iid}\n")
-        f.write(f"seed          : {seed}\n")
+        f.write(f"trial         : {trial}\n")
         f.write("=================================\n\n")
 
 
@@ -91,6 +124,209 @@ def log_server_metrics(
         if not file_exists:
             w.writerow(["round", "accuracy", "loss_func"])
         w.writerow([round_, accuracy, loss_func])
+
+
+# =========================
+# 実験結果ログ（実験計画書 7.5 対応）
+# =========================
+_RESULTS_COLUMNS = [
+    "run_id",
+    "round",
+    "accuracy",
+    "loss_func",
+    "aggregation_method",
+    "data_split",
+    "malicious_ratio",
+    "attack_type",
+    "trial",
+]
+
+_SUMMARY_COLUMNS = [
+    "run_id",
+    "final_round",
+    "final_accuracy",
+    "final_loss",
+    "aggregation_method",
+    "data_split",
+    "malicious_ratio",
+    "attack_type",
+    "trial",
+]
+
+
+def log_results_csv(
+    run_id: str,
+    round_: int,
+    accuracy: float,
+    loss_func: float,
+    aggregation_method: str,
+    data_split: str,
+    malicious_ratio: float,
+    attack_type: str,
+    trial: int,
+):
+    """ラウンドごとの Accuracy/Loss を、実験条件つきで logs/results.csv に追記する。"""
+    _ensure_dir()
+    file_exists = os.path.exists(RESULTS_CSV)
+    with open(RESULTS_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_RESULTS_COLUMNS)
+        w.writerow([
+            run_id,
+            round_,
+            accuracy,
+            loss_func,
+            aggregation_method,
+            data_split,
+            malicious_ratio,
+            attack_type,
+            trial,
+        ])
+
+
+# =========================
+# メカニズム分析用ログ（report/mechanism_analysis_plan.tex 対応）
+# =========================
+_DIAGNOSTICS_COLUMNS = [
+    "run_id",
+    "round",
+    "aggregation_method",
+    "data_split",
+    "malicious_ratio",
+    "trial",
+    "n_malicious",
+    "n_benign",
+    "benign_spread",
+    "malicious_push_dist",
+    "push_ratio",
+    "frac_selected_malicious",
+]
+
+
+def log_diagnostics_csv(
+    run_id: str,
+    round_: int,
+    aggregation_method: str,
+    data_split: str,
+    malicious_ratio: float,
+    trial: int,
+    n_malicious: int,
+    n_benign: int,
+    benign_spread: float | None,
+    malicious_push_dist: float | None,
+    push_ratio: float | None,
+    frac_selected_malicious: float | None,
+):
+    """
+    honestクラスタの分散・maliciousの押し出し距離・Krum/Bulyanの選択結果を、
+    ラウンドごとに logs/diagnostics.csv へ追記する。
+
+    - benign_spread: honest更新の重心からの平均距離
+    - malicious_push_dist: malicious（攻撃適用後）更新のhonest重心からの平均距離
+    - push_ratio: malicious_push_dist / benign_spread
+    - frac_selected_malicious: krum/bulyanで選択されたクライアントのうちmaliciousの割合
+      （fedavg/median/trimmed_meanはNone）
+    malicious_push_dist / push_ratio / frac_selected_malicious は該当しない条件（n_malicious=0など）
+    ではNoneのまま書き込む。
+    """
+    _ensure_dir()
+    file_exists = os.path.exists(DIAGNOSTICS_CSV)
+    with open(DIAGNOSTICS_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_DIAGNOSTICS_COLUMNS)
+        w.writerow([
+            run_id,
+            round_,
+            aggregation_method,
+            data_split,
+            malicious_ratio,
+            trial,
+            n_malicious,
+            n_benign,
+            benign_spread,
+            malicious_push_dist,
+            push_ratio,
+            frac_selected_malicious,
+        ])
+
+
+# =========================
+# 検知評価用ログ（sotsuron_plan2.tex 4.2--4.5 対応）
+# =========================
+DETECTION_CSV = os.path.join(LOG_DIR, "detection_updates.csv")
+
+_DETECTION_COLUMNS = [
+    "run_id",
+    "round",
+    "aggregation_method",
+    "data_split",
+    "alpha",
+    "attack_type",
+    "malicious_ratio",
+    "trial",
+    "client_pos",       # updates 配列内での位置（0..n-1）
+    "partition_id",      # 実際のクライアントID
+    "is_malicious",      # 正解ラベル（評価専用。検知器には渡さない）
+    "delta_norm",        # ||g_i||（更新ベクトルのノルム）
+    "d1_norm",           # 検知器スコア（大きいほど悪性らしい）
+    "d2_cosine",
+    "d3_kmeans",
+    "d4_spectral",
+    "benign_spread",     # そのラウンドの正常クラスタの広がり（全行で同じ値）
+    "push_ratio",        # そのラウンドの push_ratio（全行で同じ値。該当なしは空）
+]
+
+
+def log_detection_csv(rows: list):
+    """
+    集約直前（攻撃適用後）の各クライアント更新について，検知器スコアと正解ラベルを
+    logs/detection_updates.csv へ1クライアント1行で追記する。
+
+    rows: dict のリスト。各 dict は _DETECTION_COLUMNS のキーを持つ。
+    """
+    if not rows:
+        return
+    _ensure_dir()
+    file_exists = os.path.exists(DETECTION_CSV)
+    with open(DETECTION_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_DETECTION_COLUMNS)
+        for r in rows:
+            w.writerow([r.get(col) for col in _DETECTION_COLUMNS])
+
+
+def log_summary_csv(
+    run_id: str,
+    final_round: int,
+    final_accuracy: float,
+    final_loss: float,
+    aggregation_method: str,
+    data_split: str,
+    malicious_ratio: float,
+    attack_type: str,
+    trial: int,
+):
+    """1回の実行につき1行、最終ラウンドの Accuracy/Loss を logs/summary.csv に追記する。"""
+    _ensure_dir()
+    file_exists = os.path.exists(SUMMARY_CSV)
+    with open(SUMMARY_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not file_exists:
+            w.writerow(_SUMMARY_COLUMNS)
+        w.writerow([
+            run_id,
+            final_round,
+            final_accuracy,
+            final_loss,
+            aggregation_method,
+            data_split,
+            malicious_ratio,
+            attack_type,
+            trial,
+        ])
 
 
 # =========================

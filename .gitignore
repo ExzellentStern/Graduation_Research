@@ -211,3 +211,44 @@ final_model.pt
 logs/
 
 out/
+
+# LaTeX build artifacts (keep .tex source only; sotsuron.pdf is committed intentionally)
+sotsuron_plan.pdf
+sotsuron_plan.dvi
+sotsuron_plan.aux
+sotsuron_plan.fdb_latexmk
+sotsuron_plan.fls
+sotsuron_plan.synctex.gz
+sotsuron.aux
+sotsuron.dvi
+sotsuron.fdb_latexmk
+sotsuron.fls
+sotsuron.synctex.gz
+report/*.pdf
+report/*.dvi
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.bbl
+report/*.blg
+
+# 実験計画書7.6/7.7：run_experiments.pyの出力（実験ごとの final_model.pt / fixed_eval）
+experiments/
+experiments_phase1/
+experiments_diagnostic/
+fixed_eval/
+
+# sotsuron_plan2.tex：検知評価スイープ（analyze_detection.py / verify_dirichlet_partition.py）
+# experiments_detection/ 本体と analyze_detection.py の出力（results_detection/ / result_detection/）は
+# legacy_fang_reproduction/report/ と同様、分析データ・成果物として追跡する（27条件・約32MBと小規模なため）。
+# LaTeX ビルド生成物（全ディレクトリ共通。*.log は上で指定済み）
+*.aux
+*.dvi
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.out
+*.toc
+_run_*/
+_smoke/

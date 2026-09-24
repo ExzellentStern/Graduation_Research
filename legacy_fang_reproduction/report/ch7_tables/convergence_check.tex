@@ -1,0 +1,25 @@
+\begin{table}[H]
+\centering
+\caption{攻撃なし（malicious ratio 0.0）条件における学習の到達度．Round 20 の Accuracy が低く，かつ Round 16--20 の Accuracy がなお毎ラウンド増加し続けていることは，通信ラウンド数 20 が学習の収束に対して不足していることを示す（各条件 20 trial 平均）}
+\label{tab:ch7_convergence_check}
+
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.1}
+
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l cc cc}
+\toprule
+& \multicolumn{2}{c}{IID} & \multicolumn{2}{c}{Non-IID} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+集約手法 & Acc.@20 & $\Delta$Acc./round & Acc.@20 & $\Delta$Acc./round \\
+\midrule
+FedAvg & 0.412 & +0.0167 & 0.464 & +0.0193 \\
+Median & 0.437 & +0.0170 & 0.284 & +0.0110 \\
+Trimmed Mean & 0.445 & +0.0186 & 0.444 & +0.0213 \\
+Krum & 0.400 & +0.0143 & 0.139 & +0.0018 \\
+Bulyan & 0.454 & +0.0171 & 0.456 & +0.0195 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
