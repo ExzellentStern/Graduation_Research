@@ -237,11 +237,11 @@ report/*.blg
 experiments/
 experiments_phase1/
 experiments_diagnostic/
-experiments_detection/
 fixed_eval/
 
-# sotsuron_plan2.tex：検知評価スイープの図・表出力（analyze_detection.py / verify_dirichlet_partition.py）
-results_detection/
+# sotsuron_plan2.tex：検知評価スイープ（analyze_detection.py / verify_dirichlet_partition.py）
+# experiments_detection/ 本体と analyze_detection.py の出力（results_detection/ / result_detection/）は
+# legacy_fang_reproduction/report/ と同様、分析データ・成果物として追跡する（27条件・約32MBと小規模なため）。
 # LaTeX ビルド生成物（全ディレクトリ共通。*.log は上で指定済み）
 *.aux
 *.dvi

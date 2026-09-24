@@ -1,0 +1,308 @@
+=================================
+timestamp     : 2026-09-24T08:19:59
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T08:27:08
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T08:34:13
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T08:41:10
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T08:48:20
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T08:55:22
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T09:02:22
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T09:09:22
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T09:16:24
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T09:23:27
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T09:30:52
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T09:38:10
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T09:45:20
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T09:52:40
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:00:02
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:02:46
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:10:19
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:17:40
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:24:53
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:32:31
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:40:02
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:47:22
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T10:55:06
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T11:02:38
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T11:10:01
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 1
+=================================
+
+=================================
+timestamp     : 2026-09-24T11:17:44
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 2
+=================================
+
+=================================
+timestamp     : 2026-09-24T11:25:14
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+
+=================================
+timestamp     : 2026-09-24T12:12:25
+rounds        : 30
+local_epochs  : 1
+batch_size    : 32
+learning_rate : 0.001
+optimizer     : SGD
+IID           : False
+trial         : 3
+=================================
+

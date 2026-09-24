@@ -1,0 +1,31 @@
+timestamp,condition,command,output_tail
+2026-09-24T10:02:26,fedavg_dirichlet_a0.5_sign_flip_ratio0.2_trial3,"C:\Users\hideb\.venvs\Graduation_Research\Scripts\flwr.EXE run . local --run-config num-server-rounds=30 aggregation-method=""fedavg"" data-split=""dirichlet"" dirichlet-alpha=0.5 malicious-ratio=0.2 malicious-seed=3 trial=3 attack-type=""sign_flip"" alie-z=1.0 num-clients=20 output-dir=""experiments_detection/fedavg_dirichlet_a0.5_sign_flip_ratio0.2_trial3"" --stream","[36m(ClientAppActor pid=23124)[0m [ROUND 2] | eval_loss=2.2082 | eval_acc=0.3424[32m [repeated 3x across cluster][0m
+[36m(ClientAppActor pid=20000)[0m [ROUND 3] | train_loss=1.8377[32m [repeated 17x across cluster][0m
+[92mINFO [0m:      aggregate_train: Received 20 results and 0 failures
+[92mINFO [0m:      	└──> Aggregated MetricRecord: {'train_loss': 2.01360937620848, 'partition-id': 9.773941490248374}
+[92mINFO [0m:      configure_evaluate: Sampled 4 nodes (out of 20)
+[36m(ClientAppActor pid=9584)[0m [Client 6] round=3 split=dirichlet alpha=0.5 p=0.5 attack=sign_flip malicious=False poison=0.2
+[36m(ClientAppActor pid=9584)[0m [ROUND 3] | eval_loss=2.2959 | eval_acc=0.1754
+[92mINFO [0m:      aggregate_evaluate: Received 4 results and 0 failures
+[92mINFO [0m:      	└──> Aggregated MetricRecord: {'eval_loss': 2.268769900214399, 'eval_acc': 0.3103644646924829}
+[92mINFO [0m:      Global evaluation
+[ROUND 3] | accuracy=0.3205 | loss_func=2.2689
+[92mINFO [0m:      	└──> MetricRecord: {'accuracy': 0.3205, 'loss_func': 2.2689194347285015}
+[92mINFO [0m:      
+[92mINFO [0m:      [ROUND 4/30]
+[92mINFO [0m:      configure_train: Sampled 20 nodes (out of 20)
+[36m(ClientAppActor pid=28732)[0m [ROUND 4] | train_loss=2.0451[32m [repeated 3x across cluster][0m
+[36m(ClientAppActor pid=19548)[0m [Client 10] round=3 split=dirichlet alpha=0.5 p=0.5 attack=sign_flip malicious=False poison=0.2[32m [repeated 3x across cluster][0m
+[36m(ClientAppActor pid=19548)[0m [ROUND 3] | eval_loss=2.2655 | eval_acc=0.2777[32m [repeated 3x across cluster][0m
+[36m(ClientAppActor pid=13172)[0m [ROUND 4] | train_loss=1.7780[32m [repeated 17x across cluster][0m
+[92mINFO [0m:      aggregate_train: Received 20 results and 0 failures
+[92mINFO [0m:      	└──> Aggregated MetricRecord: {'train_loss': 1.947802168819434, 'partition-id': 9.773941490248374}
+[92mINFO [0m:      configure_evaluate: Sampled 4 nodes (out of 20)
+[36m(ClientAppActor pid=17680)[0m [Client 19] round=4 split=dirichlet alpha=0.5 p=0.5 attack=sign_flip malicious=False poison=0.2
+[36m(ClientAppActor pid=17680)[0m [ROUND 4] | eval_loss=2.0859 | eval_acc=0.5853
+[36m(ClientAppActor pid=8724)[0m [Client 1] round=4 split=dirichlet alpha=0.5 p=0.5 attack=sign_flip malicious=True poison=0.2
+[92mINFO [0m:      aggregate_evaluate: Received 4 results and 0 failures
+[92mINFO [0m:      	└──> Aggregated MetricRecord: {'eval_loss': 2.1870554334183563, 'eval_acc': 0.4143934997098085}
+[92mINFO [0m:      Global evaluation
+
+[92mINFO [0m:      Starting logstream for run_id `9418564655935121885`"
