@@ -93,41 +93,80 @@ def plot_auc_by_round(metrics: pd.DataFrame, outpath: str) -> None:
         print("[plot_auc_by_round] 攻撃ありの条件が無いためスキップ")
         return
 
-    combos = (
-        attacked[["alpha", "attack_type"]]
-        .drop_duplicates()
-        .sort_values(["attack_type", "alpha"])
-        .to_records(index=False)
-    )
+    # 行 = 検知器, 列 = 攻撃 に分け, 1パネルあたり α の3系列だけにする.
+    # 論文向けの体裁：α は色（赤・青・緑）に加えて線種とマーカーでも区別し, 白黒印刷でも読めるようにする.
+    attacks = [a for a in ["alie", "sign_flip"] if a in set(attacked["attack_type"])]
+    attacks += sorted(set(attacked["attack_type"]) - set(attacks))
+    attack_titles = {"alie": "ALIE (A2)", "sign_flip": "Sign flip (A1)"}
+    alphas = sorted(attacked["alpha"].unique(), reverse=True)  # 100 → 0.5 → 0.1
+    colors = ["tab:red", "tab:blue", "tab:green"]
+    linestyles = ["-", "--", "-."]
+    markers = ["o", "s", "^"]
+    style = {
+        a: (colors[i % 3], linestyles[i % 3], markers[i % 3])
+        for i, a in enumerate(alphas)
+    }
 
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True, sharey=True)
-    for ax, det in zip(axes.flat, DETECTORS):
-        sub = attacked[attacked["detector"] == det]
-        for alpha, attack in combos:
-            cell = sub[(sub["alpha"] == alpha) & (sub["attack_type"] == attack)]
-            if cell.empty:
-                continue
-            agg = cell.groupby("round")["auc"].agg(["mean", "std"]).reset_index()
-            label = f"{attack}, α={alpha:g}"
-            ax.plot(agg["round"], agg["mean"], marker="o", ms=3, label=label)
-            ax.fill_between(
-                agg["round"],
-                agg["mean"] - agg["std"].fillna(0.0),
-                agg["mean"] + agg["std"].fillna(0.0),
-                alpha=0.15,
-            )
-        ax.axhline(0.5, color="gray", lw=0.8, ls="--")
-        ax.set_title(DETECTOR_LABELS[det])
-        ax.set_ylim(0.0, 1.02)
-        ax.grid(True, alpha=0.3)
-    for ax in axes[-1]:
-        ax.set_xlabel("communication round")
-    for ax in axes[:, 0]:
-        ax.set_ylabel("malicious-detection ROC-AUC")
-    axes.flat[0].legend(fontsize=8, loc="lower right")
-    fig.suptitle("Detection AUC vs round (mean ± SD over trials)")
-    fig.tight_layout()
-    fig.savefig(outpath, dpi=150)
+    paper_rc = {
+        "font.family": "serif",
+        "font.serif": ["Times New Roman", "Times", "STIXGeneral"],
+        "mathtext.fontset": "stix",
+        "font.size": 7.5,
+        "axes.titlesize": 8,
+        "legend.fontsize": 7.5,
+        "axes.linewidth": 0.6,
+        "xtick.direction": "in",
+        "ytick.direction": "in",
+        "xtick.top": True,
+        "ytick.right": True,
+        "xtick.major.width": 0.6,
+        "ytick.major.width": 0.6,
+    }
+    with plt.rc_context(paper_rc):
+        fig, axes = plt.subplots(
+            len(DETECTORS), len(attacks),
+            figsize=(3.4, 1.35 * len(DETECTORS) + 0.6),
+            sharex=True, sharey=True, squeeze=False,
+        )
+        for r, det in enumerate(DETECTORS):
+            sub = attacked[attacked["detector"] == det]
+            for c, attack in enumerate(attacks):
+                ax = axes[r, c]
+                for alpha in alphas:
+                    cell = sub[(sub["alpha"] == alpha) & (sub["attack_type"] == attack)]
+                    if cell.empty:
+                        continue
+                    agg = cell.groupby("round")["auc"].agg(["mean", "std"]).reset_index()
+                    color, ls, marker = style[alpha]
+                    std = agg["std"].fillna(0.0)
+                    ax.fill_between(
+                        agg["round"],
+                        (agg["mean"] - std).clip(0.0, 1.0),
+                        (agg["mean"] + std).clip(0.0, 1.0),
+                        color=color, alpha=0.10, lw=0,
+                    )
+                    ax.plot(
+                        agg["round"], agg["mean"], color=color, ls=ls, lw=1.0,
+                        marker=marker, ms=3.5, markevery=5, mfc="white", mew=0.8,
+                        label=rf"$\alpha={alpha:g}$",
+                    )
+                ax.axhline(0.5, color="gray", lw=0.5, ls=":", zorder=0)
+                ax.set_ylim(-0.02, 1.02)
+                ax.set_yticks([0.0, 0.5, 1.0])
+                if r == 0:
+                    ax.set_title(attack_titles.get(attack, attack))
+                if c == 0:
+                    ax.set_ylabel(f"{DETECTOR_LABELS[det]}\nAUC")
+        for ax in axes[-1]:
+            ax.set_xlabel("Round")
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        fig.legend(
+            handles, labels, loc="upper center", ncol=len(labels),
+            frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+            bbox_to_anchor=(0.5, 1.0), handlelength=2.6,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.96), h_pad=0.6, w_pad=0.6)
+        fig.savefig(outpath, dpi=300)
     plt.close(fig)
     print(f"[saved] {outpath}")
 
