@@ -1,0 +1,143 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quickstart-pytorch"
+version = "1.0.0"
+description = "Federated Learning with PyTorch and Flower (Quickstart Example)"
+license = "Apache-2.0"
+dependencies = [
+    "flwr[simulation]>=1.24.0",
+    "flwr-datasets[vision]>=0.5.0",
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.flwr.app]
+publisher = "flwrlabs"
+
+[tool.flwr.app.components]
+serverapp = "fl_detection.server_app:app"
+clientapp = "fl_detection.client_app:app"
+
+# ============================================================
+# Flower アプリ設定（※このテーブルは1回だけ定義する）
+#
+# 【設定はこのファイルだけに書く】
+#   実験の設定値は，このファイルの次の2つの欄だけに書く。
+#     [tool.flwr.app.config] : 全実行で共通の値（＝手動で `flwr run .` したときの値）
+#     [tool.sweep]           : run_experiments.py が変えながら回す軸
+#   Python 側（server_app.py / client_app.py / run_experiments.py）には設定値を書かない。
+#   現在の実験で使っていない機能（他の攻撃・集約手法・分割方式など）とその設定項目は
+#   unused_features/ に移してある（戻し方は unused_features/README.md）。
+#   スイープ時は，[tool.sweep] の軸に対応する項目だけがこの欄の値を上書きする
+#   （どの項目が上書きされるかは，各項目のコメントに「スイープで上書き」と書いてある）。
+# ============================================================
+[tool.flwr.app.config]
+num-server-rounds = 50
+fraction-evaluate = 0.2
+local-epochs = 1
+learning-rate = 0.01
+batch-size = 32          # Fang et al. (2020) のデフォルト（Fashion-MNIST以外は32）に合わせた
+# 計算に使う装置。"auto" / "cuda"（NVIDIA の GPU）/ "mps"（Apple Silicon の Mac の GPU）/ "cpu"。
+# "auto" は，使える中で一番速いものを選ぶ（cuda -> mps -> cpu の順）。
+# 本番（Windows の NVIDIA GPU）で確実に GPU を使いたいときは "cuda" にしておくと，GPU が使えない場合にエラーで止まる。
+# CPU と GPU では結果の数値が変わるので，1つのスイープの中では装置を変えないこと。
+# NVIDIA の GPU をクライアントでも使うには，[tool.sweep] の client-num-gpus も 0 より大きくする。
+device = "auto"
+aggregation-method = "fedavg"   # 集約手法。現在使えるのは "fedavg" だけ（スイープで上書き）
+# 追加：実験の繰り返し試行番号（実験計画書 7.5 対応）
+# Fang et al. (2020) の"trial"（同一条件を複数回繰り返す単位）に対応させた名称。
+# 乱数の種として，データ分割・モデルの初期値・学習時のデータの並べ替えに使う。
+# malicious-seedとは独立だが、run_experiments.pyは条件ごとに複数回実験する際、
+# このtrialの値をmalicious-seedにもそのまま渡している（悪性クライアントの選出も
+# trialごとに変えるため）。
+trial = 1                  # （スイープで上書き）
+
+# 追加：データ分割
+data-split = "dirichlet"   # データ分割方式。現在使えるのは "dirichlet" だけ
+dirichlet-alpha = 0.5      # Dirichlet の濃度（大きいとほぼIID，小さいほど偏る。0.1で激偏り）（スイープで上書き）
+
+# 追加：攻撃設定
+attack-type = "none"        # "none" / "sign_flip" / "alie"（スイープで上書き）
+alie-z = 1.0              # ALIE攻撃（sotsuron_plan2.tex 4.3 A2）の摂動強度 z（実用上 0.5--1.5）（ALIE のときスイープで上書き）
+
+# 追加：悪性クライアント生成（実験計画書 7.3 対応）
+num-clients = 20           # クライアント総数（federationのnum-supernodesと一致させること）
+# 悪性クライアント割合（攻撃ありのときに使う値）。
+# num-clients × この値 が整数になるように指定する（整数にならないとエラーで止まる。例: 20台なら 0.1 / 0.2 / 0.3）。
+# 攻撃なし（attack-type="none"）のときは，この値に関係なく悪性0人として扱われる
+# （server_app.py が自動で 0 にする。攻撃していないクライアントが悪性と記録されるのを防ぐため）。
+malicious-ratio = 0.2
+malicious-seed = 1         # malicious-ratioから自動生成する際のseed（スイープでは trial と同じ値で上書き）
+
+# 追加：実験ごとの出力先分離（実験計画書 7.6 対応）
+output-dir = "."          # （スイープで上書き）run_experiments.py が実験条件ごとに別ディレクトリを渡す
+
+
+# ============================================================
+# sotsuron_plan2.tex 5.2：検知評価スイープで「変えながら回す軸」
+#
+# run_experiments.py がこの欄を読み，全組み合わせについて flwr run を実行する。
+# ここに無い項目（クライアント数・ラウンド数・学習率など）は，
+# 上の [tool.flwr.app.config] の値がそのまま全条件で使われる。
+# Flower 自身はこの欄を見ない。
+#
+# 条件数 = 集約手法 × alpha × (攻撃なし 1 + 符号反転 1 + ALIE の z の数) × trial
+#        = 1 × 3 × (1 + 1 + 4) × 3 = 54
+# ============================================================
+[tool.sweep]
+# 出力先の親フォルダ（条件ごとのフォルダと _logs/ がこの下にできる）。
+# 【決まり】コードを変えてログの列が変わったら，この名前を変える（例: _v3）。
+# ログは同じファイルに追記されていくので，列を変えた後に同じフォルダへ書き足すと，
+# 見出しと合わない行が混ざってしまう。
+output-root = "experiments_detection_v2"
+# 各クライアントに割り当てる NVIDIA GPU の割合（0.0〜1.0）。本番は Windows の NVIDIA GPU で回すので 0.2 にしてある。
+#   0.2  : 1枚の GPU を，同時に最大5台のクライアントで分け合う（20台は5台ずつ順に学習する）。
+#          値を小さくすると同時に動く台数が増えて速くなるが，GPU のメモリを多く使う。
+#          メモリ不足（CUDA out of memory）になる場合は，値を大きくする（例: 0.5 で同時に2台）。
+#   0.0  : クライアントに GPU を割り当てない。GPU の無いマシン（Mac を含む）では必ず 0.0 にする
+#          （0 より大きいままだと，クライアントが起動できない。スイープは開始前にエラーで止まる）。
+client-num-gpus = 0.2
+aggregation-methods = ["fedavg"]            # 集約手法は検知に非依存なため fedavg 固定
+dirichlet-alphas = [100.0, 0.5, 0.1]        # 100≒IID / 0.5 中程度 / 0.1 強い不均一
+attack-types = ["none", "sign_flip", "alie"]  # none は benign_spread の基準値を取るための条件
+# ALIE の z。0.385 は原論文 Algorithm 3 の z_max を n=20, f=4 に当てはめた参照値
+# （attack.alie_z_max(20, 4) = Phi^{-1}(0.65)）。Non-IID での理論値ではない。
+alie-zs = [0.385, 0.5, 0.75, 1.0]
+trials = [1, 2, 3]                          # データ分割と悪性クライアント選出の両方の seed になる
+
+
+#######################################################################
+# CONFIGURATION MIGRATION NOTICE:
+#
+# What was previously called "federation config" for SuperLink
+# connections in pyproject.toml has been renamed and moved.
+#
+# These settings are now **SuperLink connection configuration**
+# and are defined in the Flower configuration file.
+#
+# The entries below are commented out intentionally and are kept
+# only as a migration reference.
+#
+# Docs: https://flower.ai/docs/framework/ref-flower-configuration.html
+#######################################################################
+
+# [tool.flwr.federations]
+# default = "local-simulation"
+
+# [tool.flwr.federations.local-simulation]
+# options.num-supernodes = 10
+
+# [tool.flwr.federations.local-simulation-gpu]
+# options.num-supernodes = 10
+# options.backend.client-resources.num-cpus = 2 # each ClientApp assumes to use 2CPUs
+# options.backend.client-resources.num-gpus = 0.2 # at most 5 ClientApp will run in a given GPU
+
+# [tool.flwr.federations.supergrid-deployment]
+# address = "supergrid.flower.ai"
+# enable-account-auth = true
