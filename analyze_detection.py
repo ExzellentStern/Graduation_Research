@@ -189,15 +189,29 @@ def load_metrics(path: str) -> pd.DataFrame:
 #     ax.plot(...)         : 線を描く。 ax.fill_between(...) : 2本の線のあいだを薄く塗る（帯）。
 #     .clip(0.0, 1.0)      : 値を 0〜1 の範囲に収める（帯が図の外にはみ出さないように）。
 #     fig.savefig(outpath, dpi=300) : 図をファイルに保存する。dpi は解像度（大きいほど細かい）。
-def plot_auc_by_round(metrics: pd.DataFrame, outpath: str) -> None:
-    attacked = metrics[metrics["attack_type"] != "none"].copy()
-    if attacked.empty:
-        print("[plot_auc_by_round] 攻撃ありの条件が無いためスキップ")
-        return
+PAPER_RC = {
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "Times", "STIXGeneral"],
+    "mathtext.fontset": "stix",
+    "font.size": 7.5,
+    "axes.titlesize": 8,
+    "legend.fontsize": 7.5,
+    "axes.linewidth": 0.6,
+    "xtick.direction": "in",
+    "ytick.direction": "in",
+    "xtick.top": True,
+    "ytick.right": True,
+    "xtick.major.width": 0.6,
+    "ytick.major.width": 0.6,
+}
 
-    # 行 = 検知器, 列 = 攻撃 に分け, 1パネルあたり α の3系列だけにする.
-    # 論文向けの体裁：α は色（赤・青・緑）に加えて線種とマーカーでも区別し, 白黒印刷でも読めるようにする.
-    # ALIE は z の小さい順に並べ, 符号反転を右端に置く.
+
+def _auc_by_round_style(attacked: pd.DataFrame):
+    """攻撃の並び・表題，alpha→(色,線種,印)の対応を作る（まとめ版・検知器ごと版で共通に使う）。
+
+    ALIE は z の小さい順に並べ, 符号反転を右端に置く。
+    alpha は色（赤・青・緑）に加えて線種とマーカーでも区別し, 白黒印刷でも読めるようにする。
+    """
     alie_zs = sorted(attacked.loc[attacked["attack_type"] == "alie", "alie_z"].dropna().unique())
     attacks = [attack_label("alie", z) for z in alie_zs]
     attacks += sorted(set(attacked["attack"]) - set(attacks))
@@ -213,23 +227,44 @@ def plot_auc_by_round(metrics: pd.DataFrame, outpath: str) -> None:
         a: (colors[i % 3], linestyles[i % 3], markers[i % 3])
         for i, a in enumerate(alphas)
     }
+    return attacks, attack_titles, alphas, style
 
-    paper_rc = {
-        "font.family": "serif",
-        "font.serif": ["Times New Roman", "Times", "STIXGeneral"],
-        "mathtext.fontset": "stix",
-        "font.size": 7.5,
-        "axes.titlesize": 8,
-        "legend.fontsize": 7.5,
-        "axes.linewidth": 0.6,
-        "xtick.direction": "in",
-        "ytick.direction": "in",
-        "xtick.top": True,
-        "ytick.right": True,
-        "xtick.major.width": 0.6,
-        "ytick.major.width": 0.6,
-    }
-    with plt.rc_context(paper_rc):
+
+def _draw_auc_round_panel(ax, sub: pd.DataFrame, attack: str, alphas, style) -> None:
+    """1つの（検知器，攻撃）の組ぶんのパネルを ax に描く（まとめ版・検知器ごと版で共通）。"""
+    for alpha in alphas:
+        cell = sub[(sub["alpha"] == alpha) & (sub["attack"] == attack)]
+        if cell.empty:
+            continue
+        agg = cell.groupby("round")["auc"].agg(["mean", "std"]).reset_index()
+        color, ls, marker = style[alpha]
+        std = agg["std"].fillna(0.0)
+        ax.fill_between(
+            agg["round"],
+            (agg["mean"] - std).clip(0.0, 1.0),
+            (agg["mean"] + std).clip(0.0, 1.0),
+            color=color, alpha=0.10, lw=0,
+        )
+        ax.plot(
+            agg["round"], agg["mean"], color=color, ls=ls, lw=1.0,
+            marker=marker, ms=3.5, markevery=5, mfc="white", mew=0.8,
+            label=rf"$\alpha={alpha:g}$",
+        )
+    ax.axhline(0.5, color="gray", lw=0.5, ls=":", zorder=0)
+    ax.set_ylim(-0.02, 1.02)
+    ax.set_yticks([0.0, 0.5, 1.0])
+
+
+def plot_auc_by_round(metrics: pd.DataFrame, outpath: str) -> None:
+    attacked = metrics[metrics["attack_type"] != "none"].copy()
+    if attacked.empty:
+        print("[plot_auc_by_round] 攻撃ありの条件が無いためスキップ")
+        return
+
+    # 行 = 検知器, 列 = 攻撃 に分け, 1パネルあたり α の3系列だけにする.
+    attacks, attack_titles, alphas, style = _auc_by_round_style(attacked)
+
+    with plt.rc_context(PAPER_RC):
         fig, axes = plt.subplots(
             len(DETECTORS), len(attacks),
             figsize=(1.7 * max(len(attacks), 2), 1.35 * len(DETECTORS) + 0.6),
@@ -239,27 +274,7 @@ def plot_auc_by_round(metrics: pd.DataFrame, outpath: str) -> None:
             sub = attacked[attacked["detector"] == det]
             for c, attack in enumerate(attacks):
                 ax = axes[r, c]
-                for alpha in alphas:
-                    cell = sub[(sub["alpha"] == alpha) & (sub["attack"] == attack)]
-                    if cell.empty:
-                        continue
-                    agg = cell.groupby("round")["auc"].agg(["mean", "std"]).reset_index()
-                    color, ls, marker = style[alpha]
-                    std = agg["std"].fillna(0.0)
-                    ax.fill_between(
-                        agg["round"],
-                        (agg["mean"] - std).clip(0.0, 1.0),
-                        (agg["mean"] + std).clip(0.0, 1.0),
-                        color=color, alpha=0.10, lw=0,
-                    )
-                    ax.plot(
-                        agg["round"], agg["mean"], color=color, ls=ls, lw=1.0,
-                        marker=marker, ms=3.5, markevery=5, mfc="white", mew=0.8,
-                        label=rf"$\alpha={alpha:g}$",
-                    )
-                ax.axhline(0.5, color="gray", lw=0.5, ls=":", zorder=0)
-                ax.set_ylim(-0.02, 1.02)
-                ax.set_yticks([0.0, 0.5, 1.0])
+                _draw_auc_round_panel(ax, sub, attack, alphas, style)
                 if r == 0:
                     ax.set_title(attack_titles.get(attack, attack))
                 if c == 0:
@@ -278,6 +293,50 @@ def plot_auc_by_round(metrics: pd.DataFrame, outpath: str) -> None:
     print(f"[saved] {outpath}")
 
 
+# 【plot_auc_by_round_by_detector の説明】
+#   plot_auc_by_round と中身（線の引き方・色・形）は同じだが，4つの検知器を
+#   1枚の画像にまとめず，検知器ごとに別ファイル（1行 x 攻撃の列数）へ保存する。
+#     outpath_pattern : ファイル名のひな形。中の "{detector}" が d1_norm 等に置き換わる。
+def plot_auc_by_round_by_detector(metrics: pd.DataFrame, outpath_pattern: str) -> None:
+    attacked = metrics[metrics["attack_type"] != "none"].copy()
+    if attacked.empty:
+        print("[plot_auc_by_round_by_detector] 攻撃ありの条件が無いためスキップ")
+        return
+
+    attacks, attack_titles, alphas, style = _auc_by_round_style(attacked)
+
+    with plt.rc_context(PAPER_RC):
+        for det in DETECTORS:
+            sub = attacked[attacked["detector"] == det]
+            fig, axes = plt.subplots(
+                1, len(attacks),
+                figsize=(1.7 * max(len(attacks), 2), 2.1),
+                sharex=True, sharey=True, squeeze=False,
+            )
+            for c, attack in enumerate(attacks):
+                ax = axes[0, c]
+                _draw_auc_round_panel(ax, sub, attack, alphas, style)
+                ax.set_title(attack_titles.get(attack, attack))
+                if c == 0:
+                    ax.set_ylabel("AUC")
+                ax.set_xlabel("Round")
+            # fig.legend を別枠で浮かせると，suptitle との間隔調整がタイトごとに
+            # ずれて余白が安定しないため，凡例は1つ目のパネルの中に収める。
+            axes[0, 0].legend(
+                fontsize=6, loc="lower right", frameon=True, framealpha=0.9, handlelength=2.2,
+            )
+            # tight_layout() をまず余白指定なしで呼び，パネル同士の間隔だけ自動調整させる。
+            # そのあと上端だけ subplots_adjust で直接指定し，suptitle 用の余白を必要な分だけ確保する
+            # （tight_layout の rect 引数と suptitle の組み合わせは余白量が安定しないため）。
+            fig.tight_layout()
+            fig.subplots_adjust(top=0.72)
+            fig.suptitle(DETECTOR_LABELS[det], y=0.90, fontsize=9)
+            outpath = outpath_pattern.format(detector=det)
+            fig.savefig(outpath, dpi=300, bbox_inches="tight", pad_inches=0.05)
+            plt.close(fig)
+            print(f"[saved] {outpath}")
+
+
 # ============================================================
 # 3) 図：push_ratio 対 AUC（中心仮説の検証）
 # ============================================================
@@ -286,50 +345,66 @@ def plot_auc_by_round(metrics: pd.DataFrame, outpath: str) -> None:
 #     横軸 : push_ratio（悪性が良性の集団からどれだけ外に押し出されているか。1 より小さいと集団の内側）。
 #            対数の目盛りにしている（ax.set_xscale("log")）。値の幅が広いので，小さい側も見やすくするため。
 #     縦軸 : AUC。
-#     点   : 1つの点が「1つの実行の，1つのラウンド」。色が alpha，印の形が攻撃を表す。
+#     点   : 1つの点が「1つの実行の，1つのラウンド」。色が alpha，印の形が攻撃の大分類
+#            （sign_flip / alie）を表す。ALIE の z の強さは印の形では区別しない
+#            （push_ratio 自体が強さを表すため，凡例に出すと 15通りに膨らんで見づらくなる）。
 #     構成 : 検知器ごとに1枚，計4枚のグラフを 2×2 に並べる。
 #     縦の点線 : push_ratio = 1（悪性が良性の広がりのちょうど縁にいる位置）。
 #   「push_ratio が 1 を下回ると AUC が崩れる」という傾向が見えるかどうかを，この図で確かめる。
 #     np.isfinite(metrics["push_ratio"]) : 値が普通の数値である行だけを選ぶ（空の行を除く）。
 #     ax.scatter(x, y, ...)              : 点を打つ。
 #     for ax, det in zip(axes.flat, DETECTORS): : 4枚のグラフと4つの検知器を，1組ずつ対応させて回す。
+def _pushratio_style(attacked: pd.DataFrame):
+    """alpha→色，attack_type→印の形の対応を作る（4枚まとめ版・1枚ずつ版で共通に使う）。"""
+    alphas = sorted(attacked["alpha"].unique())
+    cmap = plt.get_cmap("viridis")
+    color_of = {a: cmap(i / max(len(alphas) - 1, 1)) for i, a in enumerate(alphas)}
+    markers = ["v", "o"]
+    attack_types = sorted(attacked["attack_type"].unique())
+    marker_of = {atk: markers[i % len(markers)] for i, atk in enumerate(attack_types)}
+    return alphas, color_of, attack_types, marker_of
+
+
+def _draw_pushratio_scatter(ax, sub: pd.DataFrame, alphas, color_of, attack_types, marker_of) -> None:
+    """1つの検知器ぶんの散布図を ax に描く（4枚まとめ版・1枚ずつ版で共通）。"""
+    for a in alphas:
+        for atk in attack_types:
+            cell = sub[(sub["alpha"] == a) & (sub["attack_type"] == atk)]
+            if cell.empty:
+                continue
+            ax.scatter(
+                cell["push_ratio"],
+                cell["auc"],
+                s=18,
+                color=color_of[a],
+                marker=marker_of[atk],
+                alpha=0.6,
+                edgecolors="none",
+                label=f"{atk}, α={a:g}",
+            )
+    ax.axhline(0.5, color="gray", lw=0.8, ls="--")
+    ax.axvline(1.0, color="crimson", lw=0.8, ls=":")
+    ax.set_ylim(0.0, 1.02)
+    ax.set_xscale("log")
+    ax.grid(True, alpha=0.3)
+
+
 def plot_pushratio_vs_auc(metrics: pd.DataFrame, outpath: str) -> None:
     attacked = metrics[(metrics["attack_type"] != "none") & np.isfinite(metrics["push_ratio"])].copy()
     if attacked.empty:
         print("[plot_pushratio_vs_auc] push_ratio が有効な攻撃条件が無いためスキップ")
         return
 
-    alphas = sorted(attacked["alpha"].unique())
-    cmap = plt.get_cmap("viridis")
-    color_of = {a: cmap(i / max(len(alphas) - 1, 1)) for i, a in enumerate(alphas)}
-    markers = ["o", "s", "^", "D", "v", "P"]
-    attacks = sorted(attacked["attack"].unique())
-    marker_of = {atk: markers[i % len(markers)] for i, atk in enumerate(attacks)}
+    # ALIE は z の強さ(0.385/0.5/0.75/1.0)ごとに別の攻撃として色・形を割り当てると
+    # 凡例が 攻撃5種 × alpha3種 = 15通りに膨らんで見づらくなる。z の強さはそのまま
+    # push_ratio（横軸）に表れているため，凡例では sign_flip / alie の大分類だけを区別する。
+    alphas, color_of, attack_types, marker_of = _pushratio_style(attacked)
 
     fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True, sharey=True)
     for ax, det in zip(axes.flat, DETECTORS):
         sub = attacked[attacked["detector"] == det]
-        for a in alphas:
-            for atk in attacks:
-                cell = sub[(sub["alpha"] == a) & (sub["attack"] == atk)]
-                if cell.empty:
-                    continue
-                ax.scatter(
-                    cell["push_ratio"],
-                    cell["auc"],
-                    s=18,
-                    color=color_of[a],
-                    marker=marker_of[atk],
-                    alpha=0.6,
-                    edgecolors="none",
-                    label=f"{atk}, α={a:g}",
-                )
-        ax.axhline(0.5, color="gray", lw=0.8, ls="--")
-        ax.axvline(1.0, color="crimson", lw=0.8, ls=":")
+        _draw_pushratio_scatter(ax, sub, alphas, color_of, attack_types, marker_of)
         ax.set_title(DETECTOR_LABELS[det])
-        ax.set_ylim(0.0, 1.02)
-        ax.set_xscale("log")
-        ax.grid(True, alpha=0.3)
     for ax in axes[-1]:
         ax.set_xlabel("push_ratio = push / benign_spread  (log)")
     for ax in axes[:, 0]:
@@ -340,6 +415,36 @@ def plot_pushratio_vs_auc(metrics: pd.DataFrame, outpath: str) -> None:
     fig.savefig(outpath, dpi=150)
     plt.close(fig)
     print(f"[saved] {outpath}")
+
+
+# 【plot_pushratio_vs_auc_by_detector の説明】
+#   plot_pushratio_vs_auc と中身（点の打ち方・色・形）は同じだが，4つの検知器を
+#   1枚の2x2画像にまとめず，検知器ごとに別ファイルへ1枚ずつ保存する。
+#   スライドや個別の説明で1検知器だけ大きく見せたいときに使う。
+#     outpath_pattern : ファイル名のひな形。中の "{detector}" が d1_norm 等に置き換わる。
+#                       例 "detection_pushratio_vs_auc_{detector}.png"
+def plot_pushratio_vs_auc_by_detector(metrics: pd.DataFrame, outpath_pattern: str) -> None:
+    attacked = metrics[(metrics["attack_type"] != "none") & np.isfinite(metrics["push_ratio"])].copy()
+    if attacked.empty:
+        print("[plot_pushratio_vs_auc_by_detector] push_ratio が有効な攻撃条件が無いためスキップ")
+        return
+
+    alphas, color_of, attack_types, marker_of = _pushratio_style(attacked)
+
+    for det in DETECTORS:
+        sub = attacked[attacked["detector"] == det]
+        fig, ax = plt.subplots(figsize=(6, 5))
+        _draw_pushratio_scatter(ax, sub, alphas, color_of, attack_types, marker_of)
+        ax.set_title(DETECTOR_LABELS[det])
+        ax.set_xlabel("push_ratio = push / benign_spread  (log)")
+        ax.set_ylabel("malicious-detection ROC-AUC")
+        ax.legend(fontsize=8, loc="lower left")
+        fig.suptitle("Detection AUC vs push_ratio  (each point = one condition × round)")
+        fig.tight_layout()
+        outpath = outpath_pattern.format(detector=det)
+        fig.savefig(outpath, dpi=150)
+        plt.close(fig)
+        print(f"[saved] {outpath}")
 
 
 # ============================================================
@@ -462,7 +567,13 @@ def main() -> None:
 
     os.makedirs(outdir, exist_ok=True)
     plot_auc_by_round(metrics, os.path.join(outdir, "detection_auc_by_round.png"))
+    plot_auc_by_round_by_detector(
+        metrics, os.path.join(outdir, "detection_auc_by_round_{detector}.png")
+    )
     plot_pushratio_vs_auc(metrics, os.path.join(outdir, "detection_pushratio_vs_auc.png"))
+    plot_pushratio_vs_auc_by_detector(
+        metrics, os.path.join(outdir, "detection_pushratio_vs_auc_{detector}.png")
+    )
     final_auc_table(metrics, os.path.join(outdir, "detection_final_auc_table.csv"), last_k=args.last_k)
     structure_table(metrics, os.path.join(outdir, "detection_structure_table.csv"), last_k=args.last_k)
 

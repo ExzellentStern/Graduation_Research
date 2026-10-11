@@ -102,7 +102,7 @@ output-root = "experiments_detection_v2"
 #          メモリ不足（CUDA out of memory）になる場合は，値を大きくする（例: 0.5 で同時に2台）。
 #   0.0  : クライアントに GPU を割り当てない。GPU の無いマシン（Mac を含む）では必ず 0.0 にする
 #          （0 より大きいままだと，クライアントが起動できない。スイープは開始前にエラーで止まる）。
-client-num-gpus = 0.2
+client-num-gpus = 0.0
 aggregation-methods = ["fedavg"]            # 集約手法は検知に非依存なため fedavg 固定
 dirichlet-alphas = [100.0, 0.5, 0.1]        # 100≒IID / 0.5 中程度 / 0.1 強い不均一
 attack-types = ["none", "sign_flip", "alie"]  # none は benign_spread の基準値を取るための条件

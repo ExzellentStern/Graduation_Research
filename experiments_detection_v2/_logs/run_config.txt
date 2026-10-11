@@ -1,0 +1,1392 @@
+=================================
+run_id : fedavg_dirichlet_a100.0_none_ratio0.0_trial1_20261010-132721
+timestamp : 2026-10-10T13:27:21
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_none_ratio0.0_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_none_ratio0.0_trial2_20261010-133906
+timestamp : 2026-10-10T13:39:06
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_none_ratio0.0_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_none_ratio0.0_trial3_20261010-135046
+timestamp : 2026-10-10T13:50:46
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_none_ratio0.0_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_sign_flip_ratio0.2_trial1_20261010-140226
+timestamp : 2026-10-10T14:02:26
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_sign_flip_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_sign_flip_ratio0.2_trial2_20261010-141356
+timestamp : 2026-10-10T14:13:56
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_sign_flip_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_sign_flip_ratio0.2_trial3_20261010-141923
+timestamp : 2026-10-10T14:19:23
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_sign_flip_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.385_ratio0.2_trial1_20261010-143056
+timestamp : 2026-10-10T14:30:56
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.385_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.385_ratio0.2_trial2_20261010-144228
+timestamp : 2026-10-10T14:42:28
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.385_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.385_ratio0.2_trial3_20261010-145407
+timestamp : 2026-10-10T14:54:07
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.385_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.5_ratio0.2_trial1_20261010-150548
+timestamp : 2026-10-10T15:05:48
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.5_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.5_ratio0.2_trial2_20261010-151727
+timestamp : 2026-10-10T15:17:27
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.5_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.5_ratio0.2_trial3_20261010-152907
+timestamp : 2026-10-10T15:29:07
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.5_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.75_ratio0.2_trial1_20261010-154040
+timestamp : 2026-10-10T15:40:40
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.75_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.75_ratio0.2_trial2_20261010-155226
+timestamp : 2026-10-10T15:52:26
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.75_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z0.75_ratio0.2_trial3_20261010-160403
+timestamp : 2026-10-10T16:04:03
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z0.75_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z1.0_ratio0.2_trial1_20261010-161541
+timestamp : 2026-10-10T16:15:41
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z1.0_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z1.0_ratio0.2_trial2_20261010-162719
+timestamp : 2026-10-10T16:27:19
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z1.0_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z1.0_ratio0.2_trial3_20261010-163855
+timestamp : 2026-10-10T16:38:55
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z1.0_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_none_ratio0.0_trial1_20261010-164040
+timestamp : 2026-10-10T16:40:40
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_none_ratio0.0_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_none_ratio0.0_trial2_20261010-165335
+timestamp : 2026-10-10T16:53:35
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_none_ratio0.0_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_none_ratio0.0_trial3_20261010-170549
+timestamp : 2026-10-10T17:05:49
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_none_ratio0.0_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_sign_flip_ratio0.2_trial1_20261010-171733
+timestamp : 2026-10-10T17:17:33
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_sign_flip_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_sign_flip_ratio0.2_trial2_20261010-172935
+timestamp : 2026-10-10T17:29:35
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_sign_flip_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_sign_flip_ratio0.2_trial3_20261010-174131
+timestamp : 2026-10-10T17:41:31
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_sign_flip_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.385_ratio0.2_trial1_20261010-175303
+timestamp : 2026-10-10T17:53:03
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.385_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.385_ratio0.2_trial2_20261010-180503
+timestamp : 2026-10-10T18:05:03
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.385_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.385_ratio0.2_trial3_20261010-181659
+timestamp : 2026-10-10T18:16:59
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.385_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.5_ratio0.2_trial1_20261010-182837
+timestamp : 2026-10-10T18:28:37
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.5_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.5_ratio0.2_trial2_20261010-184034
+timestamp : 2026-10-10T18:40:34
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.5_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.5_ratio0.2_trial3_20261010-185231
+timestamp : 2026-10-10T18:52:31
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.5_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.75_ratio0.2_trial1_20261010-190409
+timestamp : 2026-10-10T19:04:09
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.75_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.75_ratio0.2_trial2_20261010-191634
+timestamp : 2026-10-10T19:16:34
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.75_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.75_ratio0.2_trial3_20261010-192826
+timestamp : 2026-10-10T19:28:26
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.75_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z1.0_ratio0.2_trial1_20261010-194004
+timestamp : 2026-10-10T19:40:04
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z1.0_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z1.0_ratio0.2_trial2_20261010-195209
+timestamp : 2026-10-10T19:52:09
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z1.0_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z1.0_ratio0.2_trial3_20261010-200401
+timestamp : 2026-10-10T20:04:01
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z1.0_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_none_ratio0.0_trial1_20261010-201539
+timestamp : 2026-10-10T20:15:39
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_none_ratio0.0_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_none_ratio0.0_trial2_20261010-202812
+timestamp : 2026-10-10T20:28:12
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_none_ratio0.0_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_none_ratio0.0_trial3_20261010-203116
+timestamp : 2026-10-10T20:31:16
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_none_ratio0.0_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_sign_flip_ratio0.2_trial1_20261010-204312
+timestamp : 2026-10-10T20:43:12
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_sign_flip_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_sign_flip_ratio0.2_trial2_20261010-205535
+timestamp : 2026-10-10T20:55:35
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_sign_flip_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_sign_flip_ratio0.2_trial3_20261010-210739
+timestamp : 2026-10-10T21:07:39
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_sign_flip_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.385_ratio0.2_trial1_20261010-211927
+timestamp : 2026-10-10T21:19:27
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.385_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.385_ratio0.2_trial2_20261010-213214
+timestamp : 2026-10-10T21:32:14
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.385_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.385_ratio0.2_trial3_20261010-214434
+timestamp : 2026-10-10T21:44:34
+aggregation-method : fedavg
+alie-z : 0.385
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.385_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.5_ratio0.2_trial1_20261010-215623
+timestamp : 2026-10-10T21:56:23
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.5_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.5_ratio0.2_trial2_20261010-220849
+timestamp : 2026-10-10T22:08:49
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.5_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.5_ratio0.2_trial3_20261010-222100
+timestamp : 2026-10-10T22:21:00
+aggregation-method : fedavg
+alie-z : 0.5
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.5_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.75_ratio0.2_trial1_20261010-223252
+timestamp : 2026-10-10T22:32:52
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.75_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.75_ratio0.2_trial2_20261010-224515
+timestamp : 2026-10-10T22:45:15
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.75_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z0.75_ratio0.2_trial3_20261010-225728
+timestamp : 2026-10-10T22:57:28
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z0.75_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z1.0_ratio0.2_trial1_20261010-230919
+timestamp : 2026-10-10T23:09:19
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z1.0_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z1.0_ratio0.2_trial2_20261010-232141
+timestamp : 2026-10-10T23:21:41
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z1.0_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_alie_z1.0_ratio0.2_trial3_20261010-233350
+timestamp : 2026-10-10T23:33:50
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_alie_z1.0_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_sign_flip_ratio0.2_trial2_20261011-103852
+timestamp : 2026-10-11T10:38:52
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : sign_flip
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [2, 4, 5, 14]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_sign_flip_ratio0.2_trial2
+trial : 2
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a100.0_alie_z1.0_ratio0.2_trial3_20261011-105008
+timestamp : 2026-10-11T10:50:08
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 100.0
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [1, 3, 4, 13]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 3
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a100.0_alie_z1.0_ratio0.2_trial3
+trial : 3
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.5_alie_z0.75_ratio0.2_trial1_20261011-110115
+timestamp : 2026-10-11T11:01:15
+aggregation-method : fedavg
+alie-z : 0.75
+attack-type : alie
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.5
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : [8, 9, 14, 19]
+malicious-ratio : 0.2
+malicious-ratio (effective) : 0.2
+malicious-seed : 1
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.5_alie_z0.75_ratio0.2_trial1
+trial : 1
+=================================
+
+=================================
+run_id : fedavg_dirichlet_a0.1_none_ratio0.0_trial2_20261011-111245
+timestamp : 2026-10-11T11:12:45
+aggregation-method : fedavg
+alie-z : 1.0
+attack-type : none
+batch-size : 32
+data-split : dirichlet
+device : auto
+device (effective) : cpu
+dirichlet-alpha : 0.1
+fraction-evaluate : 0.2
+learning-rate : 0.01
+local-epochs : 1
+malicious-ids (effective) : []
+malicious-ratio : 0.0
+malicious-ratio (effective) : 0.0
+malicious-seed : 2
+num-clients : 20
+num-server-rounds : 50
+output-dir : experiments_detection_v2/fedavg_dirichlet_a0.1_none_ratio0.0_trial2
+trial : 2
+=================================
+
