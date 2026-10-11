@@ -104,7 +104,7 @@ def main(grid: Grid, context: Context) -> None:
     aggregation_method = context.run_config["aggregation-method"]   # 集約手法（現在は "fedavg" だけ）
 
     # ---- 追加：データ分割 / 攻撃 設定 ----
-    data_split = context.run_config["data-split"]                   # データ分割方式（現在は "dirichlet" だけ）
+    data_split = context.run_config["data-split"]                   # データ分割方式（"dirichlet_equal"：枚数は全員同じ / "dirichlet"：以前の方式）
     alpha = float(context.run_config["dirichlet-alpha"])            # Dirichlet の濃度（小さいほど偏りが強い）
     attack_type = context.run_config["attack-type"]                 # "none" / "sign_flip" / "alie"
     alie_z = float(context.run_config["alie-z"])                    # ALIE攻撃（sotsuron_plan2.tex 4.3 A2）の摂動強度 z
@@ -114,6 +114,11 @@ def main(grid: Grid, context: Context) -> None:
     # 使えない値は，学習を始める前にここで止める（途中まで回ってから気づくのを防ぐ）。
     #   値 not in (候補, ...) : 値が候補のどれでもなければ True。
     #   raise ValueError(...) : エラーを起こして実行を止める。
+    if data_split not in ("dirichlet_equal", "dirichlet"):
+        raise ValueError(
+            f"未対応の data-split です: {data_split!r}（対応: 'dirichlet_equal' / 'dirichlet'）。"
+            "'iid' / 'non_iid' は unused_features/task_extra.py に移してあります。"
+        )
     if attack_type not in ("none", "sign_flip", "alie"):
         raise ValueError(
             f"未対応の attack-type です: {attack_type!r}（対応: 'none' / 'sign_flip' / 'alie'）。"

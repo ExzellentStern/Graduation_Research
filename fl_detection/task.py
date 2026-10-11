@@ -25,6 +25,12 @@
     - Non-IID分割を Dirichlet に戻した（Non-IID度を alpha で連続的に操作するため）
     - 使わなくなった旧モデル NetFC と IID / Fang方式の分割は
       unused_features/task_extra.py へ移した（戻し方は unused_features/README.md）
+  - データ数を全クライアントで同じにした分割 "dirichlet_equal" を追加し，実験ではこちらを使う（2026-10-11）
+    - 従来の "dirichlet" は，alpha を小さくするとラベルの偏りと同時にデータ数の偏りも強まるため，
+      検知性能の変化がどちらの偏りによるものかを分けられなかった
+      （alpha=0.1 では 41〜15,083 枚まで開き，更新ノルムの大小がデータ数でほぼ決まっていた）。
+    - "dirichlet_equal" は枚数を固定し，ラベルの比率だけを alpha で偏らせる（ラベル分布の偏りのみ）。
+    - 従来の "dirichlet" は，以前の結果を再現するために残してある。
 """
 
 # 【このファイルの読み方】
@@ -170,8 +176,12 @@ def apply_transforms(batch):
 # ============================================================
 # 方針：
 # - MNIST(train) を 1回だけ読み込み、各クライアント用 index を作って再利用する
-# - Non-IID(Dirichlet): クラスごとに Dirichlet 分布で各クライアントへの割当比率を作り、偏りを導入
-#   （alpha が大きいとほぼ IID，小さいほど偏りが強い）
+# - Non-IID の作り方は2通りある（pyproject.toml の data-split で選ぶ）。どちらも alpha が大きいとほぼ IID，小さいほど偏りが強い。
+#     "dirichlet_equal"（実験で使う）: クライアントごとに Dirichlet 分布で「クラスの比率」を作る。枚数は全員同じ。
+#                                      偏るのはラベルの比率だけ（ラベル分布の偏り）。
+#     "dirichlet"（以前の方式）      : クラスごとに Dirichlet 分布で「各クライアントへの割当比率」を作る。
+#                                      ラベルの比率と一緒に，枚数もクライアントによって大きく変わる
+#                                      （ラベル分布の偏り + データ数の偏り）。
 #
 # 注意：
 # - data_split / alpha / num_partitions が変わったら index を作り直す必要があるため、キー付きキャッシュにする
@@ -179,7 +189,15 @@ def apply_transforms(batch):
 #
 # 【この部分の説明】
 #   Non-IID（クライアントごとにデータが偏っている状態）を作っているのは，ここ。
-#   研究の横軸である「Non-IID 度」は，下の _build_dirichlet_partitions の alpha で決まる。
+#   研究の横軸である「Non-IID 度」は，下の _build_dirichlet_equal_partitions の alpha で決まる。
+#
+#   【Non-IID の種類について】
+#     Non-IID には種類がある（NIID-Bench, Li et al., 2022 の整理）。
+#       ラベル分布の偏り : クライアントごとに，持っているクラス（数字）の比率が違う。
+#       特徴分布の偏り   : 同じクラスでも，見た目（筆跡など）がクライアントごとに違う。
+#       データ数の偏り   : クライアントごとに，持っている枚数が違う。
+#     この研究で調べたいのは「ラベル分布の偏り」が検知に与える影響なので，
+#     枚数は全員同じに固定し，ラベルの比率だけを変える "dirichlet_equal" を使う。
 #
 #   3つの変数（ファイルの中だけで使う。名前がすべて大文字なのは「ファイル全体で共有する値」の慣習）
 #     _TRAIN_DS        : 読み込んだ学習用データをしまっておく入れ物。最初は None（空）。
@@ -207,7 +225,7 @@ def _load_train_dataset():
     return _TRAIN_DS
 
 
-# 【_build_dirichlet_partitions の説明】
+# 【_build_dirichlet_partitions の説明】（以前の分割。data-split = "dirichlet" のときだけ使う。現在の実験では使っていない）
 #   学習用データを，クライアントの台数ぶんに分ける。返すのは「クライアントごとの，担当する画像の番号の一覧」。
 #
 #   考え方（数字 0〜9 のそれぞれについて，別々に同じことをする）
@@ -290,35 +308,149 @@ def _build_dirichlet_partitions(labels, num_partitions: int, alpha: float, trial
     return [np.asarray(v, dtype=int) for v in client_indices]
 
 
+# 【_build_dirichlet_equal_partitions の説明】（実験で使っている分割。data-split = "dirichlet_equal"）
+#   学習用データを，クライアントの台数ぶんに分ける。返すのは「クライアントごとの，担当する画像の番号の一覧」。
+#   上の _build_dirichlet_partitions との違いは，全クライアントの枚数が同じになること。
+#
+#   なぜ枚数をそろえるのか
+#     上の方式では，alpha を小さくすると「持っている数字の偏り」と「枚数の偏り」が同時に強まる。
+#     枚数が多いクライアントは，1ラウンドの学習で重みを更新する回数が多いので，更新ベクトルが大きくなる。
+#     すると，検知のしやすさが変わったときに，それが数字の偏りのせいなのか，枚数の偏りのせいなのかを区別できない。
+#     また，FedAvg は枚数で重み付けして平均するので，悪性クライアントの影響力が「台数の割合」からずれてしまう
+#     （20台中4台が悪性でも，枚数の少ない4台なら影響力は 0.2 より小さい）。
+#     枚数をそろえると，変わるのは数字の比率だけになり，悪性の影響力も台数の割合（0.2）に一致する。
+#
+#   考え方
+#     1. クライアント1台ごとに，「0〜9 の数字をどんな比率で持つか」を乱数で決める（ディリクレ分布）。
+#          例: クライアント A は「3 が 70%，7 が 25%，残りが少し」，クライアント B は「0 が 90%，…」。
+#     2. 全クライアントに，1枚ずつ順番に画像を配っていく（A に1枚，B に1枚，…，最後の台まで配ったらまた A に戻る）。
+#        配るたびに，そのクライアントの比率に従って「どの数字を配るか」をくじで決める。
+#     3. これを samples_per_client 回くり返す。全員がちょうど samples_per_client 枚ずつ持つことになる。
+#   1つの数字の画像は約 6,000 枚しかないので，同じ数字を欲しがるクライアントが多いと，途中で在庫がなくなる。
+#   在庫のなくなった数字はくじから外し，残っている数字だけで比率を作り直して配る（下の weights の計算）。
+#   1台ずつまとめて配るのではなく1枚ずつ順番に配るのは，在庫切れの影響が，後に配られるクライアントだけに
+#   集中しないようにするため。
+#
+#   samples_per_client（1台あたりの枚数）について
+#     pyproject.toml の samples-per-client で決める。現在は 1500（20台で 30,000 枚。全 60,000 枚の半分）。
+#     全部の画像を配りきる設定（20台なら 3000）にすると，在庫切れが頻繁に起き，決めた比率どおりに配れなくなる
+#     （alpha=1 では，平均で約2割の画像が別の数字に差し替わった）。
+#     1500 なら，差し替えはほとんど起きない（くじ引きによる自然なずれと同じ程度）。
+#
+#   alpha の意味（ディリクレ分布のつまみ）
+#     alpha が大きい（例: 1000）: どのクライアントの比率も，データ全体の比率とほぼ同じになる（ほぼ IID）。
+#     alpha が小さい（例: 1）   : 比率が極端に偏る。1台のクライアントが，1〜2種類の数字ばかりを持つ。
+#   ディリクレ分布に渡す値は alpha * prior（prior はデータ全体での各数字の割合，約 0.1 ずつ）。
+#   Hsu et al. (2019) の式 q ~ Dir(alpha * p) をそのまま使っている。数字1つあたりの値は約 alpha / 10 になる。
+#   ※ 以前の方式 "dirichlet" は，数字1つあたりの値が alpha そのもの（alpha / 10 ではない）。
+#     2つの方式のあいだで alpha の値を比べるときは，この違いに注意すること。
+#
+#   コードの読み方
+#     rng = np.random.default_rng(trial) : trial 番号を種にした乱数の発生器。同じ trial なら毎回同じ分け方になる。
+#     if samples_per_client * num_partitions > len(labels): raise ValueError(...)
+#         : 配る枚数の合計が，手持ちの画像の枚数を超えていたら，エラーにして止める。
+#     pools           : 数字ごとの「在庫」。pools[c] は，数字 c の画像の番号を，かき混ぜて並べた一覧。
+#     remaining       : 数字ごとの，在庫の残り枚数。配るたびに1ずつ減らす。
+#     prior           : データ全体での，各数字の割合（合計は 1）。
+#     rng.dirichlet(値の並び, size=num_partitions)
+#         : クライアントの台数ぶん，比率を引く。class_ratios[k] が，クライアント k の比率（10個の値で，合計は 1）。
+#     weights = class_ratios[k] * (remaining > 0)
+#         : (remaining > 0) は「在庫があれば True（1），なければ False（0）」の並び。
+#           掛け算すると，在庫のない数字の比率だけが 0 になる。
+#     if weights.sum() <= 0: weights = (remaining > 0).astype(float)
+#         : そのクライアントが欲しい数字がすべて在庫切れのときは，在庫のある数字から均等に選ぶ。
+#     rng.choice(num_classes, p=weights / weights.sum())
+#         : 0〜9 のどれかを，p の確率で1つ選ぶ。weights を合計で割って，合計が 1 になるようにしている。
+#     remaining[c] -= 1 ; pools[c][remaining[c]]
+#         : 在庫を1減らし，在庫の一覧の後ろから1枚取り出す。同じ画像が2回配られることはない。
+def _build_dirichlet_equal_partitions(
+    labels, num_partitions: int, alpha: float, trial: int, samples_per_client: int
+):
+    """
+    Dirichlet Non-IID（データ数は全クライアントで同じ）:
+    - クライアントごとに「クラスの比率」を Dirichlet(alpha * prior) から引き，その比率で samples_per_client 枚を配る。
+    - 偏るのはラベルの比率だけで，枚数は全員同じ（ラベル分布の偏りのみ。Hsu et al. (2019) の考え方）。
+    """
+    rng = np.random.default_rng(trial)
+    labels = np.asarray(labels)
+    num_classes = int(labels.max()) + 1
+
+    if samples_per_client * num_partitions > len(labels):
+        raise ValueError(
+            f"samples-per-client × クライアント数 = {samples_per_client * num_partitions} 枚が，"
+            f"学習用データの枚数（{len(labels)} 枚）を超えています。samples-per-client を小さくしてください。"
+        )
+
+    # 数字ごとの在庫（画像の番号をかき混ぜたもの）と，その残り枚数
+    pools = []
+    for c in range(num_classes):
+        idx_c = np.where(labels == c)[0]
+        rng.shuffle(idx_c)
+        pools.append(idx_c)
+    remaining = np.array([len(pool) for pool in pools])
+    prior = remaining / remaining.sum()
+
+    # クライアントごとのクラス比率（行 = クライアント，列 = クラス）
+    class_ratios = rng.dirichlet(alpha * prior, size=num_partitions)
+
+    # 全クライアントに1枚ずつ順番に配る
+    client_indices = [[] for _ in range(num_partitions)]
+    for _ in range(samples_per_client):
+        for k in range(num_partitions):
+            weights = class_ratios[k] * (remaining > 0)  # 在庫切れのクラスは選ばない
+            if weights.sum() <= 0:
+                weights = (remaining > 0).astype(float)
+            c = int(rng.choice(num_classes, p=weights / weights.sum()))
+            remaining[c] -= 1
+            client_indices[k].append(int(pools[c][remaining[c]]))
+
+    return [np.asarray(v, dtype=int) for v in client_indices]
+
+
 # 【_get_partitions の説明】
 #   分割を取得する窓口。同じ条件の分割が作成済みならそれを返し，なければ作って控えを取る。
-#     key = (num_partitions, data_split, float(alpha), trial)
+#     key = (num_partitions, data_split, float(alpha), trial, samples_per_client)
 #         : 分割の条件をひとまとめにしたもの（タプル）。これを辞書の「名前」として使う。
 #     if key in _PARTITION_CACHE: return _PARTITION_CACHE[key]
 #         : 同じ条件で作ったことがあれば，しまってあるものを返して終わる。
 #     分割は毎ラウンド・毎クライアントで必要になるが，作るのに時間がかかるので，1回作ったら使い回している。
 #     条件に trial が入っているので，trial が違えば別の分割になる。
-#   全クライアントが同じ条件（台数・alpha・trial）でこの関数を呼ぶので，全員が同じ分け方を再現でき，
-#   担当が重なったり抜けたりしない。
-def _get_partitions(num_partitions: int, data_split: str, alpha: float, trial: int):
+#   全クライアントが同じ条件（台数・分け方・alpha・trial・1台あたりの枚数）でこの関数を呼ぶので，
+#   全員が同じ分け方を再現でき，担当が重なることはない。
+#   data_split が "dirichlet_equal" なら枚数をそろえる分割，"dirichlet" なら以前の分割を使う。
+#   samples_per_client（1台あたりの枚数）を使うのは "dirichlet_equal" だけ。
+def _get_partitions(
+    num_partitions: int, data_split: str, alpha: float, trial: int, samples_per_client: int
+):
     """設定に応じた partitions を作成/取得する。
 
     data_split:
-        "dirichlet" : Dirichlet(alpha) によるクラスごとの配分（現在はこれだけ）。
-                      "iid" / "non_iid"（Fang方式）は unused_features/task_extra.py に移してある。
+        "dirichlet_equal" : クライアントごとにクラス比率を Dirichlet(alpha * prior) から引く。枚数は全員 samples_per_client 枚
+                            （ラベル分布の偏りのみ。実験で使う）。
+        "dirichlet"       : クラスごとに Dirichlet(alpha) で各クライアントへ配分する。枚数も偏る（以前の方式）。
+                            samples_per_client は使わない。
+        "iid" / "non_iid"（Fang方式）は unused_features/task_extra.py に移してある。
     """
     train_ds = _load_train_dataset()
     labels = train_ds["label"]
 
-    key = (num_partitions, data_split, float(alpha), trial)
+    key = (num_partitions, data_split, float(alpha), trial, samples_per_client)
     if key in _PARTITION_CACHE:
         return _PARTITION_CACHE[key]
 
-    if data_split == "dirichlet":
+    if data_split == "dirichlet_equal":
+        parts = _build_dirichlet_equal_partitions(
+            labels,
+            num_partitions=num_partitions,
+            alpha=float(alpha),
+            trial=trial,
+            samples_per_client=int(samples_per_client),
+        )
+    elif data_split == "dirichlet":
         parts = _build_dirichlet_partitions(labels, num_partitions=num_partitions, alpha=float(alpha), trial=trial)
     else:
         raise ValueError(
-            f"Unknown data_split: {data_split}（現在使えるのは 'dirichlet' だけ。"
+            f"Unknown data_split: {data_split}（使えるのは 'dirichlet_equal' / 'dirichlet'。"
             "'iid' / 'non_iid' は unused_features/task_extra.py に移してあります）"
         )
 
@@ -353,6 +485,7 @@ def load_data(
     data_split: str,
     alpha: float,
     trial: int,
+    samples_per_client: int,
 ):
     """
     各クライアントが使うデータローダを作る。
@@ -361,8 +494,9 @@ def load_data(
         partition_id: 何番目のクライアントか（0..num_partitions-1）
         num_partitions: クライアント総数
         batch_size: ミニバッチサイズ
-        data_split: データ分割方式（現在は "dirichlet" だけ）
+        data_split: データ分割方式（"dirichlet_equal" または "dirichlet"）
         alpha: Dirichlet の濃度パラメータ（小さいほど偏りが強い）
+        samples_per_client: クライアント1台に配る枚数（"dirichlet_equal" のときだけ使う）
         trial: 再現性用シード（データ分割と train/test split に使用）
 
     Returns:
@@ -370,7 +504,13 @@ def load_data(
             このクライアントに割り当てられたデータを 80% train / 20% test に分けた DataLoader
     """
     train_ds = _load_train_dataset()
-    parts = _get_partitions(num_partitions=num_partitions, data_split=data_split, alpha=alpha, trial=trial)
+    parts = _get_partitions(
+        num_partitions=num_partitions,
+        data_split=data_split,
+        alpha=alpha,
+        trial=trial,
+        samples_per_client=samples_per_client,
+    )
 
     if partition_id < 0 or partition_id >= num_partitions:
         raise ValueError(f"partition_id out of range: {partition_id}")

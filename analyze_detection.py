@@ -16,13 +16,25 @@ ROC-AUC などの検知性能指標は実験中に計算済み（robust_strategy
   - detection_auc_by_round.png
       検知器ごとに「AUC 対 ラウンド」を (alpha, 攻撃) 別に描く（trial 平均±標準偏差）
   - detection_pushratio_vs_auc.png
-      横軸 push_ratio・縦軸 AUC の散布図（中心仮説の検証用）
+      符号反転だけを対象にした，横軸 push_ratio・縦軸 AUC の散布図（中心仮説の検証用）
+  - detection_auc_by_round_<検知器>.png / detection_pushratio_vs_auc_<検知器>.png
+      上の2つの図を，検知器ごとに1枚ずつに分けたもの（d1_norm / d2_cosine / d3_kmeans / d4_spectral）
+  - detection_pushratio_corr_table.csv
+      符号反転での push_ratio と AUC の順位相関（全体と alpha ごと）
+  - detection_auc_by_z.png
+      ALIE だけを対象にした，横軸 z・縦軸 AUC の図（最終ラウンド付近の平均，trial 平均±標準偏差）
   - detection_final_auc_table.csv
       最終ラウンド付近の平均 AUC 一覧（alpha × 攻撃 × 検知器）
   - detection_structure_table.csv
       最終ラウンド付近の spread / push_ratio / 構造指標と AUC の対応表
 
 ALIE は z ごとに別の攻撃条件（alie_z0.5 など）として扱う。
+
+【push_ratio の分析から ALIE を除いている理由】
+ALIE の悪性更新は「良性の平均 - z × 良性の標準偏差」で作るので，push_ratio は作り方の時点で
+ほぼ z に等しくなる（sotsuron_plan2.tex の式 push_ratio = z * RMS / Mean >= z）。
+つまり ALIE では push_ratio は測って分かる量ではなく，z で決めた量であり，alpha を変えても動かない。
+そこで，push_ratio と AUC の関係は符号反転だけで調べ，ALIE は z を横軸にして別の図で見る。
 
 使い方:
   python3 analyze_detection.py <logdir>
@@ -39,10 +51,12 @@ ALIE は z ごとに別の攻撃条件（alie_z0.5 など）として扱う。
 #
 #   全体の流れ（一番下の main() が，上から順に実行する）
 #       1. ログのフォルダから detection_metrics.csv を読む        load_metrics
-#       2. 図1：AUC がラウンドとともにどう変わるか               plot_auc_by_round
-#       3. 図2：push_ratio と AUC の関係                         plot_pushratio_vs_auc
-#       4. 表1：最後の数ラウンドの平均 AUC                       final_auc_table
-#       5. 表2：分布構造の診断指標と AUC の対応                  structure_table
+#       2. 図1：AUC がラウンドとともにどう変わるか               plot_auc_by_round（検知器ごとの版は plot_auc_by_round_by_detector）
+#       3. 図2：push_ratio と AUC の関係（符号反転だけ）         plot_pushratio_vs_auc（検知器ごとの版は plot_pushratio_vs_auc_by_detector）
+#       4. 表1：push_ratio と AUC の順位相関（符号反転だけ）     pushratio_corr_table
+#       5. 図3：z と AUC の関係（ALIE だけ）                     plot_auc_by_z
+#       6. 表2：最後の数ラウンドの平均 AUC                       final_auc_table
+#       7. 表3：分布構造の診断指標と AUC の対応                  structure_table
 #
 #   使い方
 #       python analyze_detection.py <detection_metrics.csv が入っているフォルダ>
@@ -51,7 +65,7 @@ ALIE は z ごとに別の攻撃条件（alie_z0.5 など）として扱う。
 #
 #   読み込むデータの形
 #       表（pandas の DataFrame）。1行が「ある実行の，あるラウンドの，ある検知器の成績」。
-#       54条件 × 50ラウンド × 検知器4つ = 10,800 行。
+#       300条件 × 50ラウンド × 検知器4つ = 60,000 行。
 #       列は，実験条件（alpha，attack_type，trial など），round，detector，auc，push_ratio など。
 #
 # 【このファイルで何度も出てくる pandas の書き方】
@@ -81,6 +95,8 @@ import matplotlib.pyplot as plt
 #   DETECTOR_LABELS  : 図に表示するときの，検知器の見やすい名前。
 #   CONDITION_KEYS   : 実験条件を表す列の名前。この7つがすべて同じ行は，同じ条件の実行とみなす。
 #   STRUCTURE_COLS   : 分布構造の診断指標の列の名前。
+#   PAPER_RC         : 論文に載せる図の見た目の設定（字の大きさや目盛りの向きなど）をまとめた辞書。
+#                      with plt.rc_context(PAPER_RC): の中で描いた図にだけ適用される。
 METRICS_CSV_NAME = "detection_metrics.csv"
 DETECTORS = ["d1_norm", "d2_cosine", "d3_kmeans", "d4_spectral"]
 DETECTOR_LABELS = {
@@ -108,6 +124,42 @@ STRUCTURE_COLS = [
     "mal_rank_mean",
     "mal_rank_std",
 ]
+
+
+PAPER_RC = {
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "Times", "STIXGeneral"],
+    "mathtext.fontset": "stix",
+    "font.size": 7.5,
+    "axes.titlesize": 8,
+    "legend.fontsize": 7.5,
+    "axes.linewidth": 0.6,
+    "xtick.direction": "in",
+    "ytick.direction": "in",
+    "xtick.top": True,
+    "ytick.right": True,
+    "xtick.major.width": 0.6,
+    "ytick.major.width": 0.6,
+}
+
+
+# 【alpha_styles の説明】
+#   alpha ごとの線の見た目（色，線の種類，印の形）を決めて，辞書で返す。
+#   どの図でも同じ alpha が同じ見た目になるように，ここ1か所で決めている。
+#   alpha は大きい順（1000 → 5 → 1）に，赤の実線・青の破線・緑の一点鎖線を割り当てる。
+#   色だけでなく線の種類と印でも区別するのは，白黒で印刷しても読めるようにするため。
+#     sorted(alphas, reverse=True) : 大きい順に並べる。
+#     enumerate(...)               : 「何番目か」と「値」を一緒に取り出す。
+#     i % 3                        : i を 3 で割った余り。alpha が4つ以上あっても，見た目を使い回せる。
+def alpha_styles(alphas) -> dict:
+    """alpha -> (色, 線種, マーカー) の辞書を返す（alpha の大きい順に割り当てる）。"""
+    colors = ["tab:red", "tab:blue", "tab:green"]
+    linestyles = ["-", "--", "-."]
+    markers = ["o", "s", "^"]
+    return {
+        a: (colors[i % 3], linestyles[i % 3], markers[i % 3])
+        for i, a in enumerate(sorted(alphas, reverse=True))
+    }
 
 
 # 【attack_label の説明】
@@ -175,37 +227,23 @@ def load_metrics(path: str) -> pd.DataFrame:
 #   検知性能が，学習の進み具合（ラウンド）とともにどう変わるかを見る図。論文に載せる体裁で描いている。
 #     構成 : 小さなグラフを格子状に並べる。行 = 検知器（D1〜D4），列 = 攻撃（ALIE の z ごと，符号反転）。
 #     1つのグラフの中 : 横軸がラウンド，縦軸が AUC。alpha ごとに線を1本ずつ描く（色・線の種類・印を変える）。
-#     線           : 3回の trial の平均。
+#     線           : 10回の trial の平均。
 #     薄い帯       : 平均 ± 標準偏差（trial によるばらつきの幅）。
 #     点線（0.5）  : でたらめに判定したときの AUC。これより上なら見分けられていて，
 #                    下なら「悪性のほうが良性らしい」と判定されている。
 #
 #   前半は，描くものの準備（どの攻撃・どの alpha があるかを調べ，色や線の種類を決める）。
 #     attacked = metrics[metrics["attack_type"] != "none"] : 攻撃なしの行を除く（悪性がいないので AUC が無い）。
-#     paper_rc = {...} : 字の大きさや目盛りの向きなど，図の見た目の設定をまとめた辞書。
+#     PAPER_RC / alpha_styles(...) : 図の見た目の設定と，alpha ごとの線の見た目（ファイルの上のほうで定義）。
+#   同じ描き方を「4つの検知器をまとめた図」と「検知器ごとの図」の両方で使うので，共通の部分を2つの関数に分けている。
+#     _auc_by_round_style(...)   : 攻撃の並び順と表題，alpha ごとの線の見た目を決める。
+#     _draw_auc_round_panel(...) : グラフ1つぶん（ある検知器の，ある攻撃）を描く。
 #   後半の3重の for で，グラフを1つずつ描いている（検知器 -> 攻撃 -> alpha の順）。
 #     cell.groupby("round")["auc"].agg(["mean", "std"])
 #         : ラウンドごとに，trial をまたいだ AUC の平均と標準偏差を求める。
 #     ax.plot(...)         : 線を描く。 ax.fill_between(...) : 2本の線のあいだを薄く塗る（帯）。
 #     .clip(0.0, 1.0)      : 値を 0〜1 の範囲に収める（帯が図の外にはみ出さないように）。
 #     fig.savefig(outpath, dpi=300) : 図をファイルに保存する。dpi は解像度（大きいほど細かい）。
-PAPER_RC = {
-    "font.family": "serif",
-    "font.serif": ["Times New Roman", "Times", "STIXGeneral"],
-    "mathtext.fontset": "stix",
-    "font.size": 7.5,
-    "axes.titlesize": 8,
-    "legend.fontsize": 7.5,
-    "axes.linewidth": 0.6,
-    "xtick.direction": "in",
-    "ytick.direction": "in",
-    "xtick.top": True,
-    "ytick.right": True,
-    "xtick.major.width": 0.6,
-    "ytick.major.width": 0.6,
-}
-
-
 def _auc_by_round_style(attacked: pd.DataFrame):
     """攻撃の並び・表題，alpha→(色,線種,印)の対応を作る（まとめ版・検知器ごと版で共通に使う）。
 
@@ -219,14 +257,8 @@ def _auc_by_round_style(attacked: pd.DataFrame):
     for z in alie_zs:
         title = "ALIE (A2)" if len(alie_zs) == 1 else rf"ALIE $z={z:g}$"
         attack_titles[attack_label("alie", z)] = title
-    alphas = sorted(attacked["alpha"].unique(), reverse=True)  # 100 → 0.5 → 0.1
-    colors = ["tab:red", "tab:blue", "tab:green"]
-    linestyles = ["-", "--", "-."]
-    markers = ["o", "s", "^"]
-    style = {
-        a: (colors[i % 3], linestyles[i % 3], markers[i % 3])
-        for i, a in enumerate(alphas)
-    }
+    alphas = sorted(attacked["alpha"].unique(), reverse=True)  # 1000 → 5 → 1
+    style = alpha_styles(alphas)
     return attacks, attack_titles, alphas, style
 
 
@@ -338,117 +370,271 @@ def plot_auc_by_round_by_detector(metrics: pd.DataFrame, outpath_pattern: str) -
 
 
 # ============================================================
-# 3) 図：push_ratio 対 AUC（中心仮説の検証）
+# 3) 図：push_ratio 対 AUC（中心仮説の検証。符号反転だけ）
 # ============================================================
+# 【spearman の説明】
+#   2つの量の「順位相関係数」（Spearman の順位相関）を求める。
+#   値そのものではなく「大きさの順位」どうしの相関を見るので，関係が直線でなくても，
+#   「片方が大きいほど，もう片方も大きい」という傾向があれば 1 に近くなる。
+#     +1 に近い : 片方が大きいと，もう片方も大きい。
+#     -1 に近い : 片方が大きいと，もう片方は小さい。
+#      0 に近い : 関係が見られない。
+#   点が3つ未満のとき，またはどちらかの値がすべて同じとき（順位が付けられない）は，計算できないので nan を返す。
+#     x.rank()            : 値を順位に置き換える（同じ値どうしは，順位の平均を割り当てる）。
+#     a.corr(b)           : 2つの列の相関係数（Pearson）。順位に対して計算すると，Spearman の順位相関になる。
+#     x.nunique()         : 値の種類の数。1 なら，すべて同じ値。
+def spearman(x: pd.Series, y: pd.Series) -> float:
+    """Spearman の順位相関係数。計算できない場合（点が少ない，値が一定）は nan。"""
+    if len(x) < 3 or x.nunique() < 2 or y.nunique() < 2:
+        return float("nan")
+    return float(x.rank().corr(y.rank()))
+
+
+# 【rho_text の説明】
+#   順位相関係数を，図に書き込む文字列にする（例: ρ=0.45）。計算できなかった場合（nan）は「ρ: n/a」と書く。
+#     np.isfinite(rho) : 値が普通の数値なら True。
+def rho_text(rho: float) -> str:
+    """順位相関係数を図に書く文字列にする。"""
+    return rf"$\rho={rho:.2f}$" if np.isfinite(rho) else r"$\rho$: n/a"
+
+
+# 【sign_flip_rows の説明】
+#   push_ratio の分析に使う行（符号反転で，push_ratio と AUC がどちらも普通の数値である行）だけを取り出す。
+#   ALIE を入れない理由は，ファイルの先頭の【push_ratio の分析から ALIE を除いている理由】を参照。
+#   下の図（plot_pushratio_vs_auc）と表（pushratio_corr_table）が同じ行を使うように，関数にまとめている。
+#     np.isfinite(列) : 値が普通の数値である行に True が付く（空の行や無限大を除く）。
+def sign_flip_rows(metrics: pd.DataFrame) -> pd.DataFrame:
+    """push_ratio の分析対象（符号反転で，push_ratio と AUC が有効な行）を返す。"""
+    keep = (
+        (metrics["attack_type"] == "sign_flip")
+        & np.isfinite(metrics["push_ratio"])
+        & np.isfinite(metrics["auc"])
+    )
+    return metrics[keep].copy()
+
+
 # 【plot_pushratio_vs_auc の説明】
-#   研究の中心仮説を確かめるための散布図。
+#   研究の中心仮説を確かめるための散布図。符号反転だけを対象にする。
 #     横軸 : push_ratio（悪性が良性の集団からどれだけ外に押し出されているか。1 より小さいと集団の内側）。
 #            対数の目盛りにしている（ax.set_xscale("log")）。値の幅が広いので，小さい側も見やすくするため。
 #     縦軸 : AUC。
-#     点   : 1つの点が「1つの実行の，1つのラウンド」。色が alpha，印の形が攻撃の大分類
-#            （sign_flip / alie）を表す。ALIE の z の強さは印の形では区別しない
-#            （push_ratio 自体が強さを表すため，凡例に出すと 15通りに膨らんで見づらくなる）。
+#     点   : 1つの点が「1つの実行の，1つのラウンド」。色と印の形が alpha を表す。
 #     構成 : 検知器ごとに1枚，計4枚のグラフを 2×2 に並べる。
 #     縦の点線 : push_ratio = 1（悪性が良性の広がりのちょうど縁にいる位置）。
-#   「push_ratio が 1 を下回ると AUC が崩れる」という傾向が見えるかどうかを，この図で確かめる。
-#     np.isfinite(metrics["push_ratio"]) : 値が普通の数値である行だけを選ぶ（空の行を除く）。
-#     ax.scatter(x, y, ...)              : 点を打つ。
+#     横の点線 : AUC = 0.5（でたらめに判定したときの値）。
+#     右下の数値 : 順位相関係数（spearman）。all は全部の点，その下は alpha ごと。
+#   「push_ratio が小さいほど AUC が下がる」という傾向が見えるかどうかを，この図で確かめる。
+#
+#   alpha ごとの相関も出している理由
+#     符号反転には強さを決める値が無いので，push_ratio を動かしているのは主に alpha である。
+#     そのため，全部の点で相関があっても，それは「alpha が違うと AUC が違う」ことを言い換えただけかもしれない。
+#     同じ alpha の点だけで見ても push_ratio と AUC が連動していれば，
+#     push_ratio そのものが検知のしやすさと結びついている，と言いやすくなる。
+#
+#   同じ描き方を「4つの検知器をまとめた図」と「検知器ごとの図」の両方で使うので，
+#   グラフ1つぶんを描く部分を _draw_pushratio_panel(...) に分けている。
+#   以前は ALIE の点も一緒に描いていたため，凡例を「符号反転 / ALIE」の大分類にまとめる工夫をしていたが，
+#   対象を符号反転だけにしたので，凡例は alpha の区別だけになった。
 #     for ax, det in zip(axes.flat, DETECTORS): : 4枚のグラフと4つの検知器を，1組ずつ対応させて回す。
-def _pushratio_style(attacked: pd.DataFrame):
-    """alpha→色，attack_type→印の形の対応を作る（4枚まとめ版・1枚ずつ版で共通に使う）。"""
-    alphas = sorted(attacked["alpha"].unique())
-    cmap = plt.get_cmap("viridis")
-    color_of = {a: cmap(i / max(len(alphas) - 1, 1)) for i, a in enumerate(alphas)}
-    markers = ["v", "o"]
-    attack_types = sorted(attacked["attack_type"].unique())
-    marker_of = {atk: markers[i % len(markers)] for i, atk in enumerate(attack_types)}
-    return alphas, color_of, attack_types, marker_of
-
-
-def _draw_pushratio_scatter(ax, sub: pd.DataFrame, alphas, color_of, attack_types, marker_of) -> None:
-    """1つの検知器ぶんの散布図を ax に描く（4枚まとめ版・1枚ずつ版で共通）。"""
-    for a in alphas:
-        for atk in attack_types:
-            cell = sub[(sub["alpha"] == a) & (sub["attack_type"] == atk)]
-            if cell.empty:
-                continue
-            ax.scatter(
-                cell["push_ratio"],
-                cell["auc"],
-                s=18,
-                color=color_of[a],
-                marker=marker_of[atk],
-                alpha=0.6,
-                edgecolors="none",
-                label=f"{atk}, α={a:g}",
-            )
-    ax.axhline(0.5, color="gray", lw=0.8, ls="--")
-    ax.axvline(1.0, color="crimson", lw=0.8, ls=":")
-    ax.set_ylim(0.0, 1.02)
+#     ax.scatter(x, y, ...)   : 点を打つ。 rasterized=True は，点が多くてもファイルが重くならないようにする指定。
+#     ax.text(..., transform=ax.transAxes) : グラフの中に文字を書く。位置を「グラフの枠の中での割合」で指定している
+#                                            （0.97, 0.05 は右下の隅の近く）。
+def _draw_pushratio_panel(ax, sub: pd.DataFrame, alphas, style, text_size: float = 6.5) -> None:
+    """1つの検知器ぶんの散布図と順位相関係数を ax に描く（まとめ版・検知器ごと版で共通）。"""
+    lines = [f"all: {rho_text(spearman(sub['push_ratio'], sub['auc']))}"]
+    for alpha in alphas:
+        cell = sub[sub["alpha"] == alpha]
+        if cell.empty:
+            continue
+        color, _, marker = style[alpha]
+        ax.scatter(
+            cell["push_ratio"], cell["auc"], s=7, color=color, marker=marker,
+            alpha=0.45, linewidths=0, rasterized=True, label=rf"$\alpha={alpha:g}$",
+        )
+        lines.append(rf"$\alpha={alpha:g}$: " + rho_text(spearman(cell["push_ratio"], cell["auc"])))
+    ax.axhline(0.5, color="gray", lw=0.5, ls=":", zorder=0)
+    ax.axvline(1.0, color="gray", lw=0.5, ls=":", zorder=0)
+    ax.text(
+        0.97, 0.05, "\n".join(lines), transform=ax.transAxes, ha="right", va="bottom",
+        fontsize=text_size, bbox=dict(facecolor="white", edgecolor="black", linewidth=0.4, pad=2.0),
+    )
     ax.set_xscale("log")
-    ax.grid(True, alpha=0.3)
+    ax.set_ylim(-0.02, 1.02)
+    ax.set_yticks([0.0, 0.5, 1.0])
 
 
 def plot_pushratio_vs_auc(metrics: pd.DataFrame, outpath: str) -> None:
-    attacked = metrics[(metrics["attack_type"] != "none") & np.isfinite(metrics["push_ratio"])].copy()
-    if attacked.empty:
-        print("[plot_pushratio_vs_auc] push_ratio が有効な攻撃条件が無いためスキップ")
+    rows = sign_flip_rows(metrics)
+    if rows.empty:
+        print("[plot_pushratio_vs_auc] 符号反転で push_ratio が有効な行が無いためスキップ")
         return
 
-    # ALIE は z の強さ(0.385/0.5/0.75/1.0)ごとに別の攻撃として色・形を割り当てると
-    # 凡例が 攻撃5種 × alpha3種 = 15通りに膨らんで見づらくなる。z の強さはそのまま
-    # push_ratio（横軸）に表れているため，凡例では sign_flip / alie の大分類だけを区別する。
-    alphas, color_of, attack_types, marker_of = _pushratio_style(attacked)
+    alphas = sorted(rows["alpha"].unique(), reverse=True)  # 1000 → 5 → 1
+    style = alpha_styles(alphas)
 
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True, sharey=True)
-    for ax, det in zip(axes.flat, DETECTORS):
-        sub = attacked[attacked["detector"] == det]
-        _draw_pushratio_scatter(ax, sub, alphas, color_of, attack_types, marker_of)
-        ax.set_title(DETECTOR_LABELS[det])
-    for ax in axes[-1]:
-        ax.set_xlabel("push_ratio = push / benign_spread  (log)")
-    for ax in axes[:, 0]:
-        ax.set_ylabel("malicious-detection ROC-AUC")
-    axes.flat[0].legend(fontsize=8, loc="lower left")
-    fig.suptitle("Detection AUC vs push_ratio  (each point = one condition × round)")
-    fig.tight_layout()
-    fig.savefig(outpath, dpi=150)
+    with plt.rc_context(PAPER_RC):
+        fig, axes = plt.subplots(2, 2, figsize=(5.2, 4.4), sharex=True, sharey=True)
+        for ax, det in zip(axes.flat, DETECTORS):
+            _draw_pushratio_panel(ax, rows[rows["detector"] == det], alphas, style)
+            ax.set_title(DETECTOR_LABELS[det])
+        for ax in axes[-1]:
+            ax.set_xlabel("push_ratio (sign flip)")
+        for ax in axes[:, 0]:
+            ax.set_ylabel("AUC")
+        handles, labels = axes.flat[0].get_legend_handles_labels()
+        legend = fig.legend(
+            handles, labels, loc="upper center", ncol=len(labels),
+            frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+            bbox_to_anchor=(0.5, 1.0), markerscale=2.0,
+        )
+        for handle in legend.legend_handles:
+            handle.set_alpha(1.0)  # 凡例の印は，薄くせずはっきり描く
+        fig.tight_layout(rect=(0, 0, 1, 0.94), h_pad=0.6, w_pad=0.6)
+        fig.savefig(outpath, dpi=300)
     plt.close(fig)
     print(f"[saved] {outpath}")
 
 
 # 【plot_pushratio_vs_auc_by_detector の説明】
-#   plot_pushratio_vs_auc と中身（点の打ち方・色・形）は同じだが，4つの検知器を
-#   1枚の2x2画像にまとめず，検知器ごとに別ファイルへ1枚ずつ保存する。
-#   スライドや個別の説明で1検知器だけ大きく見せたいときに使う。
+#   plot_pushratio_vs_auc と中身（点の打ち方・色・右下の順位相関係数）は同じだが，4つの検知器を
+#   1枚の画像にまとめず，検知器ごとに別ファイルへ保存する。対象は，同じく符号反転だけ。
 #     outpath_pattern : ファイル名のひな形。中の "{detector}" が d1_norm 等に置き換わる。
-#                       例 "detection_pushratio_vs_auc_{detector}.png"
 def plot_pushratio_vs_auc_by_detector(metrics: pd.DataFrame, outpath_pattern: str) -> None:
-    attacked = metrics[(metrics["attack_type"] != "none") & np.isfinite(metrics["push_ratio"])].copy()
-    if attacked.empty:
-        print("[plot_pushratio_vs_auc_by_detector] push_ratio が有効な攻撃条件が無いためスキップ")
+    rows = sign_flip_rows(metrics)
+    if rows.empty:
+        print("[plot_pushratio_vs_auc_by_detector] 符号反転で push_ratio が有効な行が無いためスキップ")
         return
 
-    alphas, color_of, attack_types, marker_of = _pushratio_style(attacked)
+    alphas = sorted(rows["alpha"].unique(), reverse=True)
+    style = alpha_styles(alphas)
 
-    for det in DETECTORS:
-        sub = attacked[attacked["detector"] == det]
-        fig, ax = plt.subplots(figsize=(6, 5))
-        _draw_pushratio_scatter(ax, sub, alphas, color_of, attack_types, marker_of)
-        ax.set_title(DETECTOR_LABELS[det])
-        ax.set_xlabel("push_ratio = push / benign_spread  (log)")
-        ax.set_ylabel("malicious-detection ROC-AUC")
-        ax.legend(fontsize=8, loc="lower left")
-        fig.suptitle("Detection AUC vs push_ratio  (each point = one condition × round)")
-        fig.tight_layout()
-        outpath = outpath_pattern.format(detector=det)
-        fig.savefig(outpath, dpi=150)
-        plt.close(fig)
-        print(f"[saved] {outpath}")
+    with plt.rc_context(PAPER_RC):
+        for det in DETECTORS:
+            fig, ax = plt.subplots(figsize=(3.2, 2.7))
+            _draw_pushratio_panel(ax, rows[rows["detector"] == det], alphas, style)
+            ax.set_title(DETECTOR_LABELS[det])
+            ax.set_xlabel("push_ratio (sign flip)")
+            ax.set_ylabel("AUC")
+            # 凡例は，点に重ならないよう，グラフの枠の外（上）に置く。
+            handles, labels = ax.get_legend_handles_labels()
+            legend = fig.legend(
+                handles, labels, loc="upper center", ncol=len(labels),
+                frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+                bbox_to_anchor=(0.5, 1.0), markerscale=2.0,
+            )
+            for handle in legend.legend_handles:
+                handle.set_alpha(1.0)
+            fig.tight_layout(rect=(0, 0, 1, 0.91))
+            outpath = outpath_pattern.format(detector=det)
+            fig.savefig(outpath, dpi=300)
+            plt.close(fig)
+            print(f"[saved] {outpath}")
+
+
+# 【pushratio_corr_table の説明】
+#   上の図の右下に書いた順位相関係数を，表にして保存する。符号反転だけを対象にする。
+#     行 : alpha（1行目の all は，全部の alpha をまとめたもの）。
+#     列 : n_points（相関の計算に使った点の数。1点 = 1つの実行の，1つのラウンド）と，検知器ごとの順位相関係数。
+#   all の行の相関が高くても，alpha ごとの行の相関が低ければ，
+#   push_ratio と AUC の関係は alpha の違いで説明できてしまう，ということになる（上の図の説明を参照）。
+#   nan は，計算できなかったことを表す（AUC がすべて同じ値だった場合など）。
+#     groups = [("all", rows)] + [...] : 「名前」と「その名前で使う行」の組を並べたリスト。先頭が全体，続いて alpha ごと。
+#     records.append({...})            : 表の1行ぶんを，辞書の形でリストに足していく。
+#     pd.DataFrame(records)            : 辞書のリストから，表を作る。
+def pushratio_corr_table(metrics: pd.DataFrame, outpath: str) -> None:
+    """符号反転での push_ratio と AUC の Spearman 順位相関を，全体と alpha ごとに求めて保存する。"""
+    rows = sign_flip_rows(metrics)
+    if rows.empty:
+        print("[pushratio_corr_table] 符号反転で push_ratio が有効な行が無いためスキップ")
+        return
+    alphas = sorted(rows["alpha"].unique(), reverse=True)
+    groups = [("all", rows)] + [(f"{a:g}", rows[rows["alpha"] == a]) for a in alphas]
+    records = []
+    for name, group in groups:
+        record = {"alpha": name, "n_points": int((group["detector"] == DETECTORS[0]).sum())}
+        for det in DETECTORS:
+            cell = group[group["detector"] == det]
+            record[det] = spearman(cell["push_ratio"], cell["auc"])
+        records.append(record)
+    table = pd.DataFrame(records).set_index("alpha").round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+    print("\n=== 符号反転：push_ratio と AUC の順位相関（Spearman） ===")
+    print(table.to_string())
 
 
 # ============================================================
-# 4) 最終ラウンド付近の平均 AUC 一覧
+# 4) 図：z 対 AUC（ALIE だけ）
+# ============================================================
+# 【plot_auc_by_z の説明】
+#   ALIE の強さ z を変えたときに，検知性能がどう変わるかを見る図。ALIE だけを対象にする。
+#   ALIE では push_ratio がほぼ z に等しいので，push_ratio の代わりに z を横軸にしている。
+#     構成 : 検知器ごとに1枚，計4枚のグラフを横に並べる。
+#     横軸 : z。 縦軸 : AUC。alpha ごとに線を1本ずつ描く（見た目は「AUC 対 ラウンド」の図と同じ）。
+#     点   : 10回の trial の平均。
+#     縦の棒 : 平均 ± 標準偏差（trial によるばらつきの幅）。
+#     点線（0.5） : でたらめに判定したときの AUC。0 に近い場合は，「見分けられない」のではなく，
+#                   「悪性のほうが良性よりも普通に見えている」（判定が逆向きにそろっている）ことを表す。
+#   同じ z で alpha によって線が離れていれば，それは push_ratio では説明できない違いである
+#   （ALIE では，alpha を変えても push_ratio は変わらないため）。
+#
+#   平均の取り方（2段階）
+#     1. まず，実行（trial）ごとに，最後の last_k ラウンドの AUC を平均して，1つの値にする。
+#     2. 次に，その値について，trial をまたいだ平均と標準偏差を求める。
+#   同じ実行の中のラウンドどうしは似た値になるので，ラウンドと trial をまとめて標準偏差を取ると，
+#   ばらつきを小さく見積もってしまう。そのため，先に実行ごとの値にまとめている。
+#     tail.groupby([...])["auc"].mean() : （検知器，alpha，z，trial）の組ごとに，最後の数ラウンドの平均を取る（手順1）。
+#     per_trial.groupby([...])["auc"].agg(["mean", "std"]) : trial をまたいだ平均と標準偏差を求める（手順2）。
+#     ax.errorbar(x, y, yerr=...) : 線と点に加えて，上下に誤差の棒を描く。capsize は棒の先の横線の長さ。
+def plot_auc_by_z(metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    alie = metrics[(metrics["attack_type"] == "alie") & metrics["alie_z"].notna()].copy()
+    if alie.empty:
+        print("[plot_auc_by_z] ALIE の条件が無いためスキップ")
+        return
+
+    max_round = alie["round"].max()
+    tail = alie[alie["round"] > max_round - last_k]
+    per_trial = tail.groupby(["detector", "alpha", "alie_z", "trial"])["auc"].mean().reset_index()
+    summary = per_trial.groupby(["detector", "alpha", "alie_z"])["auc"].agg(["mean", "std"]).reset_index()
+
+    alphas = sorted(alie["alpha"].unique(), reverse=True)  # 1000 → 5 → 1
+    style = alpha_styles(alphas)
+
+    with plt.rc_context(PAPER_RC):
+        fig, axes = plt.subplots(
+            1, len(DETECTORS), figsize=(1.75 * len(DETECTORS), 2.0), sharex=True, sharey=True, squeeze=False,
+        )
+        for ax, det in zip(axes.flat, DETECTORS):
+            for alpha in alphas:
+                cell = summary[(summary["detector"] == det) & (summary["alpha"] == alpha)].sort_values("alie_z")
+                if cell.empty:
+                    continue
+                color, ls, marker = style[alpha]
+                ax.errorbar(
+                    cell["alie_z"], cell["mean"], yerr=cell["std"].fillna(0.0), color=color, ls=ls, lw=1.0,
+                    marker=marker, ms=3.5, mfc="white", mew=0.8, elinewidth=0.6, capsize=1.5,
+                    label=rf"$\alpha={alpha:g}$",
+                )
+            ax.axhline(0.5, color="gray", lw=0.5, ls=":", zorder=0)
+            ax.set_title(DETECTOR_LABELS[det])
+            ax.set_ylim(-0.02, 1.02)
+            ax.set_yticks([0.0, 0.5, 1.0])
+            ax.set_xlabel(r"ALIE $z$")
+        axes[0, 0].set_ylabel("AUC")
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        fig.legend(
+            handles, labels, loc="upper center", ncol=len(labels),
+            frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+            bbox_to_anchor=(0.5, 1.0), handlelength=2.6,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.90), w_pad=0.6)
+        fig.savefig(outpath, dpi=300)
+    plt.close(fig)
+    print(f"[saved] {outpath}")
+
+
+# ============================================================
+# 5) 最終ラウンド付近の平均 AUC 一覧
 # ============================================================
 # 【final_auc_table の説明】
 #   結果を1つの数値にまとめた表。行が（alpha，攻撃），列が検知器で，マスの中が平均 AUC。
@@ -483,7 +669,7 @@ def final_auc_table(metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> Non
 
 
 # ============================================================
-# 5) 分布構造の診断指標と AUC の対応表
+# 6) 分布構造の診断指標と AUC の対応表
 # ============================================================
 # 【structure_table の説明】
 #   考察のための表。（alpha，攻撃）ごとに，説明する側の指標（spread，push_ratio，分布構造の診断指標）と，
@@ -574,6 +760,8 @@ def main() -> None:
     plot_pushratio_vs_auc_by_detector(
         metrics, os.path.join(outdir, "detection_pushratio_vs_auc_{detector}.png")
     )
+    pushratio_corr_table(metrics, os.path.join(outdir, "detection_pushratio_corr_table.csv"))
+    plot_auc_by_z(metrics, os.path.join(outdir, "detection_auc_by_z.png"), last_k=args.last_k)
     final_auc_table(metrics, os.path.join(outdir, "detection_final_auc_table.csv"), last_k=args.last_k)
     structure_table(metrics, os.path.join(outdir, "detection_structure_table.csv"), last_k=args.last_k)
 

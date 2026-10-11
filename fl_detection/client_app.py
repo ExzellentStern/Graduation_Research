@@ -123,16 +123,19 @@ def train(msg: Message, context: Context):
     #   context.run_config  : pyproject.toml の [tool.flwr.app.config] の値（サーバと同じものが見える）。
     #   load_data(...)      : task.py の関数。全体の学習データを num_partitions 個に分け，
     #                         そのうち自分の番号（partition_id）のぶんだけを読み込む。
-    #                         分け方（data_split, alpha）と seed（trial）が全員同じなので，
+    #                         分け方（data_split, alpha, samples_per_client）と seed（trial）が全員同じなので，
     #                         各クライアントは互いに重ならない自分の担当ぶんを受け取る。
+    #   samples_per_client  : クライアント1台に配る枚数（pyproject.toml の samples-per-client）。
+    #                         全員が同じ枚数を持つので，サーバへ返す "num-examples"（FedAvg の重み）も全員同じになる。
     #   trainloader, _ = ... : load_data は（学習用, 評価用）の2つを返す。
     #                          _ は「受け取るが使わない」ことを示す慣習的な名前（ここでは評価用を捨てている）。
     #   partition_id in malicious_ids : 自分の番号が悪性の一覧に入っていれば True，なければ False。
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
     batch_size = context.run_config["batch-size"]
+    samples_per_client = int(context.run_config["samples-per-client"])
 
-    # データ分割の設定（data_split / alpha / trial）を反映して読み込む（重要）
+    # データ分割の設定（data_split / alpha / trial / samples_per_client）を反映して読み込む（重要）
     trainloader, _ = load_data(
         partition_id,
         num_partitions,
@@ -140,6 +143,7 @@ def train(msg: Message, context: Context):
         data_split=data_split,
         alpha=alpha,
         trial=trial,
+        samples_per_client=samples_per_client,
     )
 
     # 悪性クライアント判定
@@ -290,6 +294,7 @@ def evaluate(msg: Message, context: Context):
         data_split=data_split,
         alpha=alpha,
         trial=trial,
+        samples_per_client=int(context.run_config["samples-per-client"]),
     )
 
     # 悪性クライアント判定（表示用）

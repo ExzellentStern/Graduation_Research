@@ -34,13 +34,13 @@ sotsuron_plan2.tex 5.2：検知評価スイープを自動で回すオーケス�
 
 # 【このファイルの読み方】
 #   実験を「まとめて回す」ための補助スクリプト。研究の中身（攻撃・検知・学習）は何も入っていない。
-#   やっていることは，人が手で次のコマンドを54回打つ代わりをしているだけである。
+#   やっていることは，人が手で次のコマンドを300回打つ代わりをしているだけである。
 #       flwr run . local --run-config "条件ごとに違う設定" --stream
 #   連合学習そのものは，このコマンドで起動される fl_detection/ の中のコードが行う。
 #
 #   全体の流れ（一番下の main() が，上から順に実行する）
 #       1. pyproject.toml から，共通の設定と，変えながら回す軸を読む            load_settings
-#       2. 軸の全組み合わせを並べて，条件の一覧（54件）を作る                    detection_conditions
+#       2. 軸の全組み合わせを並べて，条件の一覧（300件）を作る                    detection_conditions
 #       3. Flower のコマンドが使えるか確かめ，クライアントの台数を設定する        check_flwr_available / ensure_simulation_config
 #       4. 条件を1つずつ順に実行する                                              run_one_detection
 #            - すでに終わっている条件は飛ばす                                     is_done
@@ -218,7 +218,7 @@ def ensure_simulation_config(federation: str, num_clients: int, client_num_gpus:
 #   detection_conditions(base, sweep)
 #       軸の全組み合わせを，1件ずつ辞書にして取り出せるようにする。for が5重になっているのは，
 #       集約手法 × alpha × 攻撃 ×（ALIE のときだけ z）× trial のすべての組み合わせを順に作るため。
-#           1 × 3 ×（攻撃なし 1 + 符号反転 1 + ALIE の z 4 通り）× 3 = 54 件
+#           1 × 3 ×（攻撃なし 1 + 符号反転 1 + ALIE の z 8 通り）× 10 = 300 件
 #       ratio = 0.0 if attack == "none" else ... : 攻撃なしのときは悪性割合を 0 にする。
 #       for z in (sweep["alie-zs"] if attack == "alie" else [None]):
 #           ALIE のときは z の一覧を順に試し，それ以外の攻撃では「z なし」（None）を1回だけ回す。
@@ -228,7 +228,7 @@ def ensure_simulation_config(federation: str, num_clients: int, client_num_gpus:
 #
 #   detection_condition_name(p, base)
 #       条件に名前を付ける。これがそのまま，出力フォルダの名前になる。
-#           例: fedavg_dirichlet_a0.1_alie_z0.5_ratio0.2_trial2
+#           例: fedavg_dirichlet_equal_a0.1_alie_z0.5_ratio0.2_trial2
 FAILURES_CSV_NAME = "failures.csv"
 PYPROJECT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pyproject.toml")
 
@@ -408,7 +408,7 @@ def record_failure(name: str, cmd: list, output_tail: str, experiments_dir: str)
 #   条件を回す部分
 #     conditions = list(detection_conditions(base, sweep)) : 条件を全部取り出して，リストにする。
 #     for i, p in enumerate(conditions, start=1): : 条件を1件ずつ取り出す。i は 1 から始まる通し番号。
-#     print(f"[{i}/{total}]", end=" ")        : 「[3/54]」のように進み具合を表示する。end=" " は，改行せずに続ける指定。
+#     print(f"[{i}/{total}]", end=" ")        : 「[3/300]」のように進み具合を表示する。end=" " は，改行せずに続ける指定。
 #     counts[run_one_detection(...)] += 1     : 返ってきた結果（"done" など）の件数を，1つ増やす。
 #
 #   if args.dry_run: ... return               : --dry-run のときは，条件とコマンドを表示するだけで終わる。

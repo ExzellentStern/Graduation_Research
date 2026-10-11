@@ -40,7 +40,7 @@ clientapp = "fl_detection.client_app:app"
 [tool.flwr.app.config]
 num-server-rounds = 50
 fraction-evaluate = 0.2
-local-epochs = 1
+local-epochs = 2
 learning-rate = 0.01
 batch-size = 32          # Fang et al. (2020) のデフォルト（Fashion-MNIST以外は32）に合わせた
 # 計算に使う装置。"auto" / "cuda"（NVIDIA の GPU）/ "mps"（Apple Silicon の Mac の GPU）/ "cpu"。
@@ -59,8 +59,18 @@ aggregation-method = "fedavg"   # 集約手法。現在使えるのは "fedavg" 
 trial = 1                  # （スイープで上書き）
 
 # 追加：データ分割
-data-split = "dirichlet"   # データ分割方式。現在使えるのは "dirichlet" だけ
-dirichlet-alpha = 0.5      # Dirichlet の濃度（大きいとほぼIID，小さいほど偏る。0.1で激偏り）（スイープで上書き）
+# データ分割方式（Non-IID の作り方）。
+#   "dirichlet_equal" : クライアントごとにクラスの比率を Dirichlet 分布から引く。枚数は全員同じ（samples-per-client 枚）。
+#                       偏るのはラベルの比率だけ（ラベル分布の偏り）。実験ではこちらを使う。
+#   "dirichlet"       : クラスごとに各クライアントへの配分を Dirichlet 分布から引く。枚数もクライアントによって大きく変わる
+#                       （ラベル分布の偏り + データ数の偏り）。experiments_detection_v2 までの結果はこの方式。
+data-split = "dirichlet_equal"
+# クライアント1台に配る枚数（"dirichlet_equal" のときだけ使う）。このうち8割を学習に，2割をクライアント側の評価に使う。
+#   num-clients × この値 が，学習用データの枚数（MNIST は 60,000）以下になるようにする。
+#   1500（20台で 30,000 枚）にしてあるのは，全部配りきる 3000 だと数字ごとの在庫が足りなくなり，
+#   決めた比率どおりに配れなくなるため（詳しくは fl_detection/task.py の _build_dirichlet_equal_partitions の説明）。
+samples-per-client = 1500
+dirichlet-alpha = 5.0      # Dirichlet の濃度。Hsu et al. (2019) の Dir(alpha * p) の alpha（大きいとほぼIID，小さいほど偏る。1で激偏り）（スイープで上書き）
 
 # 追加：攻撃設定
 attack-type = "none"        # "none" / "sign_flip" / "alie"（スイープで上書き）
@@ -88,14 +98,16 @@ output-dir = "."          # （スイープで上書き）run_experiments.py が
 # Flower 自身はこの欄を見ない。
 #
 # 条件数 = 集約手法 × alpha × (攻撃なし 1 + 符号反転 1 + ALIE の z の数) × trial
-#        = 1 × 3 × (1 + 1 + 4) × 3 = 54
+#        = 1 × 3 × (1 + 1 + 8) × 10 = 300
 # ============================================================
 [tool.sweep]
 # 出力先の親フォルダ（条件ごとのフォルダと _logs/ がこの下にできる）。
 # 【決まり】コードを変えてログの列が変わったら，この名前を変える（例: _v3）。
 # ログは同じファイルに追記されていくので，列を変えた後に同じフォルダへ書き足すと，
 # 見出しと合わない行が混ざってしまう。
-output-root = "experiments_detection_v2"
+# v3 にしたのは，データ分割を "dirichlet_equal"（枚数は全員同じ）に替えたため。
+# 列は変わっていないが，分割方式の違う v2 の結果と同じファイルに混ざらないように分けた。
+output-root = "experiments_detection_v3"
 # 各クライアントに割り当てる NVIDIA GPU の割合（0.0〜1.0）。本番は Windows の NVIDIA GPU で回すので 0.2 にしてある。
 #   0.2  : 1枚の GPU を，同時に最大5台のクライアントで分け合う（20台は5台ずつ順に学習する）。
 #          値を小さくすると同時に動く台数が増えて速くなるが，GPU のメモリを多く使う。
@@ -104,12 +116,13 @@ output-root = "experiments_detection_v2"
 #          （0 より大きいままだと，クライアントが起動できない。スイープは開始前にエラーで止まる）。
 client-num-gpus = 0.0
 aggregation-methods = ["fedavg"]            # 集約手法は検知に非依存なため fedavg 固定
-dirichlet-alphas = [100.0, 0.5, 0.1]        # 100≒IID / 0.5 中程度 / 0.1 強い不均一
+dirichlet-alphas = [1000.0, 5.0, 1.0]       # 1000≒IID / 5 中程度 / 1 強い不均一（Hsu et al. (2019) の alpha）
 attack-types = ["none", "sign_flip", "alie"]  # none は benign_spread の基準値を取るための条件
 # ALIE の z。0.385 は原論文 Algorithm 3 の z_max を n=20, f=4 に当てはめた参照値
 # （attack.alie_z_max(20, 4) = Phi^{-1}(0.65)）。Non-IID での理論値ではない。
-alie-zs = [0.385, 0.5, 0.75, 1.0]
-trials = [1, 2, 3]                          # データ分割と悪性クライアント選出の両方の seed になる
+# 1.25 以上は push_ratio > 1 の側（重心からの距離が正常更新を超える領域）を調べるための水準。
+alie-zs = [0.385, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0]
+trials = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]                          # データ分割と悪性クライアント選出の両方の seed になる
 
 
 #######################################################################
