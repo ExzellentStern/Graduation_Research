@@ -10,6 +10,8 @@ ROC-AUC などの検知性能指標は実験中に計算済み（robust_strategy
 使って detection_metrics.csv に記録する）なので，ここでは読み込んで集計・作図するだけ。
 
 入力 : <logdir>/detection_metrics.csv
+       <logdir>/results.csv（あれば。ラウンドごとのテスト精度。無ければ精度の図と表は作らない）
+       <logdir>/detection_updates.csv（あれば。1クライアント1行のスコア。無ければ符号反転の分離の図と表は作らない）
        1行 =（実行, ラウンド, 検知器）。ROC-AUC / AP / recall@f / precision@f と，
        spread / push_ratio / 分布構造の診断指標を同じ行に持つ。
 出力 : <outdir>/（既定は <logdir>/analysis/）
@@ -24,9 +26,36 @@ ROC-AUC などの検知性能指標は実験中に計算済み（robust_strategy
   - detection_auc_by_z.png
       ALIE だけを対象にした，横軸 z・縦軸 AUC の図（最終ラウンド付近の平均，trial 平均±標準偏差）
   - detection_final_auc_table.csv
-      最終ラウンド付近の平均 AUC 一覧（alpha × 攻撃 × 検知器）
+      最終ラウンド付近の AUC 一覧（alpha × 攻撃 × 検知器。trial 間の平均と標準偏差）
   - detection_structure_table.csv
       最終ラウンド付近の spread / push_ratio / 構造指標と AUC の対応表
+  - detection_segment_auc_table.csv
+      ラウンドの区間（第1-5, 6-15, 16-30, 31-50ラウンド）ごとの AUC（trial 平均。検知器 × 攻撃 × alpha）
+  - detection_segment_pushratio_table.csv
+      同じ区間ごとの push_ratio（trial 平均。攻撃 × alpha）
+  - signflip_d2_score_by_round.png
+      符号反転での D2 スコア（1 - cos）のラウンド推移を，正常更新と悪性更新に分けて描く（trial 平均±標準偏差）
+  - signflip_separation_table.csv
+      符号反転で悪性と正常が分かれる様子の表（D2 スコアの平均，ラウンド内で完全に分かれた割合，
+      悪性方向と全更新の第1主成分の |cos|。第1-5ラウンドと最終ラウンド付近）
+  - signflip_norm_ratio_by_round.png
+      符号反転での悪性/正常のノルムの比のラウンド推移と，攻撃なしで同じ4台を悪性とみなした場合の比（対照）
+  - signflip_norm_dispersion_table.csv
+      符号反転の最終ラウンド付近での，ノルムの比，正常更新のノルムの変動係数（攻撃なしとの比較），
+      D1・D4 が順位を誤った組の割合とその内訳（中央値より小さい／大きい正常更新によるもの），
+      正常更新どうしでの D4 のスコアとノルムの順位相関
+  - signflip_norm_cv_by_segment_table.csv
+      正常更新のノルムの変動係数を，ラウンドの区間ごとに，符号反転と攻撃なしで比べた表
+  - alie_d2_score_by_z.png / alie_d2_score_by_z_table.csv
+      ALIE の z ごとの，最終ラウンド付近の D2 スコア（正常と悪性。trial 平均±標準偏差）。表の最後の行は攻撃なしの正常
+  - alie_norm_ratio_by_z_table.csv
+      ALIE の z ごとの，最終ラウンド付近の悪性/正常のノルムの比（D1 の U 字型の説明用）
+  - alie_shell_by_z.png / alie_shell_table.csv
+      卒論 9.3（高次元の殻）。z ごとの距離の比（push_ratio）・ノルムの比と，正常の殻の厚み（ノルムと距離の変動係数）
+  - accuracy_by_round.png
+      グローバルモデルのテスト精度のラウンド推移（alpha ごと。trial 平均±標準偏差）
+  - accuracy_table.csv
+      最終ラウンドの精度と，最後の数ラウンドでの精度の上がり幅（学習が収束しているかの確認）
 
 ALIE は z ごとに別の攻撃条件（alie_z0.5 など）として扱う。
 
@@ -57,6 +86,16 @@ ALIE の悪性更新は「良性の平均 - z × 良性の標準偏差」で作�
 #       5. 図3：z と AUC の関係（ALIE だけ）                     plot_auc_by_z
 #       6. 表2：最後の数ラウンドの平均 AUC                       final_auc_table
 #       7. 表3：分布構造の診断指標と AUC の対応                  structure_table
+#       8. 図4：テスト精度のラウンド推移                         plot_accuracy_by_round（results.csv があるときだけ）
+#       9. 表4：最終精度と，最後の数ラウンドでの上がり幅         accuracy_table（同上）
+#      10. 図5：符号反転での D2 スコアのラウンド推移（正常と悪性） plot_signflip_d2_score_by_round（detection_updates.csv があるときだけ）
+#      11. 表5：符号反転で悪性と正常が分かれる様子               signflip_separation_table（同上）
+#      12. 図6：符号反転でのノルムの比のラウンド推移（攻撃なしと比較） plot_signflip_norm_ratio_by_round（同上）
+#      13. 表6：符号反転でのノルムのばらつきと D1・D4 の誤り          signflip_norm_dispersion_table（同上）
+#      14. 表7：正常更新のノルムの変動係数（ラウンドの区間ごと）  signflip_norm_cv_by_segment_table（同上）
+#      15. 図7・表8：ALIE の z ごとの D2 スコア（正常と悪性）     plot_alie_d2_score_by_z / alie_d2_score_by_z_table（同上）
+#      16. 表9：ALIE の z ごとのノルムの比                        alie_norm_ratio_by_z_table（同上）
+#      17. 図8・表10：ALIE の殻（距離の比・ノルムの比・殻の厚み）  plot_alie_shell_by_z / alie_shell_table（同上）
 #
 #   使い方
 #       python analyze_detection.py <detection_metrics.csv が入っているフォルダ>
@@ -91,6 +130,8 @@ import matplotlib.pyplot as plt
 
 # 【定数の説明】（ファイル全体で使う，変わらない値。名前を大文字で書く慣習）
 #   METRICS_CSV_NAME : 読み込むファイルの名前。
+#   RESULTS_CSV_NAME : ラウンドごとのテスト精度のファイルの名前（無くても動く）。
+#   UPDATES_CSV_NAME : 1クライアント1行の検知スコアのファイルの名前（無くても動く）。
 #   DETECTORS        : 検知器の名前（ログの detector 列に入っている値）。図や表の並び順にもなる。
 #   DETECTOR_LABELS  : 図に表示するときの，検知器の見やすい名前。
 #   CONDITION_KEYS   : 実験条件を表す列の名前。この7つがすべて同じ行は，同じ条件の実行とみなす。
@@ -98,6 +139,8 @@ import matplotlib.pyplot as plt
 #   PAPER_RC         : 論文に載せる図の見た目の設定（字の大きさや目盛りの向きなど）をまとめた辞書。
 #                      with plt.rc_context(PAPER_RC): の中で描いた図にだけ適用される。
 METRICS_CSV_NAME = "detection_metrics.csv"
+RESULTS_CSV_NAME = "results.csv"
+UPDATES_CSV_NAME = "detection_updates.csv"
 DETECTORS = ["d1_norm", "d2_cosine", "d3_kmeans", "d4_spectral"]
 DETECTOR_LABELS = {
     "d1_norm": "D1 norm",
@@ -177,22 +220,34 @@ def attack_label(attack_type: str, alie_z) -> str:
 # ============================================================
 # 1) 実験が出力した指標ログを読む
 # ============================================================
+# 【keep_last_runs の説明】
+#   ログは追記されていくので，ある条件が途中で失敗して回し直された場合，
+#   失敗した実行の行と，回し直した実行の行の両方がファイルに残っている。
+#   そのまま平均を取ると，同じ条件が二重に数えられる。そこで，条件ごとに
+#   「最後に書かれた実行」だけを残し，それより前の実行の行は捨てる。
+#   detection_metrics.csv と results.csv の両方で同じ処理をするので，関数にまとめている。
+#     df.groupby(CONDITION_KEYS, dropna=False)["run_id"].transform("last")
+#         : 条件が同じ行をグループにし，各行に「そのグループで最後に出てくる run_id」を対応させる。
+#           dropna=False は，alie_z が空の条件（ALIE 以外）もグループとして扱う指定。
+#     stale = df["run_id"] != last_run : 最後の実行ではない行に True が付く。
+#     df[~stale]                       : ~ は True と False を入れ替える。つまり，最後の実行の行だけを残す。
+#     who : 画面に出すメッセージの頭に付ける名前（どの読み込みで除いたかが分かるように）。
+def keep_last_runs(df: pd.DataFrame, who: str) -> pd.DataFrame:
+    """条件ごとに最後に書かれた実行の行だけを残す（回し直した実行の途中までの行を捨てる）。"""
+    last_run = df.groupby(CONDITION_KEYS, dropna=False)["run_id"].transform("last")
+    stale = df["run_id"] != last_run
+    if stale.any():
+        dropped = sorted(df.loc[stale, "run_id"].unique())
+        print(f"[{who}] 回し直された条件の古い実行 {len(dropped)} 件を除外: {dropped}")
+    return df[~stale]
+
+
 # 【load_metrics の説明】
 #   detection_metrics.csv を読み込み，使いやすい形に整えて返す。
 #     pd.read_csv(path)   : CSV ファイルを表（DataFrame）として読み込む。
 #     df[col] = np.nan    : 列が無ければ，全部が空（NaN）の列を足す（古いログでも動くようにするため）。
 #
-#   回し直した条件の扱い
-#     ログは追記されていくので，ある条件が途中で失敗して回し直された場合，
-#     失敗した実行の行と，回し直した実行の行の両方がファイルに残っている。
-#     そのまま平均を取ると，同じ条件が二重に数えられる。そこで，条件ごとに
-#     「最後に書かれた実行」だけを残し，それより前の実行の行は捨てる。
-#       df.groupby(CONDITION_KEYS, dropna=False)["run_id"].transform("last")
-#           : 条件が同じ行をグループにし，各行に「そのグループで最後に出てくる run_id」を対応させる。
-#             dropna=False は，alie_z が空の条件（ALIE 以外）もグループとして扱う指定。
-#       stale = df["run_id"] != last_run : 最後の実行ではない行に True が付く。
-#       df = df[~stale]                  : ~ は True と False を入れ替える。つまり，最後の実行の行だけを残す。
-#
+#     keep_last_runs(df, ...) : 回し直した条件は，最後の実行の行だけを残す（上の【keep_last_runs の説明】を参照）。
 #     zip(A, B)           : 2つの列から，同じ位置の値を1組ずつ取り出す。
 #     df.sort_values(...) : 指定した列の順に，行を並べ替える。
 def load_metrics(path: str) -> pd.DataFrame:
@@ -208,12 +263,7 @@ def load_metrics(path: str) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = np.nan
 
-    last_run = df.groupby(CONDITION_KEYS, dropna=False)["run_id"].transform("last")
-    stale = df["run_id"] != last_run
-    if stale.any():
-        dropped = sorted(df.loc[stale, "run_id"].unique())
-        print(f"[load_metrics] 回し直された条件の古い実行 {len(dropped)} 件を除外: {dropped}")
-        df = df[~stale]
+    df = keep_last_runs(df, "load_metrics")
 
     df["attack"] = [attack_label(t, z) for t, z in zip(df["attack_type"], df["alie_z"])]
     sort_cols = CONDITION_KEYS + ["round", "detector"]
@@ -225,7 +275,8 @@ def load_metrics(path: str) -> pd.DataFrame:
 # ============================================================
 # 【plot_auc_by_round の説明】
 #   検知性能が，学習の進み具合（ラウンド）とともにどう変わるかを見る図。論文に載せる体裁で描いている。
-#     構成 : 小さなグラフを格子状に並べる。行 = 検知器（D1〜D4），列 = 攻撃（ALIE の z ごと，符号反転）。
+#     構成 : 小さなグラフを格子状に並べる。行 = 検知器（D1〜D4），列 = 攻撃（左端が符号反転，その右に ALIE を z の小さい順）。
+#            ALIE の z は 8 通りあって列が多くなるので，--round-zs で載せる z を絞った版も作れる（detection_auc_by_round_selected.png）。
 #     1つのグラフの中 : 横軸がラウンド，縦軸が AUC。alpha ごとに線を1本ずつ描く（色・線の種類・印を変える）。
 #     線           : 10回の trial の平均。
 #     薄い帯       : 平均 ± 標準偏差（trial によるばらつきの幅）。
@@ -244,15 +295,19 @@ def load_metrics(path: str) -> pd.DataFrame:
 #     ax.plot(...)         : 線を描く。 ax.fill_between(...) : 2本の線のあいだを薄く塗る（帯）。
 #     .clip(0.0, 1.0)      : 値を 0〜1 の範囲に収める（帯が図の外にはみ出さないように）。
 #     fig.savefig(outpath, dpi=300) : 図をファイルに保存する。dpi は解像度（大きいほど細かい）。
-def _auc_by_round_style(attacked: pd.DataFrame):
+def _auc_by_round_style(attacked: pd.DataFrame, only_zs=None):
     """攻撃の並び・表題，alpha→(色,線種,印)の対応を作る（まとめ版・検知器ごと版で共通に使う）。
 
-    ALIE は z の小さい順に並べ, 符号反転を右端に置く。
+    符号反転（A1）を左端に置き, その右に ALIE（A2）を z の小さい順に並べる（卒論の表と同じ A1 → A2 の順）。
+    only_zs を渡すと, ALIE はその z だけを並べる（論文に載せる列を絞るため）。
     alpha は色（赤・青・緑）に加えて線種とマーカーでも区別し, 白黒印刷でも読めるようにする。
     """
     alie_zs = sorted(attacked.loc[attacked["attack_type"] == "alie", "alie_z"].dropna().unique())
-    attacks = [attack_label("alie", z) for z in alie_zs]
-    attacks += sorted(set(attacked["attack"]) - set(attacks))
+    if only_zs is not None:
+        alie_zs = [z for z in alie_zs if any(abs(z - w) < 1e-9 for w in only_zs)]
+    alie_attacks = [attack_label("alie", z) for z in alie_zs]
+    others = sorted(set(attacked["attack"]) - {a for a in attacked["attack"].unique() if str(a).startswith("alie")})
+    attacks = others + alie_attacks
     attack_titles = {"sign_flip": "Sign flip (A1)"}
     for z in alie_zs:
         title = "ALIE (A2)" if len(alie_zs) == 1 else rf"ALIE $z={z:g}$"
@@ -287,14 +342,15 @@ def _draw_auc_round_panel(ax, sub: pd.DataFrame, attack: str, alphas, style) -> 
     ax.set_yticks([0.0, 0.5, 1.0])
 
 
-def plot_auc_by_round(metrics: pd.DataFrame, outpath: str) -> None:
+def plot_auc_by_round(metrics: pd.DataFrame, outpath: str, only_zs=None) -> None:
     attacked = metrics[metrics["attack_type"] != "none"].copy()
     if attacked.empty:
         print("[plot_auc_by_round] 攻撃ありの条件が無いためスキップ")
         return
 
     # 行 = 検知器, 列 = 攻撃 に分け, 1パネルあたり α の3系列だけにする.
-    attacks, attack_titles, alphas, style = _auc_by_round_style(attacked)
+    # only_zs を渡すと ALIE の列をその z だけに絞る（--round-zs で指定）.
+    attacks, attack_titles, alphas, style = _auc_by_round_style(attacked, only_zs)
 
     with plt.rc_context(PAPER_RC):
         fig, axes = plt.subplots(
@@ -637,15 +693,21 @@ def plot_auc_by_z(metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
 # 5) 最終ラウンド付近の平均 AUC 一覧
 # ============================================================
 # 【final_auc_table の説明】
-#   結果を1つの数値にまとめた表。行が（alpha，攻撃），列が検知器で，マスの中が平均 AUC。
-#   「最後の last_k ラウンド」（既定は5ラウンド）について，ラウンドと trial をまたいで平均している。
+#   結果を数値にまとめた表。行が（alpha，攻撃），列が検知器ごとの「平均」と「標準偏差」。
+#   「最後の last_k ラウンド」（既定は5ラウンド）での検知性能を，次の2段階でまとめる
+#   （plot_auc_by_z と同じ方法）。
+#     1. 実行（trial）ごとに，最後の last_k ラウンドの AUC を平均して，1つの値にする。
+#     2. その値について，trial をまたいだ平均（mean）と標準偏差（std）を求める。
+#   同じ実行の中のラウンドどうしは似た値になるので，ラウンドと trial をまとめて標準偏差を取ると，
+#   ばらつきを小さく見積もってしまう。そのため，先に実行ごとの値にまとめている。
+#   平均の値そのものは，ラウンドと trial をまとめて平均した場合と同じになる（どの trial もラウンド数が同じため）。
 #   最後の数ラウンドを使うのは，学習がある程度進んだ段階での検知性能を見るため。
 #     max_round = attacked["round"].max()                : 最後のラウンドの番号。
 #     tail = attacked[attacked["round"] > max_round - last_k] : 最後の last_k ラウンドの行だけを取り出す
 #                                                              （50 ラウンドなら 46〜50）。
-#     .groupby([...])["auc"].mean() : （alpha，攻撃，検知器）の組ごとに，AUC の平均を取る。
-#     .pivot(index=..., columns="detector", values="auc")
-#         : 縦に長い表を，検知器が列に並ぶ形に組み替える（見やすい表にする）。
+#     .groupby([...])["auc"].mean() : （alpha，攻撃，検知器，trial）の組ごとに，AUC の平均を取る（手順1）。
+#     .agg(["mean", "std"])         : trial をまたいだ平均と標準偏差を求める（手順2）。
+#     .unstack("detector")          : 検知器を列の方向に並べる。列の名前は「d1_norm_mean」「d1_norm_std」の形に直す。
 #     .round(3)                     : 小数第3位までに丸める。
 #     table.to_csv(outpath)         : 表を CSV ファイルに保存する。
 def final_auc_table(metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
@@ -655,16 +717,14 @@ def final_auc_table(metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> Non
         return
     max_round = attacked["round"].max()
     tail = attacked[attacked["round"] > max_round - last_k]
-    table = (
-        tail.groupby(["alpha", "attack", "detector"])["auc"]
-        .mean()
-        .reset_index()
-        .pivot(index=["alpha", "attack"], columns="detector", values="auc")
-        .round(3)
-    )
+    per_trial = tail.groupby(["alpha", "attack", "detector", "trial"])["auc"].mean()
+    summary = per_trial.groupby(["alpha", "attack", "detector"]).agg(["mean", "std"]).unstack("detector")
+    summary.columns = [f"{det}_{stat}" for stat, det in summary.columns]
+    columns = [f"{det}_{stat}" for det in DETECTORS for stat in ("mean", "std")]
+    table = summary[[c for c in columns if c in summary.columns]].round(3)
     table.to_csv(outpath)
     print(f"[saved] {outpath}")
-    print(f"\n=== 最終{last_k}ラウンドの平均 AUC ===")
+    print(f"\n=== 最終{last_k}ラウンドの AUC（trial ごとに平均してから，trial 間の平均と標準偏差） ===")
     print(table.to_string())
 
 
@@ -712,6 +772,631 @@ def structure_table(metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> Non
 
 
 # ============================================================
+# 6b) ラウンドの区間ごとの AUC（学習の段階による変化を数値で示す表）
+# ============================================================
+# 【segment_auc_table の説明】
+#   AUC 対ラウンドの図を，数値の表にしたもの。ラウンドを SEGMENTS の区間に分け，
+#   （検知器，攻撃，alpha，区間）ごとに AUC を平均する。
+#   図だけでは「序盤は 0.3 くらい」のような目分量しかできないので，本文に区間の平均を書くときの根拠にする。
+#   平均の取り方は，trial ごとに区間内のラウンドを平均してから，trial をまたいで平均する
+#   （どの trial もラウンド数が同じなので，ラウンドと trial をまとめて平均した場合と同じ値になる）。
+#     SEGMENTS : 区間の一覧。（最初のラウンド，最後のラウンド）の組。50 ラウンドの実験に合わせている。
+#     列の名前 : 「a1000_r1-5」のように，alpha と区間を並べたもの。
+SEGMENTS = [(1, 5), (6, 15), (16, 30), (31, 50)]
+
+
+def segment_auc_table(metrics: pd.DataFrame, outpath: str) -> None:
+    """ラウンドの区間ごとの AUC（trial 平均）を，検知器 × 攻撃 × alpha × 区間で保存する。"""
+    attacked = metrics[metrics["attack_type"] != "none"].copy()
+    if attacked.empty:
+        print("[segment_auc_table] 攻撃ありの条件が無いためスキップ")
+        return
+    pieces = []
+    for lo, hi in SEGMENTS:
+        cell = attacked[(attacked["round"] >= lo) & (attacked["round"] <= hi)]
+        if cell.empty:
+            continue
+        per_trial = cell.groupby(["detector", "attack", "alpha", "trial"])["auc"].mean()
+        seg = per_trial.groupby(["detector", "attack", "alpha"]).mean().rename(f"r{lo}-{hi}")
+        pieces.append(seg)
+    table = pd.concat(pieces, axis=1).unstack("alpha")
+    table.columns = [f"a{alpha:g}_{seg}" for seg, alpha in table.columns]
+    alphas = sorted(attacked["alpha"].unique(), reverse=True)
+    order = [f"a{a:g}_r{lo}-{hi}" for a in alphas for lo, hi in SEGMENTS if f"a{a:g}_r{lo}-{hi}" in table.columns]
+    table = table[order].round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+
+
+# 【segment_pushratio_table の説明】
+#   segment_auc_table と同じ区間（SEGMENTS）で，push_ratio を平均した表。
+#   push_ratio は同じラウンドならどの検知器の行でも同じ値なので，検知器 1 つぶんの行だけを使う。
+#   符号反転では学習の段階によって push_ratio の大小関係が入れ替わること，
+#   ALIE ではどの区間でも push_ratio がほぼ z になることを，数値で確かめるための表。
+def segment_pushratio_table(metrics: pd.DataFrame, outpath: str) -> None:
+    """ラウンドの区間ごとの push_ratio（trial 平均）を，攻撃 × alpha × 区間で保存する。"""
+    rows = metrics[(metrics["attack_type"] != "none") & (metrics["detector"] == DETECTORS[0])].copy()
+    if rows.empty:
+        print("[segment_pushratio_table] 攻撃ありの条件が無いためスキップ")
+        return
+    pieces = []
+    for lo, hi in SEGMENTS:
+        cell = rows[(rows["round"] >= lo) & (rows["round"] <= hi)]
+        if cell.empty:
+            continue
+        per_trial = cell.groupby(["attack", "alpha", "trial"])["push_ratio"].mean()
+        pieces.append(per_trial.groupby(["attack", "alpha"]).mean().rename(f"r{lo}-{hi}"))
+    table = pd.concat(pieces, axis=1).unstack("alpha")
+    table.columns = [f"a{alpha:g}_{seg}" for seg, alpha in table.columns]
+    alphas = sorted(rows["alpha"].unique(), reverse=True)
+    order = [f"a{a:g}_r{lo}-{hi}" for a in alphas for lo, hi in SEGMENTS if f"a{a:g}_r{lo}-{hi}" in table.columns]
+    table = table[order].round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+
+
+# ============================================================
+# 7) 図：テスト精度のラウンド推移 / 表：最終精度と収束の確認（results.csv があるときだけ）
+# ============================================================
+# 【load_results の説明】
+#   results.csv（ラウンドごとのグローバルモデルのテスト精度）を読む。
+#   detection_metrics.csv と同じく，回し直した条件は最後の実行だけを残す（keep_last_runs）。
+#   round 0 は，学習を始める前（初期のモデル）の精度である。
+def load_results(path: str) -> pd.DataFrame:
+    """results.csv を読み，回し直した条件は最後の実行だけを残して返す。"""
+    df = keep_last_runs(pd.read_csv(path), "load_results")
+    df = df.copy()
+    df["attack"] = [attack_label(t, z) for t, z in zip(df["attack_type"], df["alie_z"])]
+    return df.sort_values(CONDITION_KEYS + ["round"]).reset_index(drop=True)
+
+
+# 【plot_accuracy_by_round の説明】
+#   学習の進み具合と，攻撃による精度の低下を見る図。
+#     構成 : alpha ごとに1枚，計3枚のグラフを横に並べる。
+#     横軸 : ラウンド。 縦軸 : テスト精度（%）。
+#     線   : 攻撃なし（黒の実線），符号反転（赤の破線），ALIE の z=1 と z=3（青と緑）。
+#            ALIE の z は8通りあるが，全部描くと線が重なって読めないので，代表として2つだけ描く。
+#            すべての z の値は accuracy_table.csv にある。
+#     薄い帯 : 平均 ± 標準偏差（trial によるばらつきの幅）。
+#     縦軸の範囲 : 序盤の低い精度まで入れると終盤の差が見えないので，ylim で下限を決めている（既定は 60%）。
+#     ACC_LINES : 描く線の一覧。（攻撃の名前，図での名前，色，線の種類）。
+ACC_LINES = [
+    ("none", "No attack", "black", "-"),
+    ("sign_flip", "Sign flip (A1)", "tab:red", "--"),
+    ("alie_z1", r"ALIE $z=1$", "tab:blue", "-."),
+    ("alie_z3", r"ALIE $z=3$", "tab:green", ":"),
+]
+
+
+def plot_accuracy_by_round(results: pd.DataFrame, outpath: str, ymin: float = 60.0) -> None:
+    alphas = sorted(results["alpha"].unique(), reverse=True)  # 1000 → 5 → 1
+    with plt.rc_context(PAPER_RC):
+        fig, axes = plt.subplots(1, len(alphas), figsize=(2.2 * len(alphas), 2.2), sharey=True, squeeze=False)
+        for ax, alpha in zip(axes.flat, alphas):
+            for attack, label, color, ls in ACC_LINES:
+                cell = results[(results["alpha"] == alpha) & (results["attack"] == attack)]
+                if cell.empty:
+                    continue
+                agg = (cell.groupby("round")["accuracy"].agg(["mean", "std"]) * 100).reset_index()
+                std = agg["std"].fillna(0.0)
+                ax.fill_between(agg["round"], agg["mean"] - std, agg["mean"] + std, color=color, alpha=0.10, lw=0)
+                ax.plot(agg["round"], agg["mean"], color=color, ls=ls, lw=1.0, label=label)
+            ax.set_title(rf"$\alpha={alpha:g}$")
+            ax.set_xlabel("Round")
+            ax.set_ylim(ymin, 100.0)
+        axes[0, 0].set_ylabel("Test accuracy (%)")
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        fig.legend(
+            handles, labels, loc="upper center", ncol=len(labels),
+            frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+            bbox_to_anchor=(0.5, 1.0), handlelength=2.6,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.86), w_pad=0.6)
+        fig.savefig(outpath, dpi=300)
+    plt.close(fig)
+    print(f"[saved] {outpath}")
+
+
+# 【accuracy_table の説明】
+#   最終ラウンドの精度と，学習が収束しているかの目安をまとめた表。行が（alpha，攻撃）。
+#     final_mean / final_std : 最終ラウンドの精度（%）の，trial 間の平均と標準偏差。
+#     final_min              : 最終ラウンドの精度の，trial の中で一番低い値（%）。
+#     gain_last_k            : 最後の last_k ラウンドで精度が何ポイント上がったか
+#                              （最終ラウンドの精度 − last_k ラウンド前の精度。trial 間の平均）。
+#                              0 に近ければ，精度はほぼ頭打ち（収束している）とみなせる。
+#                              50 ラウンド・last_k=5 なら，45 ラウンドから 50 ラウンドまでの上がり幅。
+#     .pivot(index="trial", columns="round", values="accuracy") : trial を行，ラウンドを列にした表に組み替える。
+def accuracy_table(results: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    max_round = int(results["round"].max())
+    records = []
+    for (alpha, attack), cell in results.groupby(["alpha", "attack"]):
+        wide = cell.pivot(index="trial", columns="round", values="accuracy") * 100
+        final = wide[max_round]
+        gain = final - wide[max_round - last_k]
+        records.append({
+            "alpha": alpha, "attack": attack,
+            "final_mean": final.mean(), "final_std": final.std(), "final_min": final.min(),
+            f"gain_last_{last_k}": gain.mean(),
+        })
+    table = pd.DataFrame(records).set_index(["alpha", "attack"]).round(2)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+    print(f"\n=== 最終ラウンド（{max_round}）の精度 [%] と，最後の {last_k} ラウンドでの上がり幅 [ポイント] ===")
+    print(table.to_string())
+
+
+# ============================================================
+# 8) 符号反転で悪性と正常が分かれる様子（detection_updates.csv があるときだけ）
+# ============================================================
+# 【load_updates の説明】
+#   detection_updates.csv（1クライアント1行。ラウンドごとの各クライアントの検知スコア）を読む。
+#   ここで使うのは符号反転・ALIE・攻撃なしの行（攻撃なしの行は，ノルムの比を比べるときの対照に使う）。
+#   detection_metrics.csv と同じく，回し直した条件は最後の実行だけを残す（keep_last_runs）。
+#     usecols=... : 必要な列だけを読む（ファイルが大きいので，読み込みを軽くするため）。
+UPDATES_COLS = CONDITION_KEYS + ["run_id", "round", "partition_id", "is_malicious", "delta_norm", "d1_norm", "d2_cosine", "d4_spectral"]
+
+
+def load_updates(path: str) -> pd.DataFrame:
+    """detection_updates.csv を読み，符号反転・ALIE・攻撃なしの行を，回し直した条件は最後の実行だけにして返す。"""
+    df = keep_last_runs(pd.read_csv(path, usecols=UPDATES_COLS), "load_updates")
+    return df[df["attack_type"].isin(["sign_flip", "alie", "none"])].reset_index(drop=True)
+
+
+# 【_d2_by_group の説明】
+#   符号反転の行から，（alpha，trial，ラウンド）ごとに，正常更新と悪性更新それぞれの D2 スコアの平均を求める。
+#   列 benign / malicious を持つ表を返す（図と表の両方で使う）。
+#     .unstack("is_malicious") : is_malicious（0 か 1）を列の方向に並べる。
+def _d2_by_group(updates: pd.DataFrame) -> pd.DataFrame:
+    g = updates.groupby(["alpha", "trial", "round", "is_malicious"])["d2_cosine"].mean().unstack("is_malicious")
+    return g.rename(columns={0: "benign", 1: "malicious"}).reset_index()
+
+
+# 【plot_signflip_d2_score_by_round の説明】
+#   符号反転で D2 がなぜ序盤から悪性を見分けられるのか，学習が進むとどうなるのかを見る図。
+#     横軸 : ラウンド。 縦軸 : D2 スコア（1 - cos。参照方向とのコサイン距離）。
+#     線   : alpha ごとに，正常更新と悪性更新の2本ずつ（trial 平均）。薄い帯は ± 標準偏差。
+#            alpha は他の図と同じ色・線の種類・印（alpha_styles）。
+#            正常更新は塗りつぶした印，悪性更新は白抜きの印で区別する。
+#     点線（1.0）: cos = 0 の位置。正常更新と参照方向のなす角を θ とすると，正常は 1 - cos θ，
+#                  符号を反転した悪性は 1 + cos θ になるので，正常が cos θ > 0 である限り，
+#                  正常は 1 より下，悪性は 1 より上に分かれる。
+#     凡例 : alpha の3つ。正常・悪性の区別は，図の中に直接書く（上の線が悪性，下の線が正常）。
+def plot_signflip_d2_score_by_round(updates: pd.DataFrame, outpath: str) -> None:
+    updates = updates[updates["attack_type"] == "sign_flip"]
+    if updates.empty:
+        print("[plot_signflip_d2_score_by_round] 符号反転の行が無いためスキップ")
+        return
+    per_trial = _d2_by_group(updates)
+    alphas = sorted(per_trial["alpha"].unique(), reverse=True)  # 1000 → 5 → 1
+    style = alpha_styles(alphas)
+    with plt.rc_context(PAPER_RC):
+        fig, ax = plt.subplots(figsize=(3.3, 2.3))
+        for alpha in alphas:
+            color, ls, marker = style[alpha]
+            cell = per_trial[per_trial["alpha"] == alpha]
+            for group, mfc in (("benign", color), ("malicious", "white")):
+                agg = cell.groupby("round")[group].agg(["mean", "std"]).reset_index()
+                std = agg["std"].fillna(0.0)
+                ax.fill_between(agg["round"], agg["mean"] - std, agg["mean"] + std, color=color, alpha=0.10, lw=0)
+                ax.plot(
+                    agg["round"], agg["mean"], color=color, ls=ls, lw=1.0,
+                    marker=marker, ms=3.5, markevery=5, mfc=mfc, mew=0.8,
+                )
+        ax.axhline(1.0, color="gray", lw=0.5, ls=":", zorder=0)
+        ax.set_xlabel("Round")
+        ax.set_ylabel(r"D2 score ($1-\cos$)")
+        ax.set_ylim(0.0, 2.0)
+        ax.text(0.98, 0.95, "Malicious (open markers)", transform=ax.transAxes, ha="right", va="top")
+        ax.text(0.98, 0.05, "Benign (filled markers)", transform=ax.transAxes, ha="right", va="bottom")
+        handles = [
+            plt.Line2D([], [], color=style[a][0], ls=style[a][1], marker=style[a][2], ms=3.5,
+                       mfc="white", mew=0.8, lw=1.0, label=rf"$\alpha={a:g}$")
+            for a in alphas
+        ]
+        fig.legend(
+            handles=handles, loc="upper center", ncol=len(handles),
+            frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+            bbox_to_anchor=(0.5, 1.0), handlelength=2.6, columnspacing=1.0,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.89))
+        fig.savefig(outpath, dpi=300)
+    plt.close(fig)
+    print(f"[saved] {outpath}")
+
+
+# 【signflip_separation_table の説明】
+#   符号反転で悪性と正常が分かれる様子を，ラウンドの区間ごとに数値で示す表。行が alpha。
+#   区間は，学習の序盤（第1-5ラウンド）と，最後の last_k ラウンド（final_auc_table と同じ）。
+#     d2_benign / d2_malicious : 正常更新・悪性更新の D2 スコアの平均。
+#     perfect_sep              : ラウンドの中で，すべての悪性の D2 スコアが，すべての正常のスコアより
+#                                大きかった（完全に分かれた）ラウンドの割合。
+#     mal_cos_pc1_all          : 悪性方向（悪性の平均 - 正常の平均）と全更新の第1主成分の |cos|
+#                                （detection_metrics.csv の値。D3 の特徴量の PC1 と同じ向き）。
+#   平均の取り方は，trial ごとに区間内のラウンドを平均してから，trial をまたいで平均する。
+#     sep = ...groupby([...]).apply(...) : （alpha，trial，ラウンド）ごとに「完全に分かれたか」を True/False で求める。
+def signflip_separation_table(updates: pd.DataFrame, metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    updates = updates[updates["attack_type"] == "sign_flip"]
+    if updates.empty:
+        print("[signflip_separation_table] 符号反転の行が無いためスキップ")
+        return
+    per_round = _d2_by_group(updates)
+    sep = (
+        updates.groupby(["alpha", "trial", "round"])
+        .apply(lambda t: t.loc[t["is_malicious"] == 1, "d2_cosine"].min() > t.loc[t["is_malicious"] == 0, "d2_cosine"].max())
+        .rename("perfect_sep").reset_index()
+    )
+    per_round = per_round.merge(sep, on=["alpha", "trial", "round"])
+    pc1 = metrics[(metrics["attack_type"] == "sign_flip") & (metrics["detector"] == DETECTORS[0])]
+    per_round = per_round.merge(pc1[["alpha", "trial", "round", "mal_cos_pc1_all"]], on=["alpha", "trial", "round"], how="left")
+
+    max_round = per_round["round"].max()
+    segments = [(1, 5), (max_round - last_k + 1, max_round)]
+    cols = ["benign", "malicious", "perfect_sep", "mal_cos_pc1_all"]
+    names = {"benign": "d2_benign", "malicious": "d2_malicious"}
+    pieces = []
+    for lo, hi in segments:
+        cell = per_round[(per_round["round"] >= lo) & (per_round["round"] <= hi)].astype({"perfect_sep": float})
+        seg = cell.groupby(["alpha", "trial"])[cols].mean().groupby("alpha").mean()
+        seg.columns = [f"r{lo}-{hi}_{names.get(c, c)}" for c in cols]
+        pieces.append(seg)
+    table = pd.concat(pieces, axis=1).sort_index(ascending=False).round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+    print("\n=== 符号反転：D2 スコアの平均，完全に分かれたラウンドの割合，悪性方向と第1主成分の |cos| ===")
+    print(table.T.to_string())
+
+
+# 【plot_signflip_norm_ratio_by_round の説明】
+#   符号反転で D1 が学習の途中から悪性を見分けられるようになる理由を見る図。
+#     縦軸 : 悪性更新のノルムの平均 ÷ 正常更新のノルムの平均（ラウンドごと。1 なら大きさが揃っている）。
+#     線   : alpha ごとに2本ずつ（trial 平均。薄い帯は ± 標準偏差）。
+#            白抜きの印 = 符号反転の実行。
+#            塗りつぶした印 = 攻撃なしの実行で，同じ trial で符号反転のときに悪性になる4台を「悪性」とみなしたもの（対照）。
+#            悪性クライアントの選び方は trial ごとに固定なので，同じ trial の攻撃なしの実行にそのまま当てはめられる。
+#            攻撃なしで比が 1 から離れないなら，ノルムの差は4台のデータの性質ではなく攻撃によって生じたことになる。
+#     mal_ids : （trial，partition_id）の組で，符号反転のときに悪性だったクライアント。
+def _norm_ratio_by_round(rows: pd.DataFrame, mal_col: str) -> pd.DataFrame:
+    g = rows.groupby(["alpha", "trial", "round", mal_col])["delta_norm"].mean().unstack(mal_col)
+    return (g[1] / g[0]).rename("ratio").reset_index()
+
+
+def plot_signflip_norm_ratio_by_round(updates: pd.DataFrame, outpath: str) -> None:
+    sf = updates[updates["attack_type"] == "sign_flip"]
+    none = updates[updates["attack_type"] == "none"]
+    if sf.empty or none.empty:
+        print("[plot_signflip_norm_ratio_by_round] 符号反転か攻撃なしの行が無いためスキップ")
+        return
+    mal_ids = sf.loc[sf["is_malicious"] == 1, ["trial", "partition_id"]].drop_duplicates().assign(same_clients=1)
+    none = none.merge(mal_ids, on=["trial", "partition_id"], how="left").fillna({"same_clients": 0})
+    series = [
+        (_norm_ratio_by_round(sf, "is_malicious"), "open"),
+        (_norm_ratio_by_round(none, "same_clients"), "filled"),
+    ]
+    alphas = sorted(sf["alpha"].unique(), reverse=True)  # 1000 → 5 → 1
+    style = alpha_styles(alphas)
+    with plt.rc_context(PAPER_RC):
+        fig, ax = plt.subplots(figsize=(3.3, 2.3))
+        for alpha in alphas:
+            color, ls, marker = style[alpha]
+            for ratio, fill in series:
+                agg = ratio[ratio["alpha"] == alpha].groupby("round")["ratio"].agg(["mean", "std"]).reset_index()
+                std = agg["std"].fillna(0.0)
+                ax.fill_between(agg["round"], agg["mean"] - std, agg["mean"] + std, color=color, alpha=0.10, lw=0)
+                ax.plot(
+                    agg["round"], agg["mean"], color=color, ls=ls, lw=1.0,
+                    marker=marker, ms=3.5, markevery=5, mfc="white" if fill == "open" else color, mew=0.8,
+                )
+        ax.axhline(1.0, color="gray", lw=0.5, ls=":", zorder=0)
+        ax.set_xlabel("Round")
+        ax.set_ylabel("Norm ratio (malicious / benign)")
+        # 攻撃なしの線は 1 付近に集まるので，下に余白を取り，その注記を線の下に置く
+        ax.set_ylim(0.55, None)
+        ax.text(0.02, 0.95, "Sign flip (open markers)", transform=ax.transAxes, ha="left", va="top")
+        ax.text(0.98, 0.03, "No attack, same clients (filled markers)", transform=ax.transAxes, ha="right", va="bottom")
+        handles = [
+            plt.Line2D([], [], color=style[a][0], ls=style[a][1], marker=style[a][2], ms=3.5,
+                       mfc="white", mew=0.8, lw=1.0, label=rf"$\alpha={a:g}$")
+            for a in alphas
+        ]
+        fig.legend(
+            handles=handles, loc="upper center", ncol=len(handles),
+            frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+            bbox_to_anchor=(0.5, 1.0), handlelength=2.6, columnspacing=1.0,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.89))
+        fig.savefig(outpath, dpi=300)
+    plt.close(fig)
+    print(f"[saved] {outpath}")
+
+
+# 【signflip_norm_dispersion_table の説明】
+#   符号反転で，alpha=1 のときに D1 と D4 の AUC が下がる理由を見る表。行が alpha。
+#   どちらも「正常更新のノルムのばらつき」によって，正常更新が悪性と取り違えられることを示すための表である。
+#   最後の last_k ラウンドで，次の量を求める（trial ごとに平均してから，trial をまたいで平均する）。
+#     norm_ratio          : 悪性更新のノルムの平均 ÷ 正常更新のノルムの平均。
+#     cv_benign           : 正常更新のノルムの変動係数（ラウンド内の 標準偏差 ÷ 平均）。
+#     cv_benign_none      : 攻撃なしの実行での，全クライアントのノルムの変動係数（対照）。
+#     d1_misranked / d4_misranked
+#                         : （正常1台，悪性1台）の組のうち，その検知器が正常のほうを疑わしいと判定した組の割合。
+#                           同点は半分と数えるので，1 - AUC に等しい。
+#     d1_misranked_below  : D1 の誤った組のうち，その正常更新のノルムが中央値より小さかったものの割合。
+#                           D1 は |ノルム - 中央値| をスコアにするので，小さすぎる正常更新も疑わしく見える。
+#     d4_misranked_above  : D4 の誤った組のうち，その正常更新のノルムが中央値より大きかったものの割合。
+#                           D4 は射影の2乗をスコアにするので，共通の方向に沿って遠くにいる（ノルムの大きい）正常更新が疑わしく見える。
+#     （内訳の2列だけは，全 trial・全ラウンドの組をまとめて割合を求める。誤った組が無い alpha は空欄になる）
+#     d4_benign_norm_corr : 正常更新どうしでの，D4 のスコアとノルムの順位相関（ラウンドごとに求めて平均）。
+#   _misranked(t, score) : 1ラウンドぶんの行 t から，検知器 score で誤った組の数（全体と，中央値より下の正常によるもの）と組の総数を返す。
+#     s[:, None] > m[None, :] : 正常の各スコアと悪性の各スコアを総当たりで比べた表（正常の数 × 悪性の数）。
+def _misranked(t: pd.DataFrame, score: str) -> pd.Series:
+    med = t["delta_norm"].median()
+    b = t[t["is_malicious"] == 0]
+    m = t.loc[t["is_malicious"] == 1, score].to_numpy()
+    s = b[score].to_numpy()
+    wrong = (s[:, None] > m[None, :]) + 0.5 * (s[:, None] == m[None, :])
+    below = (b["delta_norm"].to_numpy() < med)[:, None]
+    return pd.Series({"wrong": wrong.sum(), "wrong_below": (wrong * below).sum(), "pairs": wrong.size})
+
+
+def signflip_norm_dispersion_table(updates: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    max_round = updates["round"].max()
+    tail = updates[updates["round"] > max_round - last_k]
+    sf = tail[tail["attack_type"] == "sign_flip"]
+    none = tail[tail["attack_type"] == "none"]
+    if sf.empty or none.empty:
+        print("[signflip_norm_dispersion_table] 符号反転か攻撃なしの行が無いためスキップ")
+        return
+    keys = ["alpha", "trial", "round"]
+
+    def cv(rows: pd.DataFrame) -> pd.Series:
+        g = rows.groupby(keys)["delta_norm"]
+        return (g.std() / g.mean()).groupby(["alpha", "trial"]).mean()
+
+    def counts(score: str) -> pd.DataFrame:
+        cols = ["delta_norm", score, "is_malicious"]
+        return sf.groupby(keys)[cols].apply(_misranked, score=score).groupby(["alpha", "trial"]).sum()
+
+    benign = sf[sf["is_malicious"] == 0]
+    d4_corr = (
+        benign.groupby(keys)[["d4_spectral", "delta_norm"]]
+        .apply(lambda t: t["d4_spectral"].rank().corr(t["delta_norm"].rank()))
+        .groupby(["alpha", "trial"]).mean()
+    )
+    c1, c4 = counts("d1_norm"), counts("d4_spectral")
+    per_trial = pd.DataFrame({
+        "norm_ratio": _norm_ratio_by_round(sf, "is_malicious").groupby(["alpha", "trial"])["ratio"].mean(),
+        "cv_benign": cv(benign),
+        "cv_benign_none": cv(none),
+        "d1_misranked": c1["wrong"] / c1["pairs"],
+        "d4_misranked": c4["wrong"] / c4["pairs"],
+        "d4_benign_norm_corr": d4_corr,
+    })
+    table = per_trial.groupby("alpha").mean()
+    # 内訳の割合は，trial ごとに割ると誤った組が少ない trial の値が大きく揺れるので，全 trial の組をまとめて割る
+    p1, p4 = c1.groupby("alpha").sum(), c4.groupby("alpha").sum()
+    table["d1_misranked_below"] = p1["wrong_below"] / p1["wrong"].where(p1["wrong"] > 0)
+    table["d4_misranked_above"] = 1 - p4["wrong_below"] / p4["wrong"].where(p4["wrong"] > 0)
+    order = ["norm_ratio", "cv_benign", "cv_benign_none", "d1_misranked", "d1_misranked_below",
+             "d4_misranked", "d4_misranked_above", "d4_benign_norm_corr"]
+    table = table[order].sort_index(ascending=False).round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+    print(f"\n=== 符号反転：最終{last_k}ラウンドのノルムの比，変動係数，D1・D4 が順位を誤った組の割合 ===")
+    print(table.to_string())
+
+
+# 【signflip_norm_cv_by_segment_table の説明】
+#   正常更新のノルムのばらつきが，学習の段階とともにどう変わるかを見る表。
+#   ラウンドを SEGMENTS の区間に分け，（攻撃，alpha，区間）ごとに正常更新のノルムの変動係数を平均する
+#   （ラウンドごとに 標準偏差 ÷ 平均 を求め，trial ごとに区間内で平均してから，trial をまたいで平均する）。
+#   符号反転では学習が進むほどばらつきが広がり，攻撃なしでは広がらないことを示すための表。
+#   攻撃なしの実行には悪性がいないので，全クライアントを正常として数える。
+def signflip_norm_cv_by_segment_table(updates: pd.DataFrame, outpath: str) -> None:
+    benign = updates[(updates["is_malicious"] == 0) & updates["attack_type"].isin(["sign_flip", "none"])]
+    if benign.empty:
+        print("[signflip_norm_cv_by_segment_table] 行が無いためスキップ")
+        return
+    g = benign.groupby(["attack_type", "alpha", "trial", "round"])["delta_norm"]
+    cv = (g.std() / g.mean()).rename("cv").reset_index()
+    pieces = []
+    for lo, hi in SEGMENTS:
+        cell = cv[(cv["round"] >= lo) & (cv["round"] <= hi)]
+        seg = cell.groupby(["attack_type", "alpha", "trial"])["cv"].mean().groupby(["attack_type", "alpha"]).mean()
+        pieces.append(seg.rename(f"r{lo}-{hi}"))
+    table = pd.concat(pieces, axis=1).sort_index(level=[0, 1], ascending=[False, False]).round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+    print("\n=== 正常更新のノルムの変動係数（ラウンドの区間ごと） ===")
+    print(table.to_string())
+
+
+# 【alie_d2_score_by_z の説明】
+#   ALIE で D2 が z <= 1.5 では悪性を「一番正常らしい」と判定し，z = 2〜3 で検知に転じる理由を見る図と表。
+#     横軸 : ALIE の z（8 水準）。 縦軸 : 最後の last_k ラウンドの D2 スコア（1 - cos）の平均。
+#     線   : alpha ごとに，正常更新（塗りつぶしの印）と悪性更新（白抜きの印）の2本ずつ。
+#            trial ごとに最後の last_k ラウンドを平均してから，trial をまたいだ平均（線）と標準偏差（縦棒）を求める。
+#     点線（1.0）: cos = 0（参照方向と直角）。
+#   悪性の線が正常の線より下にある z では，悪性のほうが参照方向に近く（AUC が 0 に近い），
+#   悪性の線が正常の線を越える z で，D2 は検知に転じる。
+#   表（alie_d2_score_by_z_table.csv）は，図と同じ平均と標準偏差を，z × alpha × 正常・悪性で並べたもの。
+#   表の最後の行（alie_z が "none"）は攻撃なしの実行の値で，全クライアントを正常として数える。
+#   攻撃なしでは参照方向はほぼ正常の平均の向きなので，正常の D2 スコアが 1 に近いほど，
+#   全員に共通する成分（平均）に比べて各クライアント自身のずれが大きいことを表す。
+def _alie_d2_by_z(updates: pd.DataFrame, last_k: int) -> pd.DataFrame:
+    alie = updates[updates["attack_type"] == "alie"]
+    tail = alie[alie["round"] > alie["round"].max() - last_k]
+    per_trial = tail.groupby(["alie_z", "alpha", "is_malicious", "trial"])["d2_cosine"].mean()
+    return per_trial.groupby(["alie_z", "alpha", "is_malicious"]).agg(["mean", "std"]).reset_index()
+
+
+def plot_alie_d2_score_by_z(updates: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    if (updates["attack_type"] == "alie").sum() == 0:
+        print("[plot_alie_d2_score_by_z] ALIE の行が無いためスキップ")
+        return
+    agg = _alie_d2_by_z(updates, last_k)
+    alphas = sorted(agg["alpha"].unique(), reverse=True)  # 1000 → 5 → 1
+    style = alpha_styles(alphas)
+    with plt.rc_context(PAPER_RC):
+        fig, ax = plt.subplots(figsize=(3.3, 2.3))
+        for alpha in alphas:
+            color, ls, marker = style[alpha]
+            for mal, mfc in ((0, color), (1, "white")):
+                cell = agg[(agg["alpha"] == alpha) & (agg["is_malicious"] == mal)].sort_values("alie_z")
+                ax.errorbar(
+                    cell["alie_z"], cell["mean"], yerr=cell["std"].fillna(0.0),
+                    color=color, ls=ls, lw=1.0, marker=marker, ms=3.5, mfc=mfc, mew=0.8,
+                    capsize=1.5, elinewidth=0.6,
+                )
+        ax.axhline(1.0, color="gray", lw=0.5, ls=":", zorder=0)
+        ax.set_xlabel(r"ALIE $z$")  # 目盛りは自動（detection_auc_by_z.png と同じ）。0.385 と 0.5 は近くて数字が重なるため
+        ax.set_ylabel(r"D2 score ($1-\cos$)")
+        ax.set_ylim(0.0, 1.4)
+        ax.text(0.02, 0.97, "Benign (filled markers)", transform=ax.transAxes, ha="left", va="top")
+        ax.text(0.98, 0.03, "Malicious (open markers)", transform=ax.transAxes, ha="right", va="bottom")
+        handles = [
+            plt.Line2D([], [], color=style[a][0], ls=style[a][1], marker=style[a][2], ms=3.5,
+                       mfc="white", mew=0.8, lw=1.0, label=rf"$\alpha={a:g}$")
+            for a in alphas
+        ]
+        fig.legend(
+            handles=handles, loc="upper center", ncol=len(handles),
+            frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+            bbox_to_anchor=(0.5, 1.0), handlelength=2.6, columnspacing=1.0,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.89))
+        fig.savefig(outpath, dpi=300)
+    plt.close(fig)
+    print(f"[saved] {outpath}")
+
+
+def alie_d2_score_by_z_table(updates: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    if (updates["attack_type"] == "alie").sum() == 0:
+        print("[alie_d2_score_by_z_table] ALIE の行が無いためスキップ")
+        return
+    agg = _alie_d2_by_z(updates, last_k)
+    agg["group"] = agg["is_malicious"].map({0: "benign", 1: "malicious"})
+    none = updates[updates["attack_type"] == "none"]
+    none = none[none["round"] > none["round"].max() - last_k]
+    if not none.empty:
+        per_trial = none.groupby(["alpha", "trial"])["d2_cosine"].mean()
+        none_agg = per_trial.groupby("alpha").agg(["mean", "std"]).reset_index()
+        none_agg = none_agg.assign(alie_z="none", is_malicious=0, group="benign")
+        agg = pd.concat([agg.assign(alie_z=agg["alie_z"].map(lambda z: f"{z:g}")), none_agg], ignore_index=True)
+    table = agg.pivot_table(index="alie_z", columns=["alpha", "group"], values=["mean", "std"], sort=False)
+    table.columns = [f"a{alpha:g}_{group}_{stat}" for stat, alpha, group in table.columns]
+    alphas = sorted(agg["alpha"].unique(), reverse=True)
+    order = [f"a{a:g}_{g}_{st}" for a in alphas for g in ("benign", "malicious") for st in ("mean", "std")]
+    table = table[order].round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+    print(f"\n=== ALIE：最終{last_k}ラウンドの D2 スコア（正常・悪性） ===")
+    print(table.to_string())
+
+
+# 【alie_norm_ratio_by_z_table の説明】
+#   ALIE で D1 の AUC が z に対して U 字型になる理由を見る表。行が z，列が alpha。
+#   値は，最後の last_k ラウンドでの「悪性更新のノルム ÷ 正常更新のノルムの平均」
+#   （ラウンドごとに求め，trial ごとに平均してから，trial をまたいで平均する）。
+#   1 より小さければ悪性のほうが小さく，1 に近い z で D1 は見分けられなくなる。
+def alie_norm_ratio_by_z_table(updates: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    alie = updates[updates["attack_type"] == "alie"]
+    if alie.empty:
+        print("[alie_norm_ratio_by_z_table] ALIE の行が無いためスキップ")
+        return
+    tail = alie[alie["round"] > alie["round"].max() - last_k]
+    g = tail.groupby(["alie_z", "alpha", "trial", "round", "is_malicious"])["delta_norm"].mean().unstack("is_malicious")
+    ratio = (g[1] / g[0]).groupby(["alie_z", "alpha", "trial"]).mean().groupby(["alie_z", "alpha"]).mean()
+    table = ratio.unstack("alpha")
+    table = table[sorted(table.columns, reverse=True)]
+    table.columns = [f"a{a:g}" for a in table.columns]
+    table = table.round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+    print(f"\n=== ALIE：最終{last_k}ラウンドの悪性/正常のノルムの比 ===")
+    print(table.to_string())
+
+
+# 【alie_shell の説明】
+#   卒論 9.3（高次元の殻）の図と表。ALIE の悪性が z とともに「殻の内側 → 殻の上 → 殻の外」へ動くことを示す。
+#   最後の last_k ラウンドで，(alpha, z) ごとに次の量を求める（trial ごとに平均してから，trial をまたいで平均する）。
+#     dist_ratio      : push_ratio（悪性と正常の平均との距離 ÷ 正常と平均との距離の平均）。ALIE ではほぼ z。
+#     norm_ratio      : 悪性のノルム ÷ 正常のノルムの平均（alie_norm_ratio_by_z_table と同じ値）。
+#     benign_norm_cv  : 正常のノルムの変動係数（ラウンド内の 標準偏差 ÷ 平均）。殻の厚みの目安。
+#     benign_dist_cv  : 正常の平均からの距離の変動係数。式 push_ratio = z × RMS / Mean から，
+#                       RMS / Mean = push_ratio / z = sqrt(1 + CV^2) を使って CV = sqrt((push_ratio / z)^2 - 1) と求める。
+#   図（alie_shell_by_z.png）: alpha ごとに 1 枚，計 3 枚を横に並べる。横軸 z，縦軸は「悪性 ÷ 正常」の比。
+#     破線 = 距離の比（push_ratio），実線 = ノルムの比。灰色の帯 = 1 ± 正常のノルムの変動係数（正常の殻の厚みの目安）。
+#     ノルムの線が帯の中を通る z で，D1 は悪性と正常を見分けにくくなる。
+def _alie_shell(updates: pd.DataFrame, metrics: pd.DataFrame, last_k: int) -> pd.DataFrame:
+    alie_u = updates[updates["attack_type"] == "alie"]
+    tail_u = alie_u[alie_u["round"] > alie_u["round"].max() - last_k]
+    keys = ["alie_z", "alpha", "trial"]
+    g = tail_u.groupby(keys + ["round", "is_malicious"])["delta_norm"].mean().unstack("is_malicious")
+    norm_ratio = (g[1] / g[0]).groupby(keys).mean()
+    gb = tail_u[tail_u["is_malicious"] == 0].groupby(keys + ["round"])["delta_norm"]
+    norm_cv = (gb.std() / gb.mean()).groupby(keys).mean()
+    alie_m = metrics[(metrics["attack_type"] == "alie") & (metrics["detector"] == DETECTORS[0])]
+    tail_m = alie_m[alie_m["round"] > alie_m["round"].max() - last_k]
+    dist_ratio = tail_m.groupby(keys)["push_ratio"].mean()
+    per_trial = pd.DataFrame({"dist_ratio": dist_ratio, "norm_ratio": norm_ratio, "benign_norm_cv": norm_cv})
+    table = per_trial.groupby(["alie_z", "alpha"]).mean().reset_index()
+    k = (table["dist_ratio"] / table["alie_z"]).clip(lower=1.0)
+    table["benign_dist_cv"] = np.sqrt(k ** 2 - 1.0)
+    return table
+
+
+def alie_shell_table(updates: pd.DataFrame, metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    if (updates["attack_type"] == "alie").sum() == 0:
+        print("[alie_shell_table] ALIE の行が無いためスキップ")
+        return
+    table = _alie_shell(updates, metrics, last_k)
+    table = table.sort_values(["alpha", "alie_z"], ascending=[False, True]).set_index(["alpha", "alie_z"]).round(3)
+    table.to_csv(outpath)
+    print(f"[saved] {outpath}")
+    print(f"\n=== ALIE：最終{last_k}ラウンドの距離の比・ノルムの比・正常の殻の厚み ===")
+    print(table.to_string())
+
+
+def plot_alie_shell_by_z(updates: pd.DataFrame, metrics: pd.DataFrame, outpath: str, last_k: int = 5) -> None:
+    if (updates["attack_type"] == "alie").sum() == 0:
+        print("[plot_alie_shell_by_z] ALIE の行が無いためスキップ")
+        return
+    table = _alie_shell(updates, metrics, last_k)
+    alphas = sorted(table["alpha"].unique(), reverse=True)  # 1000 → 5 → 1
+    style = alpha_styles(alphas)
+    with plt.rc_context(PAPER_RC):
+        fig, axes = plt.subplots(1, len(alphas), figsize=(2.2 * len(alphas), 2.3), sharey=True, squeeze=False)
+        for ax, alpha in zip(axes.flat, alphas):
+            color, _, marker = style[alpha]
+            cell = table[table["alpha"] == alpha].sort_values("alie_z")
+            cv = cell["benign_norm_cv"].mean()
+            ax.axhspan(1.0 - cv, 1.0 + cv, color="gray", alpha=0.18, lw=0)
+            ax.axhline(1.0, color="gray", lw=0.5, ls=":", zorder=0)
+            ax.plot(cell["alie_z"], cell["dist_ratio"], color=color, ls="--", lw=1.0,
+                    marker=marker, ms=3.5, mfc="white", mew=0.8, label="Distance from mean (push_ratio)")
+            ax.plot(cell["alie_z"], cell["norm_ratio"], color=color, ls="-", lw=1.0,
+                    marker=marker, ms=3.5, mfc=color, mew=0.8, label="Norm")
+            ax.set_title(rf"$\alpha={alpha:g}$")
+            ax.set_xlabel(r"ALIE $z$")
+            ax.set_ylim(0.0, 3.2)
+        axes[0, 0].set_ylabel("Malicious / benign")
+        handles = [
+            plt.Line2D([], [], color="black", ls="--", lw=1.0, marker="o", ms=3.5, mfc="white", mew=0.8,
+                       label="Distance from mean (push_ratio)"),
+            plt.Line2D([], [], color="black", ls="-", lw=1.0, marker="o", ms=3.5, mfc="black", mew=0.8, label="Norm"),
+            plt.Rectangle((0, 0), 1, 1, color="gray", alpha=0.18, lw=0, label=r"Benign band ($1 \pm$ CV of norm)"),
+        ]
+        fig.legend(
+            handles=handles, loc="upper center", ncol=3,
+            frameon=True, fancybox=False, edgecolor="black", framealpha=1.0,
+            bbox_to_anchor=(0.5, 1.0), handlelength=2.4, columnspacing=1.0,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.86), w_pad=0.6)
+        fig.savefig(outpath, dpi=300)
+    plt.close(fig)
+    print(f"[saved] {outpath}")
+
+
+# ============================================================
 # 【main の説明】
 #   スクリプトを実行したときに動く本体。
 #     ap.add_argument("logdir", ...)  : 名前の前に -- が付かない指定は，必ず書かなければならない（位置で渡す）。
@@ -735,6 +1420,10 @@ def main() -> None:
     )
     ap.add_argument("--outdir", default=None, help="図と表の保存先（既定: <logdir>/analysis）")
     ap.add_argument("--last-k", type=int, default=5, help="最終平均を取るラウンド数")
+    ap.add_argument(
+        "--round-zs", default=None,
+        help="AUC 対ラウンドの図で，ALIE の列をこの z だけに絞った版も作る（カンマ区切り。例: 0.75,1.25,1.5,2）",
+    )
     args = ap.parse_args()
 
     metrics_path = os.path.join(args.logdir, METRICS_CSV_NAME)
@@ -753,6 +1442,9 @@ def main() -> None:
 
     os.makedirs(outdir, exist_ok=True)
     plot_auc_by_round(metrics, os.path.join(outdir, "detection_auc_by_round.png"))
+    if args.round_zs:
+        zs = [float(z) for z in args.round_zs.split(",")]
+        plot_auc_by_round(metrics, os.path.join(outdir, "detection_auc_by_round_selected.png"), only_zs=zs)
     plot_auc_by_round_by_detector(
         metrics, os.path.join(outdir, "detection_auc_by_round_{detector}.png")
     )
@@ -764,6 +1456,38 @@ def main() -> None:
     plot_auc_by_z(metrics, os.path.join(outdir, "detection_auc_by_z.png"), last_k=args.last_k)
     final_auc_table(metrics, os.path.join(outdir, "detection_final_auc_table.csv"), last_k=args.last_k)
     structure_table(metrics, os.path.join(outdir, "detection_structure_table.csv"), last_k=args.last_k)
+    segment_auc_table(metrics, os.path.join(outdir, "detection_segment_auc_table.csv"))
+    segment_pushratio_table(metrics, os.path.join(outdir, "detection_segment_pushratio_table.csv"))
+
+    # ラウンドごとの精度（results.csv）は，あるときだけ図と表にする。
+    results_path = os.path.join(args.logdir, RESULTS_CSV_NAME)
+    if os.path.exists(results_path):
+        results = load_results(results_path)
+        plot_accuracy_by_round(results, os.path.join(outdir, "accuracy_by_round.png"))
+        accuracy_table(results, os.path.join(outdir, "accuracy_table.csv"), last_k=args.last_k)
+    else:
+        print(f"[精度] {results_path} が無いため，精度の図と表は作りません")
+
+    # クライアントごとのスコア（detection_updates.csv）は，あるときだけ図と表にする。
+    updates_path = os.path.join(args.logdir, UPDATES_CSV_NAME)
+    if os.path.exists(updates_path):
+        updates = load_updates(updates_path)
+        plot_signflip_d2_score_by_round(updates, os.path.join(outdir, "signflip_d2_score_by_round.png"))
+        signflip_separation_table(
+            updates, metrics, os.path.join(outdir, "signflip_separation_table.csv"), last_k=args.last_k
+        )
+        plot_signflip_norm_ratio_by_round(updates, os.path.join(outdir, "signflip_norm_ratio_by_round.png"))
+        signflip_norm_dispersion_table(
+            updates, os.path.join(outdir, "signflip_norm_dispersion_table.csv"), last_k=args.last_k
+        )
+        signflip_norm_cv_by_segment_table(updates, os.path.join(outdir, "signflip_norm_cv_by_segment_table.csv"))
+        plot_alie_d2_score_by_z(updates, os.path.join(outdir, "alie_d2_score_by_z.png"), last_k=args.last_k)
+        alie_d2_score_by_z_table(updates, os.path.join(outdir, "alie_d2_score_by_z_table.csv"), last_k=args.last_k)
+        alie_norm_ratio_by_z_table(updates, os.path.join(outdir, "alie_norm_ratio_by_z_table.csv"), last_k=args.last_k)
+        alie_shell_table(updates, metrics, os.path.join(outdir, "alie_shell_table.csv"), last_k=args.last_k)
+        plot_alie_shell_by_z(updates, metrics, os.path.join(outdir, "alie_shell_by_z.png"), last_k=args.last_k)
+    else:
+        print(f"[符号反転の分離] {updates_path} が無いため，図と表は作りません")
 
 
 # このファイルを直接実行したときだけ，main() を呼ぶ（run_experiments.py の末尾と同じ書き方）。
