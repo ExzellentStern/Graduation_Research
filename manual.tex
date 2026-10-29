@@ -1,0 +1,4224 @@
+\documentclass[a4j, dvipdfmx]{jsarticle}  % 1段組
+
+\usepackage[a4paper, left=2.0cm, right=2.0cm, top=2.0cm, bottom=2.0cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{float}
+\usepackage{alltt}
+\usepackage{textcomp}  % コマンド例の中で，まっすぐな引用符（'）を出すため
+
+% 図（TikZ）。platex + dvipdfmx で使うため，ドライバを先に指定する。
+\def\pgfsysdriver{pgfsys-dvipdfmx.def}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, shapes.misc}
+
+% =========================================================
+% 見出し設定
+% =========================================================
+\titleformat{\section}[block]
+  {\normalfont\large\bfseries}{\thesection}{0.7em}{}
+\titleformat{\subsection}[block]
+  {\normalfont\normalsize\bfseries}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}[block]
+  {\normalfont\normalsize\bfseries}{\thesubsubsection}{0.7em}{}
+
+% titlesec は \paragraph も乗っ取るため runin 形式を明示（jsarticle での
+% "Entered in horizontal mode" エラー回避）
+\titleformat{\paragraph}[runin]
+  {\normalfont\normalsize\bfseries}{\theparagraph}{0.5em}{}
+
+\titlespacing*{\section}{0pt}{1.6ex plus 0.5ex minus 0.2ex}{0.9ex}
+\titlespacing*{\subsection}{0pt}{1.2ex plus 0.4ex minus 0.2ex}{0.6ex}
+\titlespacing*{\paragraph}{0pt}{1.0ex plus 0.3ex minus 0.1ex}{0.6em}
+
+\setlist[itemize]{topsep=4pt, itemsep=2pt, leftmargin=1.4em}
+\setlist[enumerate]{topsep=4pt, itemsep=2pt, leftmargin=1.8em}
+
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% シェルコマンド用の簡易ボックス（alltt を枠なしで使う）
+\newenvironment{cmd}{\par\vspace{0.3em}\begin{alltt}\small}{\end{alltt}\vspace{0.3em}\par}
+
+% 図で使う箱の見た目
+\tikzset{
+  box/.style={draw, rounded corners=2pt, align=center, font=\footnotesize, inner sep=4pt, minimum height=0.9cm},
+  file/.style={box, fill=black!4},
+  core/.style={box, fill=black!14, line width=0.8pt},
+  data/.style={box, dashed},
+  arr/.style={-{Stealth[length=2mm]}, line width=0.5pt},
+  lab/.style={font=\scriptsize, align=center},
+}
+
+\title{FL 実験コード サポートガイド\\
+\large 連合学習における悪性更新の検知実験 --- 基礎知識からコードの使い方まで}
+\author{3CDA2216 笠原秀星}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\clearpage
+
+\section{このガイドについて}
+
+本書は，「Federated Learning における悪性更新の検知可能性」を調べる実験コードの，サポートガイドである。
+卒業論文とは別に，\textbf{これ 1 冊で，背景の考え方からコードの動かし方までが分かる}ことを目指している。
+連合学習や Python にまだ慣れていない人が読むことを想定し，専門用語は出てきたところで説明する。
+
+実験の目的・仮説・評価指標の正式な定義は，研究計画書（\texttt{sotsuron\_plan2.tex}）にある。
+本書は，それを理解して手を動かすための手引きである。
+
+\paragraph{構成。}
+本書は，次の 5 つの部からなる。
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{4.6cm} P{10.7cm}@{}}
+\toprule
+部 & 内容 \\
+\midrule
+第 I 部　基礎知識 & 機械学習，連合学習，FedAvg，Non-IID，攻撃，検知器，評価指標，スイープとは何か。コードを読む前の予備知識。 \\
+第 II 部　コードの全体像 & ファイルの配置，ファイルどうしの関係，1 ラウンドの流れ，各ファイルの役割。 \\
+第 III 部　使い方 & 環境の構築，設定，実行の手順，出力されるファイルの読み方。 \\
+第 IV 部　卒論の主張と根拠 & 卒論（\texttt{Memo/soturon3.tex}）の主張ごとに，根拠のログ，計算方法，確かさの度合い，審査で聞かれそうなことをまとめる。 \\
+第 V 部　リファレンス & 攻撃と検知器の早見表，エラーで止まる条件，再現性，トラブルシューティング，設定を決めた経緯と結果を読むときの注意（\S\ref{sec:decisions}），用語集。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{読み方。}
+\begin{itemize}
+  \item 初めて読む人は，第 I 部から順に読む。
+  \item 連合学習を知っている人は，\S\ref{sec:theory-attack}（攻撃と検知）と第 II 部の 3 つの図から読む。
+  \item 動かしたいだけの人は，第 III 部だけで足りる。
+  \item 卒論の中身を吟味したい人は，第 IV 部（\S\ref{sec:claims-howto}）から読む。主張ごとに根拠と確かさをまとめてある。
+  \item 卒論の図や表の見方が分からないときは，\S\ref{sec:claims-reading}（図と表の読み方）を見る。
+  \item 分からない言葉が出てきたら，巻末の用語集（\S\ref{sec:glossary}）を見る。
+\end{itemize}
+コードの各行の意味は，各ファイルの中にコメントとして書いてある。本書は，その入口にあたる。
+
+\paragraph{この実験が調べていること。}
+\begin{itemize}
+  \item データの偏り（Non-IID 度）と攻撃の隠れ方を変えながら，
+        サーバが，クライアントから届く更新だけを見て，悪性クライアントを見分けられるかを測る。
+  \item 集約の方法は FedAvg に固定する。
+  \item 検知した結果は記録するだけで，集約には使わない
+        （測っているのは「検知できるか」であり，「検知して取り除いたらどうなるか」ではない）。
+\end{itemize}
+
+% =========================================================
+\part{基礎知識}
+\label{part:basics}
+
+この部では，コードを読む前に知っておきたい考え方を，前提知識なしで説明する。
+すでに知っている節は飛ばしてよい。用語は巻末の用語集（\S\ref{sec:glossary}）にもまとめてある。
+
+% =========================================================
+\section{機械学習と連合学習}
+\label{sec:ml-fl}
+
+\subsection{機械学習の最小限}
+
+\paragraph{モデルと重み。}
+\textbf{モデル}は，入力を受け取って答えを返す計算の手順である。
+本実験のモデルは，手書きの数字の画像（縦 28 $\times$ 横 28 の白黒）を受け取り，それが 0〜9 のどれかを答える。
+モデルの中には，調整できる数値がたくさん入っている。これを\textbf{重み}（パラメータ）と呼び，まとめて $w$ と書く。
+本実験のモデルでは，重みは 266{,}060 個ある。重みの値を変えると，モデルの答えが変わる。
+
+\paragraph{学習。}
+\textbf{学習}とは，正解の分かっているデータを使って，モデルがなるべく正しく答えるように重みを調整することである。
+どれだけ外れているかを 1 つの数値で表したものを\textbf{損失}（loss）と呼び，$\ell(w)$ と書く。損失が小さいほど，よく合っている。
+
+\paragraph{勾配降下法。}
+損失を小さくするには，「各重みを少し増やしたら損失が増えるか減るか」を調べ，損失が減る向きに重みを動かせばよい。
+この「増減の向きと大きさ」を並べたものが\textbf{勾配} $\nabla \ell(w)$ である。重みの更新は，次の式で表される。
+\begin{equation}
+  w \leftarrow w - \eta\, \nabla \ell(w; b)
+  \label{eq:sgd}
+\end{equation}
+$\eta$ は\textbf{学習率}で，1 回にどれだけ動かすかの倍率である（本実験では 0.01）。
+$b$ は\textbf{バッチ}で，データの中から取り出した一部（本実験では 32 枚）を指す。
+データ全体ではなく一部で勾配を計算し，少しずつ更新を繰り返す方法を，\textbf{確率的勾配降下法}（SGD）と呼ぶ。
+手元のデータを 1 周し終えることを 1 \textbf{エポック}という。
+
+\paragraph{評価。}
+学習に使っていないデータ（\textbf{テストデータ}）でモデルに答えさせ，正解した割合を\textbf{精度}（accuracy）と呼ぶ。
+本実験のデータセット MNIST は，学習用 60{,}000 枚とテスト用 10{,}000 枚に分かれている。
+
+\subsection{連合学習とは}
+
+ふつうの機械学習では，データを 1 か所に集めて学習する。
+しかし，病院の診療記録やスマートフォンの入力履歴のように，持ち主の外に出したくないデータは集められない。
+\textbf{連合学習}（Federated Learning，FL）は，データを集めずに，\textbf{モデルのほうを各所へ送って学習させる}方法である。
+
+登場するのは，まとめ役の\textbf{サーバ} 1 台と，データを持つ\textbf{クライアント}複数台である。
+次の一巡を\textbf{ラウンド}（通信ラウンド）と呼び，これを何度も繰り返す（図\ref{fig:fl}）。
+
+\begin{enumerate}
+  \item サーバが，今のモデル（\textbf{グローバルモデル}）$w^t$ を，全クライアントに配る。
+  \item 各クライアント $k$ が，自分のデータだけを使って，式(\ref{eq:sgd})で重みを更新する（\textbf{ローカル学習}）。結果を $w_k^{t+1}$ とする。
+  \item 各クライアントが，学習後の重み $w_k^{t+1}$ をサーバに返す。\textbf{データそのものは送らない。}
+  \item サーバが，返ってきた重みを 1 つにまとめて（\textbf{集約}），新しいグローバルモデル $w^{t+1}$ を作る。
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[core, text width=4.6cm] (s) at (0,0) {\textbf{サーバ}\\グローバルモデル $w^t$ を持つ};
+  \node[file, text width=3.2cm] (c1) at (-5.0,-3.2) {\textbf{クライアント 1}\\自分のデータで学習};
+  \node[file, text width=3.2cm] (c2) at (0,-3.2) {\textbf{クライアント 2}\\自分のデータで学習};
+  \node[file, text width=3.2cm] (c3) at (5.0,-3.2) {\textbf{クライアント $K$}\\自分のデータで学習};
+  \node at (2.5,-3.2) {$\cdots$};
+  \foreach \c/\sx in {c1/-1.6, c2/0, c3/1.6} {
+    \draw[arr] ([xshift=\sx cm - 0.2cm]s.south) -- ([xshift=-0.2cm]\c.north);
+    \draw[arr, dashed] ([xshift=0.2cm]\c.north) -- ([xshift=\sx cm + 0.2cm]s.south);
+  }
+  \node[lab, anchor=east] at (-3.1,-1.4) {(1) モデル $w^t$ を配る};
+  \node[lab, anchor=west] at (3.1,-1.4) {(3) 学習後の重み $w_k^{t+1}$ を返す};
+  \node[lab] at (0,-4.2) {(2) ローカル学習（データはクライアントの外に出ない）};
+  \node[lab] at (0,0.95) {(4) 集約して $w^{t+1}$ を作る};
+\end{tikzpicture}
+\caption{連合学習の 1 ラウンド。実線がサーバからクライアントへ，破線がクライアントからサーバへの通信。}
+\label{fig:fl}
+\end{figure}
+
+本実験では，1 台のコンピュータの中で，サーバとクライアント 20 台を模擬的に動かしている（\textbf{シミュレーション}）。
+その仕組みを提供しているのが，連合学習用のライブラリ \textbf{Flower}（\texttt{flwr}）である。
+
+\subsection{FedAvg（集約の方法）}
+\label{sec:fedavg}
+
+\textbf{FedAvg}（Federated Averaging）は，連合学習の一番基本的な集約の方法で，
+返ってきた重みを，\textbf{各クライアントのデータ数で重み付けして平均する}。
+クライアント $k$ のデータ数を $n_k$，全体を $n = \sum_k n_k$ とすると，次の式になる。
+\begin{equation}
+  w^{t+1} = \sum_{k=1}^{K} \frac{n_k}{n}\, w_k^{t+1}
+  \label{eq:fedavg}
+\end{equation}
+
+\paragraph{重み付き平均の例。}
+データ数が 100 枚のクライアント A と，300 枚のクライアント B がいて，ある重みの値が A は 2，B は 6 だったとする。
+\[
+  \frac{100 \times 2 + 300 \times 6}{100 + 300} = 5
+\]
+単純な平均（4）より，データの多い B の値に近くなる。
+「データをたくさん持っているクライアントの学習結果ほど，重く扱う」という考え方である。
+
+\paragraph{1 ラウンドの手順（本実験の設定）。}
+\begin{enumerate}
+  \item サーバが $w^t$ を 20 台すべてに配る（毎ラウンド全員が参加する）。
+  \item 各クライアントが，手元のデータを 1 周（1 エポック）し，32 枚ずつのバッチで式(\ref{eq:sgd})を繰り返す。
+        データが多いクライアントほど，更新の回数が多い。
+  \item サーバが式(\ref{eq:fedavg})で平均する。
+\end{enumerate}
+
+\paragraph{FedAvg の弱点。}
+式(\ref{eq:fedavg})は，届いた重みを\textbf{すべて信じて}平均に入れる。おかしな値を取り除く仕組みは無い。
+そのため，クライアントの中に，わざとおかしな重みを返す者（悪性クライアント）がいると，その影響がそのままグローバルモデルに入る。
+これに対処する方法は，大きく 2 つある。
+(a) 平均の代わりに中央値などを使い，外れた値の影響を受けにくくする（\textbf{頑健な集約}。Median，Krum など）。
+(b) おかしな更新を見つけて取り除く（\textbf{検知}）。
+本実験が調べているのは (b) の前半，つまり「そもそも見つけられるのか」である。
+
+\subsection{IID / Non-IID と Dirichlet 分割}
+\label{sec:noniid}
+
+\paragraph{IID と Non-IID。}
+クライアントごとのデータの中身が，どれも似たような構成になっている状態を \textbf{IID}（独立同分布）という。
+たとえば，どのクライアントも 0〜9 の数字をほぼ同じ割合で持っている場合である。
+これに対して，クライアントによって中身が偏っている状態を \textbf{Non-IID} という。
+「あるクライアントは 3 と 7 ばかり，別のクライアントは 0 ばかり」という場合である。
+現実の連合学習は，ほぼ必ず Non-IID になる（人によって撮る写真も，打つ文章も違う）。
+
+Non-IID だと，各クライアントは自分の偏ったデータに合うように重みを動かすので，
+\textbf{良性のクライアントどうしでも，学習結果がばらばらになる}。
+これが，本実験の中心にある問題である。良性どうしのばらつきが大きいと，悪性の「おかしさ」が，その中に埋もれてしまう。
+
+\paragraph{Non-IID の種類。}
+Non-IID には種類がある。
+\begin{itemize}
+  \item \textbf{ラベル分布の偏り}：クライアントごとに，持っている数字（クラス）の比率が違う。
+  \item \textbf{特徴分布の偏り}：同じ数字でも，見た目（筆跡など）がクライアントごとに違う。
+  \item \textbf{データ数の偏り}：クライアントごとに，持っている枚数が違う。
+\end{itemize}
+本実験で扱うのは，このうち\textbf{ラベル分布の偏りだけ}である。枚数は全クライアントで同じにしている。
+特徴分布の偏りも与えていない。各クライアントには，同じ数字の画像の中から無作為に配っているので，
+どのクライアントの「7」も同じ集団から偶然選ばれたものであり，筆跡の傾向に系統的な違いはない。
+（書き手ごとにクライアントを分けたデータセット，たとえば FEMNIST を使うと，特徴分布の偏りが自然に生じる。）
+卒論で「特徴分布の偏りは\textbf{意図的には}与えていない」と書いているのは，偶然の小さな違いまでは否定できないためである。
+
+\paragraph{Dirichlet 分割。}
+本実験では，Non-IID の度合いを 1 つの数値 $\alpha$ で調整できるように，\textbf{ディリクレ分布}を使ってデータを分ける。
+設定の \texttt{data-split} が \texttt{"dirichlet\_equal"} のときの分け方は，次のとおりである。
+
+\begin{enumerate}
+  \item クライアント 1 台ごとに，「数字 $0, 1, \dots, 9$ をどんな比率で持つか」の比率を，
+        ディリクレ分布から乱数で 1 組引く。比率の合計は 1 である。
+  \item 全クライアントに，1 枚ずつ順番に画像を配る。配るたびに，そのクライアントの比率に従って，
+        どの数字を配るかをくじで決める。ある数字の在庫がなくなったら，その数字はくじから外す。
+  \item これを 1{,}500 回くり返す。全クライアントが，ちょうど 1{,}500 枚ずつ持つことになる
+        （設定の \texttt{samples-per-client}）。
+\end{enumerate}
+
+比率の平均は，どの数字もデータ全体での割合（約 $0.1$）で同じである。違うのは，ばらつきの大きさで，
+標準偏差はおよそ $\sqrt{0.09\,/\,(\alpha + 1)}$ になる。
+$\alpha$ が大きいほどばらつきが小さく（どのクライアントも全体と同じ比率に近い），$\alpha$ が小さいほどばらつきが大きい（偏る）。
+
+\begin{table}[H]
+\centering
+\caption{$\alpha$ と偏りの関係（クライアント 20 台）。1 行目は理論値，残りは本実験の分割での実測。}
+\label{tab:alpha}
+\begin{tabular}{@{}P{7.4cm} P{2.3cm} P{2.3cm} P{2.3cm}@{}}
+\toprule
+ & $\alpha = 1000$ & $\alpha = 5$ & $\alpha = 1$ \\
+\midrule
+比率の標準偏差（平均は約 0.1） & 0.009 & 0.122 & 0.212 \\
+\midrule
+クライアントが持つ数字の種類（20 台の平均，\texttt{trial} 1） & 10.0 種類 & 9.3 種類 & 5.8 種類 \\
+その中で一番多い数字が占める割合（同上） & 12\% & 41\% & 66\% \\
+クライアントのデータ枚数 & 全員 1{,}500 & 全員 1{,}500 & 全員 1{,}500 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{注意：枚数をそろえている理由。}
+以前は，数字ごとに「どのクライアントに何割ずつ配るか」を引く方式（\texttt{data-split = "dirichlet"}）を使っていた。
+この方式では，$\alpha$ を小さくすると，「どの数字を持っているか」だけでなく，\textbf{「何枚持っているか」も大きく偏る}
+（$\alpha = 0.1$ では，最少 41 枚から最多 15{,}083 枚まで開く）。
+枚数が多いクライアントほど更新の回数が多く，更新が大きくなるので，
+検知のしやすさが変わっても，それが数字の偏りのせいなのか，枚数の偏りのせいなのかを区別できなかった。
+また，FedAvg は枚数で重み付けして平均するので，悪性クライアントの影響力が，台数の割合（0.2）からずれていた。
+枚数が全員同じなら，20 台の重みはどれも $1/20$ で，悪性 4 台の影響力の合計はちょうど $4/20 = 0.2$ になる。
+枚数が不均一だと，悪性 4 台がたまたま枚数の少ないクライアントなら 0.2 より小さく，多いクライアントなら大きくなる
+（以前の方式の $\alpha = 0.1$ では 0.09〜0.16 だった）。
+すると，同じ「悪性割合 0.2」でも，攻撃の効き具合が $\alpha$ や \texttt{trial} によって変わってしまい，
+検知性能や精度の違いが，Non-IID のせいなのか，悪性の影響力の違いのせいなのかを区別できない。
+そこで，枚数を全クライアントで同じにし，数字の比率だけを $\alpha$ で変える方式に切り替えた。
+したがって，本実験の「Non-IID 度」は，ラベル分布の偏りだけを表す。
+
+配る枚数を 1 台あたり 1{,}500 枚（合計 30{,}000 枚。全 60{,}000 枚の半分）にしているのは，
+全部を配りきる設定にすると，同じ数字を欲しがるクライアントが重なったときに在庫が足りなくなり，
+引いた比率どおりに配れなくなるためである。
+
+% =========================================================
+\section{攻撃と検知}
+\label{sec:theory-attack}
+
+\subsection{悪性クライアントと，この実験の前提}
+
+連合学習では，サーバはクライアントのデータを見られない。見えるのは，返ってきた重みだけである。
+そのため，クライアントの一部が\textbf{悪性}で，学習を妨げるような重みをわざと返してきても，簡単には分からない。
+このように，重みを直接書き換えて学習を妨げる攻撃を，\textbf{モデルポイズニング}（model poisoning）と呼ぶ。
+
+本実験の前提は，次のとおりである。
+
+\begin{itemize}
+  \item 20 台のうち 4 台（割合 0.2）が悪性で，実験の最初から最後まで同じ 4 台である。
+  \item 悪性クライアントどうしは協力できる（\textbf{結託}）。
+  \item ALIE 攻撃では，悪性クライアントは，良性クライアントの更新を知っているものとする（攻撃者に有利な想定）。
+  \item 悪性クライアントは，データ数は偽らずに申告する。
+  \item サーバは正直で，どれが悪性かを知らない（実験では答え合わせのために正解を記録するが，検知器には渡さない）。
+\end{itemize}
+
+\subsection{更新ベクトル}
+\label{sec:update-vector}
+
+クライアント $k$ が，配られた重み $w^t$ から，学習でどれだけ動かしたかを\textbf{更新ベクトル}と呼ぶ。
+\begin{equation}
+  g_k = w_k^{t+1} - w^t
+  \label{eq:update}
+\end{equation}
+$g_k$ は，重みの数（266{,}060 個）だけ数値が並んだ，1 本の長いベクトルである。
+検知器が見るのは，この $g_k$ である（重みそのものではなく，動かした分を見る）。
+式(\ref{eq:fedavg})は，$w^{t+1} = w^t + \sum_k (n_k/n)\, g_k$ と書き直せるので，
+FedAvg は「更新ベクトルの重み付き平均だけ，グローバルモデルを動かす」方法だともいえる。
+
+ベクトルには，\textbf{大きさ}（長さ，ノルム）$\|g_k\|$ と\textbf{向き}がある。
+攻撃と検知の話は，ほとんどが「大きさ」と「向き」で説明できる。
+
+\paragraph{高い次元での性質。}
+26 万次元のような高い次元では，互いに関係のない 2 本のベクトルは，ほぼ直角になる
+（実際に 266{,}060 次元で乱数のベクトルを 2 本作ると，なす角のコサインは 0.0003 だった）。
+そのため，2 本のベクトルが同じ方向を向いている，あるいは逆を向いている，というのは，偶然では起きない，意味のある情報になる。
+
+\subsection{符号反転攻撃（sign flip）}
+
+悪性クライアントは，ふつうに学習したあとで，更新ベクトルの符号を反転して送る。
+\begin{equation}
+  g_k^{\mathrm{mal}} = -\,g_k
+\end{equation}
+正直な更新は「損失が下がる向き」なので，その逆は「損失が上がる向き」である。平均に混ざると，学習を逆方向へ引っ張る。
+
+この攻撃では，\textbf{大きさは変わらず}（$\|{-g_k}\| = \|g_k\|$），\textbf{向きだけが正反対}になる。
+そのため，大きさを見る検知器では見つけにくく，向きを見る検知器では見つけやすい。作り方が単純で，隠れる工夫をしていない攻撃である。
+
+\subsection{ALIE 攻撃（A Little Is Enough）}
+\label{sec:alie}
+
+ALIE は，Baruch ら（2019）が提案した，\textbf{良性のばらつきの中に隠れる}攻撃である。
+考え方は，「良性クライアントどうしも，もともとある程度ばらついている。そのばらつきの範囲内で，少しだけ悪い方向にずらせば，見つからない」というものである。
+
+重み 1 つ 1 つ（座標 $j$）について，良性クライアントの更新の平均 $\mu_j$ と標準偏差 $\sigma_j$ を求め，悪性クライアント全員が，次の値を送る。
+\begin{equation}
+  g_j^{\mathrm{mal}} = \mu_j - z\,\sigma_j
+  \label{eq:alie}
+\end{equation}
+$z$ は，ずらす強さを決める数値である。標準偏差は「ふつうのばらつきの幅」を表すので，
+$z$ は「ふつうのばらつきの何倍だけ，平均からずらすか」を意味する。
+
+\paragraph{例。}
+ある重みについて，良性の値の平均が 0.50，標準偏差が 0.10 で，$z = 1$ なら，悪性の値は 0.40 になる。
+良性の値は 0.40〜0.60 あたりに散らばっているので，0.40 は「端のほうにいる良性」に見える。
+
+\paragraph{$z$ の意味。}
+良性の値が正規分布に従うとすると，悪性の値 $\mu_j - z\sigma_j$ より外側（小さい側）にいる良性クライアントの割合は，$z$ だけで決まる（表\ref{tab:z}）。
+$z$ が小さいほど，悪性の値は良性の集団の内側に入り，見つかりにくくなる。その代わり，モデルを動かす力は弱くなる。
+$z$ が大きいほど，攻撃としては強くなるが，目立つ。スイープで $z$ を 8 通り試しているのは，この兼ね合いを調べるためである。
+
+\begin{table}[H]
+\centering
+\caption{$z$ と，悪性の値より外側にいる良性クライアントの割合（正規分布を仮定した場合）}
+\label{tab:z}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+$z$ & 0.385 & 0.5 & 0.75 & 1.0 \\
+\midrule
+外側にいる良性の割合 & 35.0\% & 30.9\% & 22.7\% & 15.9\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+0.385 は，原論文の式を 20 台・悪性 4 台に当てはめたときの $z$ の上限の目安である。
+ただし，原論文の議論は「良性クライアントが IID で，値が正規分布に従う」という仮定に基づいており，Non-IID でも同じ意味を持つとは限らない。
+本実験では，同じ作り方の攻撃を，いろいろな Non-IID 度に当てはめたらどうなるかを，実験的に調べている。
+
+\paragraph{符号反転との違い。}
+\begin{itemize}
+  \item 悪性クライアントは\textbf{全員まったく同じ値}を送る。
+  \item 良性の更新を知らないと作れない。そのため，コードではサーバ側で差し替えている
+        （クライアントは互いの値を見られないので，攻撃者が全員の値を知っている状況を，サーバ側で模擬している）。
+\end{itemize}
+
+\subsection{広がり（spread）と押し出し（push）}
+\label{sec:spread}
+
+「悪性は，良性の集団の内側にいるのか，外側にいるのか」を数値にしたものが，本実験の中心になる指標である。
+良性クライアントの集合を $B$，悪性クライアントの集合を $M$ とし，良性の更新の平均（\textbf{重心}）を $\bar{g}_B$ とする。
+\begin{align}
+  \mathrm{spread} &= \frac{1}{|B|} \sum_{i \in B} \| g_i - \bar{g}_B \| && \text{（良性が，重心からどれだけ散らばっているか）} \\
+  \mathrm{push}   &= \frac{1}{|M|} \sum_{i \in M} \| g_i - \bar{g}_B \| && \text{（悪性が，良性の重心からどれだけ離れているか）} \\
+  \mathrm{push\_ratio} &= \mathrm{push} \,/\, \mathrm{spread}
+\end{align}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  % 左：外側
+  \begin{scope}
+    \draw[dashed] (0,0) circle (1.3);
+    \foreach \x/\y in {0.5/0.9, -0.9/0.6, -0.6/-1.0, 1.0/-0.5, 0.2/-1.2, -1.2/-0.2, 0.9/0.8, -0.3/1.2}
+      \fill (\x,\y) circle (2pt);
+    \draw (0,0) node[cross out, draw, inner sep=2pt] {};
+    \node[lab] at (0,-0.35) {重心 $\bar{g}_B$};
+    \draw[arr] (0,0) -- (3.0,0.6);
+    \node[draw, fill=black!30, inner sep=2.5pt] at (3.1,0.62) {};
+    \node[lab, anchor=west] at (3.3,0.62) {悪性};
+    \node[lab] at (1.9,0.75) {push};
+    \draw[<->] (0,1.55) -- (1.3,1.55);
+    \node[lab] at (0.65,1.8) {spread};
+    \node[font=\footnotesize] at (1.0,-2.0) {$\mathrm{push\_ratio} > 1$：悪性は集団の外側（見つけやすい）};
+  \end{scope}
+  % 右：内側
+  \begin{scope}[xshift=8.6cm]
+    \draw[dashed] (0,0) circle (1.3);
+    \foreach \x/\y in {0.5/0.9, -0.9/0.6, -0.6/-1.0, 1.0/-0.5, 0.2/-1.2, -1.2/-0.2, 0.9/0.8, -0.3/1.2}
+      \fill (\x,\y) circle (2pt);
+    \draw (0,0) node[cross out, draw, inner sep=2pt] {};
+    \draw[arr] (0,0) -- (0.62,0.12);
+    \node[draw, fill=black!30, inner sep=2.5pt] at (0.72,0.14) {};
+    \node[font=\footnotesize] at (0.3,-2.0) {$\mathrm{push\_ratio} < 1$：悪性は集団の内側（紛れる）};
+  \end{scope}
+\end{tikzpicture}
+\caption{spread と push の考え方（実際は 26 万次元だが，2 次元で描いた）。黒い点が良性，灰色の四角が悪性，破線の円が良性の広がり。}
+\label{fig:spread}
+\end{figure}
+
+\paragraph{ALIE では，push\_ratio はほぼ $z$ になる。}
+式(\ref{eq:alie})から，悪性と良性の重心との距離は $\|g^{\mathrm{mal}} - \bar{g}_B\| = z\,\|\sigma\|$ である（$\sigma$ は $\sigma_j$ を並べたベクトル）。
+一方，良性の「距離の 2 乗の平均」の平方根は，ちょうど $\|\sigma\|$ になる（標準偏差の定義そのもの）。
+距離の平均（spread）は，これより大きくはならないので，
+\begin{equation}
+  \mathrm{push\_ratio} = \frac{z\,\|\sigma\|}{\mathrm{spread}} \;\geq\; z
+\end{equation}
+が成り立ち，高い次元では，ほぼ等号になる。つまり ALIE では，\textbf{$z$ を決めると push\_ratio がほぼ決まる}。
+しかも，$\alpha$ を変えても push\_ratio は変わらない。ALIE では，push\_ratio は測って分かる量ではなく，$z$ で決めた量である。
+そこで，push\_ratio と検知性能の関係は符号反転だけで調べ，ALIE は $z$ を攻撃の強さの軸として別に調べる。
+スイープでは，$z$ を 1 より小さい値から大きい値まで 8 通りに振る。
+
+\paragraph{中心仮説。}
+本実験の中心にある仮説は，「push\_ratio が 1 を下回ると（悪性が良性の広がりの内側に入ると），検知が崩れる」というものである。
+Non-IID が強いほど良性の広がり（spread）が大きくなるので，同じ強さの攻撃でも，内側に入りやすくなる。
+上に述べた理由で，この仮説を push\_ratio で確かめるのは符号反転だけとする。
+ALIE は，push\_ratio をほぼ一定にしたまま Non-IID の強さだけを変える条件にあたる。同じ $z$ で $\alpha$ によって検知性能が変われば，それは push\_ratio では説明できない違いである。
+
+\subsection{検知という問題}
+
+サーバの手元には，20 本の更新ベクトルがある。その中から，悪性のものを見つけたい。
+本実験の検知器は，各クライアントに「\textbf{悪性らしさのスコア}」を付ける。スコアが大きいほど，悪性らしいと考える。
+
+「スコアがいくつ以上なら悪性と判定するか」という線引き（\textbf{しきい値}）は，決めていない。
+スコアで順位を付けるだけにして，その順位がどれだけ正解と合っているかを測る（\S\ref{sec:auc}）。
+しきい値の決め方によらずに，検知器そのものの良し悪しを比べるためである。
+
+以下の 4 つの検知器は，どれも「多数派と違うものを疑う」という考え方に立っている。違うのは，\textbf{何が違うことを見るか}である。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \draw[->, black!50] (-3.4,0) -- (4.6,0);
+  \draw[->, black!50] (0,-1.9) -- (0,2.9);
+  % 良性
+  \foreach \ang/\len in {38/2.0, 46/2.2, 52/1.9, 43/2.3, 57/2.1}
+    \draw[arr] (0,0) -- (\ang:\len);
+  \node[lab, anchor=east] at (-0.25,2.3) {良性\\（大きさも向きも近い）};
+  \draw[black!60, line width=0.3pt] (-0.25,2.2) -- (0.95,1.9);
+  % 大きさが違う
+  \draw[arr, line width=1.1pt] (0,0) -- (30:4.4);
+  \node[lab, anchor=north west] at (2.9,1.45) {大きさが違う\\$\rightarrow$ D1 が見つける};
+  % 向きが違う
+  \draw[arr, line width=1.1pt] (0,0) -- (226:2.1);
+  \node[lab, anchor=east] at (-1.6,-1.3) {向きが違う（符号反転）\\$\rightarrow$ D2 が見つける};
+\end{tikzpicture}
+\caption{大きさと向き。矢印 1 本が，クライアント 1 台の更新ベクトルを表す（2 次元で描いた概念図）。}
+\label{fig:vectors}
+\end{figure}
+
+\subsection{検知器 D1：大きさを見る（ノルム偏差）}
+
+各クライアントの更新の大きさ $\|g_i\|$ を測り，全クライアントの\textbf{中央値}からどれだけ離れているかをスコアにする。
+\begin{equation}
+  s_i^{\mathrm{D1}} = \Bigl|\; \|g_i\| - \operatorname*{median}_j \|g_j\| \;\Bigr|
+\end{equation}
+
+\begin{itemize}
+  \item \textbf{考え方}：ほかと比べて，極端に大きい（または小さい）更新は怪しい。
+  \item \textbf{中央値を使う理由}：平均は，極端な値が 1 つあるだけで大きく動く。中央値（大きさの順で真ん中の値）は，半分近くが極端な値にならない限り動かないので，悪性に引っ張られにくい。
+  \item \textbf{得意}：更新を何倍にも大きくする攻撃。
+  \item \textbf{苦手}：大きさが良性と変わらない攻撃。符号反転は大きさが同じなので，原理的に見分けられない。ALIE も，良性の範囲内の大きさになる。
+        また，Non-IID でデータ量が偏ると，良性どうしでも大きさが大きく違うので，悪性かどうかではなくデータ量に反応してしまう。
+\end{itemize}
+
+\paragraph{同点について。}
+クライアントの台数が偶数のとき，中央値は真ん中の 2 台の平均になる。
+すると，その 2 台は中央値からちょうど同じ距離にあり，スコアは数式の上で必ず等しくなる
+（大きさが 2，4，10，20 なら，中央値は 7 で，4 と 10 のスコアはどちらも 3）。
+計算の丸め誤差でこれがずれて，意味のない順位が付くのを防ぐため，コードでは，ごく近い値を同じ値にそろえている。
+
+\subsection{検知器 D2：向きを見る（コサイン距離）}
+
+まず，代表的な向き $r$（\textbf{参照方向}）を決める。重み 1 つ 1 つについて，クライアント間の中央値を取ったベクトルである。
+次に，各クライアントの更新と $r$ のなす角を，\textbf{コサイン}で測る。
+\begin{equation}
+  \cos(g_i, r) = \frac{g_i \cdot r}{\|g_i\|\,\|r\|}, \qquad
+  s_i^{\mathrm{D2}} = 1 - \cos(g_i, r)
+\end{equation}
+$g_i \cdot r$ は内積（同じ位置の値どうしを掛けて，全部足したもの）である。
+コサインは，同じ向きなら 1，直角なら 0，正反対なら $-1$ になる。長さで割っているので，大きさには左右されない。
+スコアは，同じ向きで 0，直角で 1，正反対で 2 になる。
+
+\begin{itemize}
+  \item \textbf{考え方}：みんなが向いている方向と違う方向を向いている更新は怪しい。
+  \item \textbf{得意}：符号反転。正反対を向くので，スコアが最大になる。
+  \item \textbf{苦手}：向きを大きく変えない攻撃。
+\end{itemize}
+
+\paragraph{注意：ALIE では，スコアが逆に出る。}
+ALIE に対しては，D2 は悪性を「見つけられない」のではなく，\textbf{悪性のほうに，良性より低いスコア（より良性らしい）を付ける}傾向がある。
+これまでの実行では，ROC-AUC がほぼ 0 になっていた。
+考えられる理由は，次のとおりである。
+良性クライアントの更新は，それぞれ固有のずれ（自分のデータの偏りによるもの）を持っていて，そのずれは互いにばらばらの方向を向いている。
+一方，ALIE の更新は良性の平均をもとに作るので，この固有のずれを持たない。
+しかも，悪性 4 台のずれ（$-z\sigma$）は全員同じなので，中央値で作る参照方向 $r$ が，そちらに少し引き寄せられる。
+その結果，悪性は誰よりも参照方向に近くなる。いわば，「典型的すぎる」のである。
+この説明は推測を含むので，新しい結果で確かめる必要がある。
+
+\subsection{検知器 D3：まとめて見る（k-means）}
+
+大きさと向きの両方を使い，クライアントを 2 つのグループに分けて，多数派から遠いものを疑う。
+
+\begin{enumerate}
+  \item 各クライアントを，4 つの数値（\textbf{特徴量}）で表す。
+        更新の大きさ $\|g_i\|$，D2 のスコア，第 1 主成分の成分，第 2 主成分の成分（主成分は D4 の項で説明する）。
+  \item 4 つの数値を\textbf{標準化}する。それぞれについて，$(\text{値} - \text{平均}) \div \text{標準偏差}$ を計算し，平均 0・ばらつき 1 にそろえる。
+        大きさと向きでは値の桁が違うので，そろえないと，桁の大きいものだけで結果が決まってしまう。
+  \item \textbf{k-means 法}で，2 つのグループに分ける。
+  \item 人数の多いグループを「良性」とみなし，その中心 $c$ までの距離をスコアにする：$s_i^{\mathrm{D3}} = \|z_i - c\|$（$z_i$ は標準化した特徴量）。
+\end{enumerate}
+
+\paragraph{k-means 法。}
+データを，似た者どうしのグループに分ける方法である。
+(1) グループの中心を仮に決める，(2) 各データを近いほうの中心のグループに入れる，(3) 各グループの平均を新しい中心にする，
+という手順の (2) と (3) を，変わらなくなるまで繰り返す。
+最初の中心の置き方によって，違う分け方に落ち着くことがある（置き方が悪いと，もっと良い分け方にたどり着けない）。
+ふつうは最初の中心を乱数で何度か変えて試すが，それでは実行のたびに結果が変わりうる。
+本実験では，最初の中心を全部の組み合わせ（20 台なら 190 通り）で試し，グループが一番よくまとまった分け方を採用している。
+乱数を使わないので，同じ入力なら必ず同じ結果になる。
+
+\begin{itemize}
+  \item \textbf{考え方}：悪性は少数派で，多数派とは違うまとまりを作るはずである。
+  \item \textbf{得意}：D1 か D2 の片方でしか見えない攻撃にも対応できる。
+  \item \textbf{苦手}：悪性が多数派になると，前提が成り立たない。また，良性どうしのばらつきが大きく，
+        グループがはっきり分かれない場合は，分け方が悪性・良性の区別と関係のないものになる。
+\end{itemize}
+
+\subsection{検知器 D4：一番ばらついている方向を見る（スペクトル）}
+\label{sec:d4}
+
+\paragraph{主成分分析（PCA）。}
+26 万次元のデータを，そのまま眺めることはできない。そこで，「クライアントによる違いが一番はっきり出る方向」を探す。
+
+教室の生徒の身長と体重を，横軸と縦軸に取って点を打つと，点は右上がりの細長い雲になる。
+その雲が一番長く伸びている向き（「体が大きい／小さい」にあたる向き）を\textbf{第 1 主成分}と呼ぶ。
+それと直角で，次に広がっている向き（「太め／細め」にあたる向き）が\textbf{第 2 主成分}である。
+本実験では，身長・体重の 2 個が，26 万個の重みに増えているだけである。
+
+\paragraph{手順。}
+\begin{enumerate}
+  \item 各クライアントの更新から，全クライアントの平均を引く：$\tilde{g}_i = g_i - \bar{g}$（\textbf{中心化}。位置ではなく，中心からのずれを見る）。
+  \item 中心化した更新を行に並べた表（行列）の，第 1 主成分の方向 $v$（長さ 1 のベクトル）を求める。計算には\textbf{特異値分解}（SVD）を使う。
+  \item 各クライアントのずれを $v$ に射影し（$v$ 方向の成分を取り出し），その 2 乗をスコアにする。
+\end{enumerate}
+\begin{equation}
+  s_i^{\mathrm{D4}} = (\tilde{g}_i \cdot v)^2
+\end{equation}
+2 乗するのは，$v$ のプラス側に離れていても，マイナス側に離れていても，同じように「離れている」と数えるためである。
+
+\begin{itemize}
+  \item \textbf{考え方}：悪性クライアントがまとまって同じ方向にずれていると，「クライアント間の違いが一番大きい方向」が，
+        ちょうど「悪性と良性を分ける方向」になる。その方向に大きく突き出しているものが悪性である。
+        バックドア攻撃の検知で提案された，スペクトル・シグネチャ（Tran ら，2018）の考え方に基づく。
+  \item \textbf{得意}：悪性が全員同じ更新を送る攻撃（ALIE）や，全員が同じ向きにずれる攻撃。
+  \item \textbf{苦手}：良性どうしの違いのほうが大きい場合。このとき，第 1 主成分は良性どうしの違いを表す方向になり，悪性は目立たない。
+        Non-IID が強いと，まさにこれが起きうる。
+\end{itemize}
+
+\paragraph{分布構造の診断指標。}
+D4 がうまく働いたかどうかを考える材料として，本実験では次の指標も記録している。
+\begin{itemize}
+  \item \textbf{第 1 主成分の寄与率}（\texttt{pc1\_ratio}）：ばらつき全体のうち，第 1 主成分の方向が何割を占めるか。
+        1 に近ければ細長い形，小さければ丸い形に散らばっている。
+  \item \textbf{悪性の方向と第 1 主成分の重なり}（\texttt{mal\_cos\_pc1}）：悪性のずれている方向と，第 1 主成分の方向の，コサインの絶対値。
+        1 に近ければ，D4 が見ている方向が悪性の方向と一致している。
+  \item \textbf{悪性の値の順位}（\texttt{mal\_rank\_mean}）：重み 1 つ 1 つについて，悪性の値以下である良性が何割いるかを求め，全部の重みで平均したもの。
+\end{itemize}
+これらは正解を使って計算するので，検知器ではなく，考察のための指標である。
+
+\subsection{4 つの検知器のまとめ}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{1.6cm} P{3.6cm} P{4.6cm} P{5.5cm}@{}}
+\toprule
+検知器 & 見るもの & 得意 & 苦手 \\
+\midrule
+D1 & 更新の大きさ & 極端に大きい・小さい更新 & 大きさが良性と同じ攻撃。データ量の偏り。 \\
+D2 & 更新の向き & 向きを逆にする攻撃（符号反転） & 向きを変えない攻撃。ALIE には逆向きに反応する。 \\
+D3 & 大きさ・向き・主成分をまとめて & 片方でしか見えない攻撃 & 悪性が多数派の場合。グループが分かれない場合。 \\
+D4 & 一番ばらつきの大きい方向 & 悪性がそろって同じ方向にずれる攻撃 & 良性どうしのばらつきが大きい場合。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =========================================================
+\section{評価とスイープ}
+\label{sec:theory-eval}
+
+\subsection{ROC-AUC}
+\label{sec:auc}
+
+検知器の成績は，\textbf{ROC-AUC}（以下 AUC）で測る。意味は，次のとおりである。
+
+\begin{quote}
+悪性クライアントを 1 台，良性クライアントを 1 台，でたらめに選んだとき，\textbf{悪性のほうがスコアが高くなっている確率}。
+\end{quote}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{2.0cm} P{13.3cm}@{}}
+\toprule
+AUC & 意味 \\
+\midrule
+1.0 & どの組でも，悪性のほうがスコアが高い。完全に見分けられる。 \\
+0.5 & 半々。でたらめに順位を付けたのと同じで，見分けられていない。 \\
+0.0 & どの組でも，悪性のほうがスコアが低い。悪性のほうが「良性らしい」と判定されている。
+\textbf{見分けられていないのではなく，逆向きにはっきり分かれている}（スコアの向きを逆にすれば，完全に見分けられる）。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{名前の由来。}
+しきい値を決めると，「悪性のうち，正しく悪性と判定できた割合」（真陽性率）と，「良性のうち，誤って悪性と判定した割合」（偽陽性率）が決まる。
+しきい値をいろいろに変えて，この 2 つを縦軸と横軸に取って描いた曲線を ROC 曲線といい，その下の面積（Area Under the Curve）が AUC である。
+この面積が，上に書いた確率と等しくなることが知られている。しきい値を 1 つに決めなくてよいので，検知器どうしを公平に比べられる。
+
+\paragraph{計算の例。}
+クライアントが 5 台で，A と C が悪性だとする。
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+クライアント & A & B & C & D & E \\
+\midrule
+正解 & 悪性 & 良性 & 悪性 & 良性 & 良性 \\
+スコア & 0.9 & 0.2 & 0.3 & 0.4 & 0.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+「悪性 1 台と良性 1 台」の組は，$2 \times 3 = 6$ 組ある。A（0.9）は，B・D・E の 3 台すべてより高い。
+C（0.3）は，B と E より高いが，D（0.4）より低い。悪性のほうが高い組は 6 組中 5 組なので，$\mathrm{AUC} = 5/6 \approx 0.83$ である。
+スコアが同じ値（同点）の組は，0.5 組として数える。
+
+\paragraph{攻撃なしの条件。}
+悪性が 0 台だと，「悪性と良性の組」が作れないので，AUC は計算できない（NaN と記録される）。これは正常である。
+
+\subsection{そのほかの指標}
+
+\begin{itemize}
+  \item \textbf{上位 $f$ 台での再現率・適合率}（\texttt{recall\_at\_f}，\texttt{precision\_at\_f}）：
+        「スコアの高い順に，上位 $f$ 台を悪性と判定する」と決めたときの成績。$f$ は実際の悪性の台数（本実験では 4）。
+        再現率は，本当の悪性のうち，上位 $f$ 台に入っていた割合。適合率は，上位 $f$ 台のうち，本当に悪性だった割合。
+        $f$ が悪性の台数と同じなので，この 2 つは同じ値になる。上の例（$f = 2$）では，上位 2 台は A と D なので，どちらも 0.5 である。
+  \item \textbf{平均適合率}（\texttt{ap}）：スコアの高い順に見ていき，悪性が現れるたびに「ここまでの中で悪性は何割か」を記録して，平均したもの。
+        上の例では，A の位置で $1/1$，C の位置で $2/3$ なので，$(1 + 2/3) / 2 \approx 0.83$ である。
+  \item \textbf{精度}（accuracy）：グローバルモデルが，テストデータ 10{,}000 枚のうち何割に正しく答えたか。
+        検知の成績ではなく，学習がどこまで進んだか，攻撃でどれだけ妨げられたかを見るための値である。
+\end{itemize}
+
+\subsection{スイープとは}
+\label{sec:sweep}
+
+\paragraph{条件と実行。}
+1 回の連合学習を，最初のラウンドから最後のラウンドまで通して行うことを，1 回の\textbf{実行}と呼ぶ。
+実行のときに決めておく設定の組み合わせ（Non-IID 度は $\alpha = 1$，攻撃は ALIE，$z = 0.5$，…）が，1 つの\textbf{条件}である。
+
+\paragraph{スイープ。}
+知りたいのは，「Non-IID 度を変えると，検知はどう変わるか」「攻撃の強さを変えるとどうか」といった，設定と結果の関係である。
+そのためには，設定を少しずつ変えながら，何度も実行する必要がある。
+このように，\textbf{設定をいくつかの値に振って，その組み合わせをすべて実行すること}を，\textbf{スイープ}（sweep）と呼ぶ。
+振る設定のことを\textbf{軸}という。
+
+本実験の軸は，Non-IID 度（$\alpha$），攻撃の種類，ALIE の強さ（$z$），繰り返しの番号（trial）である。
+
+\begin{table}[H]
+\centering
+\caption{本実験のスイープ（各条件が 10 回の実行，計 300 回）。ALIE の $z$ は 0.385，0.5，0.75，1.0，1.25，1.5，2.0，3.0 の 8 通り}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & 攻撃なし & 符号反転 & ALIE（$z$ 8 通り，各 10 回） & 計 \\
+\midrule
+$\alpha = 1000$（ほぼ IID） & 10 & 10 & 80 & 100 \\
+$\alpha = 5$（中程度） & 10 & 10 & 80 & 100 \\
+$\alpha = 1$（強い偏り） & 10 & 10 & 80 & 100 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{繰り返し（trial）と乱数の種。}
+実験には，乱数で決まる部分がある（データの分け方，モデルの最初の重み，どのクライアントが悪性か，学習時のデータの順番）。
+1 回だけの実行では，結果が設定のせいなのか，たまたまの巡り合わせなのかを区別できない。
+そこで，同じ条件を，乱数だけを変えて 10 回繰り返し，平均とばらつき（標準偏差）を見る。この繰り返しの番号が \textbf{trial} である。
+
+乱数は，\textbf{種}（seed）と呼ぶ数値を決めると，毎回同じ並びで出てくる。
+本実験では trial 番号を種にしているので，同じ trial 番号なら何度実行しても同じ結果になり（\textbf{再現性}），trial 番号を変えると別の結果になる。
+
+\paragraph{攻撃なしの条件を入れる理由。}
+悪性がいないので AUC は計算できないが，「良性だけのときの広がり（spread）」と「攻撃がないときの精度」の基準が得られる。
+攻撃ありの結果は，これと比べて読む。
+
+% =========================================================
+\part{コードの全体像}
+\label{part:code}
+
+% =========================================================
+\section{全体像}
+\label{sec:overview}
+
+連合学習，攻撃，検知の考え方は第 I 部で説明した。
+ここでは，それがコードの中でどのファイルに書かれ，どうつながっているかを示す。
+
+\subsection{ファイルの配置と，実験の流れ}
+
+図\ref{fig:pipeline}に，ファイルの配置と，実験が進む順番を示す。
+設定を書く場所は \texttt{pyproject.toml} の 1 か所だけで，
+人が直接実行するのは \texttt{run\_experiments.py} と \texttt{analyze\_detection.py} の 2 つである。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.9cm and 1.6cm]
+  % 上段
+  \node[file, text width=3.2cm] (toml) {\texttt{pyproject.toml}\\設定（ここだけに書く）};
+  \node[file, text width=3.6cm, right=of toml] (run) {\texttt{run\_experiments.py}\\300 条件を順に起動する};
+  \node[core, text width=4.2cm, right=of run] (fl) {\texttt{fl\_detection/}（9 ファイル）\\連合学習を 1 条件ぶん実行する};
+  % 下段
+  \node[data, text width=4.2cm, below=1.5cm of fl] (logs) {\texttt{<output-root>/\_logs/}\\ログ（CSV 4 つと設定の記録）};
+  \node[file, text width=3.6cm, left=of logs] (ana) {\texttt{analyze\_detection.py}\\集計して図と表にする};
+  \node[data, text width=3.2cm, left=of ana] (out) {\texttt{\_logs/analysis/}\\図 2 枚・表 2 つ};
+  % 矢印
+  \draw[arr] (toml) -- node[lab, above] {軸を読む} (run);
+  \draw[arr] (run) -- node[lab, above] {\texttt{flwr run}} node[lab, below] {（300 回）} (fl);
+  \draw[arr] (toml.north) -- ++(0,0.55) -| node[lab, above, pos=0.25] {共通の設定を読む} (fl.north);
+  \draw[arr] (fl) -- node[lab, right] {毎ラウンド\\追記する} (logs);
+  \draw[arr] (logs) -- node[lab, above] {読む} (ana);
+  \draw[arr] (ana) -- node[lab, above] {保存する} (out);
+\end{tikzpicture}
+\caption{ファイルの配置と実験の流れ。実線の箱がプログラムと設定，破線の箱が出力されるデータ。
+濃い箱が，連合学習の実行中に動くコード。}
+\label{fig:pipeline}
+\end{figure}
+
+役割は，次の 3 つに分かれている。
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{4.4cm} P{4.2cm} P{6.7cm}@{}}
+\toprule
+場所 & 役割 & 補足 \\
+\midrule
+\texttt{fl\_detection/} & 連合学習の実行中に動く & 研究の中身（学習，攻撃，検知，集約，記録）はすべてここにある。 \\
+\texttt{run\_experiments.py} & 実行を外から繰り返す & 条件を変えながら \texttt{flwr run} を 300 回呼ぶだけ。研究の中身は持たない。 \\
+\texttt{analyze\_detection.py} & 実行後の結果を読む & ログを読んで平均を取り，図と表にするだけ。実験コードには依存しない。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{\texttt{fl\_detection/} の中のつながり}
+
+図\ref{fig:modules}に，9 つのファイルのあいだの「誰が誰を使っているか」を示す。
+矢印は「使う側 $\rightarrow$ 使われる側」である。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  % 入口
+  \node[file, text width=2.6cm] (mal) at (0,0) {\texttt{malicious.py}\\誰が悪性か};
+  \node[core, text width=3.0cm] (srv) at (4.1,0) {\texttt{server\_app.py}\\サーバの入口};
+  \node[file, text width=2.6cm] (task) at (8.3,0) {\texttt{task.py}\\モデル・データ\\学習・評価};
+  \node[core, text width=3.0cm] (cli) at (12.5,0) {\texttt{client\_app.py}\\クライアントの入口};
+  % 進行
+  \node[core, text width=3.6cm] (st) at (4.1,-2.4) {\texttt{robust\_strategy.py}\\毎ラウンドの進行役};
+  % 部品
+  \node[file, text width=2.6cm] (log) at (0,-5.0) {\texttt{log\_output.py}\\ログを書く};
+  \node[file, text width=2.6cm] (det) at (4.1,-5.0) {\texttt{detection.py}\\検知器と成績};
+  \node[file, text width=2.6cm] (agg) at (8.3,-5.0) {\texttt{aggregation.py}\\形の変換と集約};
+  \node[file, text width=2.6cm] (atk) at (12.5,-5.0) {\texttt{attack.py}\\攻撃の中身};
+  % 矢印
+  \draw[arr] (srv) -- (mal);
+  \draw[arr] (srv) -- (task);
+  \draw[arr] (cli) -- (task);
+  \draw[arr] (srv) -- node[lab, right] {組み立てて\\開始する} (st);
+  \draw[arr] (srv.south west) -- (log.north);
+  \draw[arr] (st) -- (log);
+  \draw[arr] (st) -- (det);
+  \draw[arr] (st) -- (agg);
+  \draw[arr] (st.east) -- node[lab, above, sloped, pos=0.55] {ALIE} (atk.north west);
+  \draw[arr] (cli) -- node[lab, right] {符号反転} (atk);
+  % Flower
+  \node[lab] (fw) at (8.3,1.9) {Flower（\texttt{flwr run}）が，\texttt{pyproject.toml} を見てこの 2 つを起動する};
+  \draw[arr] (fw.south west) ++(1.2,0) -- (srv.north east);
+  \draw[arr] (fw.south east) ++(-1.2,0) -- (cli.north west);
+\end{tikzpicture}
+\caption{\texttt{fl\_detection/} の 9 ファイルの関係（\texttt{\_\_init\_\_.py} は目印だけのファイルなので省略）。
+濃い箱は Flower から呼ばれる側で，薄い箱は値を受け取って値を返すだけの部品。
+\texttt{client\_app.py} は画面表示のために \texttt{log\_output.py} も使うが，図では省いた。}
+\label{fig:modules}
+\end{figure}
+
+読み取ってほしいのは，次の 3 点である。
+
+\begin{itemize}
+  \item \textbf{入口は 2 つ。} Flower が起動するのは \texttt{server\_app.py} と \texttt{client\_app.py} だけで，
+        ほかのファイルは，この 2 つ（と \texttt{robust\_strategy.py}）から呼ばれて初めて動く。
+  \item \textbf{研究の中心は \texttt{robust\_strategy.py}。}
+        攻撃の差し込み，検知スコアの計算，記録，集約を，毎ラウンド順番に呼び出している。
+        \texttt{server\_app.py} に攻撃や検知が出てこないのは，この中に入っているためである。
+  \item \textbf{攻撃の入り口は 2 か所。} 符号反転はクライアントが自分で行い，
+        ALIE はサーバ側で差し替える（\S\ref{sec:attack}）。
+\end{itemize}
+
+\subsection{1 ラウンドのあいだに起きること}
+
+図\ref{fig:round}に，1 ラウンドの処理を，サーバ側とクライアント側に分けて示す。
+各ステップの下に，その処理が書かれているファイルと関数を記した。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \def\sx{0}      % サーバの列
+  \def\cx{8.3}    % クライアントの列
+  \tikzset{stepbox/.style={box, text width=6.0cm, align=left, minimum height=1.0cm}}
+  \tikzset{hot/.style={stepbox, fill=black!14, line width=0.8pt}}
+  \node[font=\small\bfseries] at (\sx,1.0) {サーバ（1 台）};
+  \node[font=\small\bfseries] at (\cx,1.0) {クライアント（20 台それぞれ）};
+
+  \node[stepbox] (s1) at (\sx,0) {\textbf{1. 設定とモデルを配る}\\{\scriptsize\texttt{robust\_strategy.configure\_train}}};
+  \node[stepbox] (c1) at (\cx,-1.5) {\textbf{2. 自分の担当データを読む}\\{\scriptsize\texttt{task.load\_data}（Dirichlet 分割）}};
+  \node[stepbox] (c2) at (\cx,-3.0) {\textbf{3. 手元のデータで学習する}\\{\scriptsize\texttt{task.train}}};
+  \node[hot]  (c3) at (\cx,-4.5) {\textbf{4. 悪性かつ符号反転なら，更新の向きを逆にする}\\{\scriptsize\texttt{attack.sign\_flip\_delta}}};
+  \node[stepbox] (s2) at (\sx,-6.0) {\textbf{5. 返信を確認し，重みを表に並べる}\\{\scriptsize 台数の照合，\texttt{aggregation.state\_dict\_to\_vector}}};
+  \node[hot]  (s3) at (\sx,-7.5) {\textbf{6. ALIE なら，悪性の行を差し替える}\\{\scriptsize\texttt{attack.alie\_attack}}};
+  \node[hot]  (s4) at (\sx,-9.0) {\textbf{7. 検知スコアと成績を計算し，記録する}\\{\scriptsize\texttt{detection.*} $\rightarrow$ \texttt{log\_output.log\_detection\_*}}};
+  \node[stepbox] (s5) at (\sx,-10.5) {\textbf{8. 集約して新しいモデルを作る}\\{\scriptsize\texttt{aggregation.aggregate}（FedAvg）}};
+  \node[stepbox] (s6) at (\sx,-12.0) {\textbf{9. テストデータで精度を測り，記録する}\\{\scriptsize\texttt{server\_app.global\_evaluate}，\texttt{task.test}}};
+
+  \draw[arr] (s1.east) -| node[lab, above, pos=0.25] {モデルと設定} (c1.north);
+  \draw[arr] (c1) -- (c2);
+  \draw[arr] (c2) -- (c3);
+  \draw[arr] (c3.south) |- node[lab, above, pos=0.75] {学習後の重み，データ数，クライアント番号} (s2.east);
+  \draw[arr] (s2) -- (s3);
+  \draw[arr] (s3) -- (s4);
+  \draw[arr] (s4) -- (s5);
+  \draw[arr] (s5) -- (s6);
+  \draw[arr] (s6.west) -- ++(-0.7,0) |- node[lab, left, pos=0.25] {次の\\ラウンドへ} (s1.west);
+\end{tikzpicture}
+\caption{1 ラウンドの流れ。濃い箱が，攻撃と検知に関わるステップ。
+ステップ 7 がこの研究の中心で，ここで記録した値が実験の結果になる。
+ステップ 7 は記録するだけで，ステップ 8 の集約には影響しない。}
+\label{fig:round}
+\end{figure}
+
+% =========================================================
+\section{各ファイルの説明}
+\label{sec:files}
+
+ファイルごとに，役割，主な関数，読むときの要点をまとめる。
+各行の意味は，ファイルの中にコメントとして書いてある（「【この部分の説明】」などの見出しが付いている）。
+
+\subsection{読む順番の目安}
+
+\begin{enumerate}
+  \item \texttt{server\_app.py}：実験全体がどう始まり，どう終わるか。
+  \item \texttt{client\_app.py}：クライアント 1 台が何をするか。
+  \item \texttt{robust\_strategy.py}：毎ラウンド，サーバ側で何が起きるか（研究の中心）。
+  \item \texttt{attack.py}，\texttt{detection.py}：攻撃と検知の中身。
+  \item \texttt{task.py}，\texttt{aggregation.py}，\texttt{malicious.py}，\texttt{log\_output.py}：必要になったときに。
+\end{enumerate}
+
+\subsection{\texttt{fl\_detection/server\_app.py}（サーバの入口）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] サーバ側の本体。\texttt{flwr run} で最初に実行される \texttt{main()} が入っている。
+        自分ではほとんど計算をせず，次の順で全体を指揮する。
+  \item[流れ]
+        (1) 設定を読む $\rightarrow$
+        (2) 出力先とログの保存先を決める $\rightarrow$
+        (3) 悪性クライアントを決める $\rightarrow$
+        (4) 設定を表示し，\texttt{run\_config.txt} に記録する $\rightarrow$
+        (5) 乱数の種を固定する $\rightarrow$
+        (6) 最初のモデルを作る $\rightarrow$
+        (7) 戦略（\texttt{RobustFedAvg}）を組み立てる $\rightarrow$
+        (8) 毎ラウンドの採点のしかた（\texttt{global\_evaluate}）を定義する $\rightarrow$
+        (9) 連合学習を開始する $\rightarrow$
+        (10) 最終モデルと最終結果を保存する。
+  \item[要点] 実行時間のほとんどは，(9) の \texttt{strategy.start(...)} の 1 行で費やされる。
+        ここで全ラウンドが回り，終わるまで先へ進まない。それより上は準備，下は後片付けである。
+        \texttt{global\_evaluate} は，ここでは定義するだけで，実行するのは Flower（毎ラウンド 1 回）である。
+\end{description}
+
+\subsection{\texttt{fl\_detection/client\_app.py}（クライアントの入口）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] クライアント 1 台ぶんの処理。同じコードが，クライアントの台数ぶん呼び出される。
+        自分が何番のクライアントかは，実行時に Flower から受け取る。
+  \item[主な関数]
+        \texttt{train()}：サーバからの「学習して」という依頼に応える（毎ラウンド，全クライアント）。\\
+        \texttt{evaluate()}：「採点して」という依頼に応える（毎ラウンド，一部のクライアント。結果は画面に表示するだけ）。
+  \item[\texttt{train()} の流れ]
+        設定を取り出す $\rightarrow$ 届いた重みでモデルを作る $\rightarrow$ 自分の担当データを読む $\rightarrow$
+        学習する $\rightarrow$ 学習後の重みを取り出す $\rightarrow$ 悪性なら攻撃する $\rightarrow$ サーバへ返す。
+  \item[要点] 攻撃は，更新量 $\Delta = \text{学習後の重み} - \text{学習前の重み}$ に対して行う。
+        悪性かつ攻撃が符号反転のときだけ，$\Delta$ の符号を反転する。
+        ALIE のときは，悪性クライアントもここでは何もせず，正直な結果を返す。
+\end{description}
+
+\subsection{\texttt{fl\_detection/robust\_strategy.py}（毎ラウンドの進行役）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] 「毎ラウンド何をするか」を担当するクラス \texttt{RobustFedAvg}。
+        Flower 標準の FedAvg を継承し，3 つのメソッドだけを書き直している。
+  \item[主なメソッド]
+        \texttt{configure\_train}：学習の依頼を出す前。設定を配り，配る前のグローバルモデルを控える。\\
+        \texttt{configure\_evaluate}：評価の依頼を出す前。設定を配る。\\
+        \texttt{aggregate\_train}：学習結果が届いた後。\textbf{攻撃の差し込み，検知，記録，集約}を行う。
+  \item[\texttt{aggregate\_train} の流れ]
+        (1) 返信を確認し（台数の照合），番号順に並べる $\rightarrow$
+        (2) 重みをベクトルに並べ直して表にする $\rightarrow$
+        (3) どの行が悪性かを特定する $\rightarrow$
+        (4) ALIE なら悪性の行を差し替える $\rightarrow$
+        (5) 良性の広がりと悪性の押し出し具合を測る $\rightarrow$
+        (6) 検知スコアを計算して記録する $\rightarrow$
+        (7) 成績（ROC-AUC など）を計算して記録する $\rightarrow$
+        (8) 集約する。
+  \item[要点] これらのメソッドを呼ぶのは Flower で，呼び出しはどのファイルにも書かれていない。
+        扱うデータは，行がクライアント（20 行），列がモデルの重み 1 つ 1 つ（266{,}060 列）の表である。
+        正解（どれが悪性か）は成績を付けるためだけに使い，検知器には渡していない。
+\end{description}
+
+\subsection{\texttt{fl\_detection/attack.py}（攻撃の中身）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] 攻撃の計算だけを書いたファイル。「いつ，誰に対して攻撃するか」は，呼び出す側が決める。
+  \item[主な関数]
+        \texttt{sign\_flip\_delta}：更新量の符号を反転する。\texttt{client\_app.py} から呼ばれる。\\
+        \texttt{alie\_attack}：良性の平均 $\mu$ と標準偏差 $\sigma$ から $\mu - z\sigma$ を作り，悪性の行に入れる。
+        \texttt{robust\_strategy.py} から呼ばれる。\\
+        \texttt{alie\_z\_max}：原論文の式による $z$ の目安を計算する。実験中は呼ばれない（テスト用）。
+  \item[要点] 符号反転は 1 台ぶんの「層ごとの辞書」を，ALIE は全クライアントぶんの「表」を扱う。
+        ALIE がサーバ側で動くのは，ほかのクライアントの値を見ないと作れない攻撃だからである。
+\end{description}
+
+\subsection{\texttt{fl\_detection/detection.py}（検知器と成績）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] 検知に関する計算だけを書いたファイル。3 つの部分に分かれている。
+  \item[1) 検知器] \texttt{all\_detector\_scores}：4 つの検知器（D1--D4）のスコアをまとめて計算する。
+        どの検知器も「スコアが大きいほど悪性らしい」向きにそろえてある。正解は使わない。
+  \item[2) 分布構造の診断指標] \texttt{structure\_diagnostics}：良性の更新がどんな形で散らばり，
+        悪性がその中のどこにいるかを測る。考察用で，正解を使う。検知器ではない。
+  \item[3) 検知性能指標] \texttt{evaluate\_scores}：スコアと正解から，ROC-AUC，平均適合率，
+        上位 $f$ 台での再現率と適合率を計算する。
+  \item[要点] しきい値（どの値から悪性と判定するか）は決めていない。スコアで順位を付けるだけで，
+        その順位がどれだけ正解と合っているかを ROC-AUC で測る。
+        主成分分析や ROC-AUC の計算など，数学として難しい箇所の補足を，ファイルの末尾にまとめてある。
+\end{description}
+
+\subsection{\texttt{fl\_detection/task.py}（モデル・データ・学習）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] 連合学習の仕組みとは関係のない，ふつうの機械学習の部品。
+  \item[主な関数]
+        \texttt{Net}：手書き数字の画像を受け取り，0〜9 のどれかを答える CNN（重みは 266{,}060 個）。\\
+        \texttt{load\_data}：クライアント 1 台が使うデータを用意する。中で Dirichlet 分割を行う。\\
+        \texttt{load\_centralized\_dataset}：サーバが採点に使うテストデータ（10{,}000 枚）を用意する。\\
+        \texttt{train} / \texttt{test}：モデルを学習させる / 採点する。
+  \item[要点] Non-IID を作っているのは，この中の \texttt{\_build\_dirichlet\_equal\_partitions} である。
+        クライアント 1 台ごとに，「数字 0〜9 をどんな比率で持つか」を乱数で決め，その比率で全員に同じ枚数（1{,}500 枚）を配る。
+        $\alpha$ を小さくすると持っている数字が偏るが，\textbf{枚数は全クライアントで同じ}である（\S\ref{sec:noniid}）。
+        以前の方式（枚数も偏る）は \texttt{\_build\_dirichlet\_partitions} として残してある。
+        各クライアントは，担当ぶんの 8 割（1{,}200 枚）を学習に，2 割を自分の評価に使う。
+\end{description}
+
+\subsection{\texttt{fl\_detection/aggregation.py}（形の変換と集約）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] モデルの重みを，「層ごとの辞書」と「1 本の長いベクトル」のあいだで変換する処理と，集約（FedAvg）。
+  \item[主な関数]
+        \texttt{state\_dict\_to\_vector} / \texttt{vector\_to\_state\_dict}：形の変換。\\
+        \texttt{stack\_updates}：クライアントごとのベクトルを，1 つの表に積む。\\
+        \texttt{aggregate}：手法の名前を受け取り，その手法で集約する（現在は \texttt{fedavg} だけ）。
+  \item[要点] 平均を取る，更新の大きさや向きを測る，といった計算は，層の区別なく全部の重みを同列に扱いたい。
+        そのため，集約だけでなく ALIE 攻撃と検知も，このベクトルの形で計算している。
+        FedAvg は，各クライアントのデータ数で重み付けした平均である。
+\end{description}
+
+\subsection{\texttt{fl\_detection/malicious.py}（誰が悪性か）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] どのクライアントを悪性にするかを決める。実験の最初に 1 回だけ使われ，決まった番号は最後まで変わらない。
+  \item[主な関数] \texttt{generate\_malicious\_ids}：台数，割合，乱数の種から，悪性にするクライアントの番号を選ぶ。
+  \item[要点] 台数 $\times$ 割合が整数にならない設定は，エラーになる。
+        スイープでは乱数の種に \texttt{trial} を渡すので，\texttt{trial} ごとに悪性になるクライアントが変わる
+        （20 台・割合 0.2 の場合，\texttt{trial} 1 では 8, 9, 14, 19 番）。
+\end{description}
+
+\subsection{\texttt{fl\_detection/log\_output.py}（ログを書く）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] 記録をファイルに書き出す。計算はしない。渡された値を，決まった列の順番で，ファイルの末尾に書き足すだけである。
+  \item[主な関数]
+        \texttt{configure\_log\_dir}：書き出し先のフォルダを切り替える。\\
+        \texttt{log\_run\_config}：設定の全項目を \texttt{run\_config.txt} に書く。\\
+        \texttt{log\_detection\_csv} / \texttt{log\_detection\_metrics\_csv}：検知のログを書く。\\
+        \texttt{log\_results\_csv} / \texttt{log\_summary\_csv}：精度のログを書く。
+  \item[要点] どのファイルも上書きではなく追記で，300 条件が同じファイルに順番に書き足される。
+        どの行がどの条件のものかは，各行に入っている条件の列で見分ける。
+\end{description}
+
+\subsection{\texttt{run\_experiments.py}（スイープの起動）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] 条件を変えながら，\texttt{flwr run} を順番に呼ぶ。人が手でコマンドを 300 回打つ代わりをしているだけで，研究の中身は持たない。
+  \item[流れ]
+        \texttt{pyproject.toml} を読む $\rightarrow$ 条件の一覧を作る $\rightarrow$ Flower のコマンドとクライアントの台数を確かめる $\rightarrow$
+        条件を 1 つずつ実行する $\rightarrow$ 完了・スキップ・失敗の件数を表示する。
+  \item[要点] 条件ごとに，最後に作られる \texttt{final\_model.pt} があるかどうかで，成功か失敗かを判断する
+        （\texttt{flwr run} は，中でエラーが起きても「成功」と返すことがあるため）。
+        このファイルがある条件は飛ばすので，途中で止めても，もう一度実行すれば続きから回る。
+        失敗した条件は \texttt{<output-root>/failures.csv} に記録し，次の条件へ進む。
+\end{description}
+
+\subsection{\texttt{analyze\_detection.py}（結果の分析）}
+
+\begin{description}[leftmargin=1.4em, style=nextline]
+  \item[役割] 実験が終わったあとに，\texttt{detection\_metrics.csv} を読んで，図と表を作る。
+        成績は実験中に計算済みなので，ここでは平均を取って並べ替え，図に描くだけである。
+  \item[主な関数]
+        \texttt{load\_metrics}：ログを読む。回し直した条件があれば，最後の実行だけを残す。\\
+        \texttt{plot\_auc\_by\_round} / \texttt{plot\_pushratio\_vs\_auc} / \texttt{plot\_auc\_by\_z}：図を描く。\\
+        \texttt{pushratio\_corr\_table} / \texttt{final\_auc\_table} / \texttt{structure\_table}：表を作る。\\
+        \texttt{load\_updates}：\texttt{detection\_updates.csv}（1 クライアント 1 行）から，符号反転と攻撃なしの行を読む。\\
+        \texttt{plot\_signflip\_d2\_score\_by\_round} /\allowbreak{} \texttt{plot\_signflip\_norm\_ratio\_by\_round}：符号反転の考察（卒論 9.1）の図を描く。\\
+        \texttt{signflip\_separation\_table} /\allowbreak{} \texttt{signflip\_norm\_dispersion\_table} /\allowbreak{} \texttt{signflip\_norm\_cv\_by\_segment\_table}：同じく表を作る。\\
+        \texttt{plot\_alie\_d2\_score\_by\_z} /\allowbreak{} \texttt{alie\_d2\_score\_by\_z\_table} /\allowbreak{} \texttt{alie\_norm\_ratio\_by\_z\_table}：ALIE の考察（卒論 9.1）の図と表を作る。\\
+        \texttt{plot\_alie\_shell\_by\_z} /\allowbreak{} \texttt{alie\_shell\_table}：高次元の殻（卒論 9.3）の図と表を作る。
+  \item[要点] 実験コード（\texttt{fl\_detection/}，Flower，\texttt{pyproject.toml}）には依存しない。
+        このファイル 1 つとログのフォルダがあれば，どこでも分析できる。
+\end{description}
+
+% =========================================================
+\part{使い方}
+\label{part:usage}
+
+% =========================================================
+\section{環境の構築}
+\label{sec:setup}
+
+\subsection{必要なもの}
+
+\begin{itemize}
+  \item Python 3.10 以上（動作を確認した環境は Python 3.12）。
+  \item \textbf{GPU は必須ではない。}再スイープ（300 条件）は CPU で実行し，約 62 時間かかった。
+        GPU を使える環境なら，クライアントの学習の部分を速くできる（\S\ref{sec:gpu}）。
+  \item インターネット接続（最初の 1 回だけ。パッケージと MNIST を取得する）。
+\end{itemize}
+
+必要なパッケージは \texttt{pyproject.toml} の \texttt{dependencies} に書いてあり，
+下の手順でまとめて入る。動作を確認した版を表\ref{tab:versions}に示す。
+
+\begin{table}[H]
+\centering
+\caption{動作を確認したパッケージの版}
+\label{tab:versions}
+\begin{tabular}{@{}lll@{}}
+\toprule
+パッケージ & 版 & 用途 \\
+\midrule
+\texttt{flwr}（Flower） & 1.33.0 & 連合学習の実行基盤 \\
+\texttt{torch} / \texttt{torchvision} & 2.8.0 / 0.23.0 & モデルと学習 \\
+\texttt{flwr-datasets} / \texttt{datasets} & （自動で入る）/ 3.1.0 & MNIST の取得 \\
+\texttt{numpy} & 2.5.2 & 検知・攻撃・集約の計算 \\
+\texttt{pandas} / \texttt{matplotlib} & 3.0.5 / 3.11.1 & 分析（\texttt{analyze\_detection.py}） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\texttt{numpy}，\texttt{pandas}，\texttt{matplotlib} は，\texttt{flwr-datasets} が必要とするパッケージとして一緒に入る。
+scikit-learn は使っていない（検知器と成績の計算は，\texttt{fl\_detection/detection.py} に numpy だけで書いてある）。
+
+\subsection{手順}
+
+プロジェクトのフォルダ（\texttt{pyproject.toml} がある場所）で，次を実行する。
+
+\paragraph{Windows（本番の環境）。}
+\begin{cmd}
+python -m venv .venv
+.venv\char92{}Scripts\char92{}activate
+pip install -e .
+\end{cmd}
+
+\paragraph{Mac / Linux。}
+\begin{cmd}
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+\end{cmd}
+
+以下の表と，本書のコマンド例は Mac / Linux の書き方で示す。
+Windows では，\texttt{source .venv/bin/activate} を \texttt{.venv\char92{}Scripts\char92{}activate} に読み替える
+（PowerShell で実行できない場合は \texttt{.venv\char92{}Scripts\char92{}Activate.ps1}）。
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{5.3cm} P{10.0cm}@{}}
+\toprule
+コマンド & 意味 \\
+\midrule
+\texttt{python3 -m venv .venv} & このプロジェクト専用の Python 環境（仮想環境）を，\texttt{.venv} というフォルダに作る。
+ほかのプロジェクトとパッケージの版がぶつからないようにするためのもの。最初の 1 回だけ行う。 \\
+\texttt{source .venv/bin/activate} & 仮想環境を有効にする。以後，このターミナルで打つ \texttt{python} や \texttt{flwr} は，\texttt{.venv} の中のものになる。
+\textbf{ターミナルを開き直すたびに必要。} \\
+\texttt{pip install -e .} & \texttt{pyproject.toml} に書かれたパッケージを，仮想環境に入れる。最初の 1 回だけ行う。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+入ったかどうかは，次で確かめられる。テストがすべて「合格」と表示されればよい。
+
+\begin{cmd}
+flwr --version
+python test_detection.py
+\end{cmd}
+
+\subsection{GPU を使うための設定}
+\label{sec:gpu}
+
+GPU で学習させるには，次の 3 つがそろっている必要がある。
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{0.5cm} P{5.2cm} P{9.6cm}@{}}
+\toprule
+ & 必要なこと & 確かめ方・設定する場所 \\
+\midrule
+1 & PyTorch が GPU 対応の版である &
+\texttt{python -c "import torch; print(torch.cuda.is\_available())"} が \texttt{True} になる。 \\
+2 & 計算に使う装置の設定 &
+\texttt{pyproject.toml} の \texttt{[tool.flwr.app.config]} の \texttt{device}。
+\texttt{"auto"} なら GPU があれば GPU を使う。\texttt{"cuda"} にすると，GPU が使えないときにエラーで止まる。 \\
+3 & クライアントへの GPU の割り当て &
+\texttt{pyproject.toml} の \texttt{[tool.sweep]} の \texttt{client-num-gpus}（0 より大きい値。現在は 0.2）。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{1. PyTorch の版。}
+Windows では，\texttt{pip install -e .} で入る PyTorch は CPU 専用の版になることがある。
+上の確認で \texttt{False} と表示された場合は，GPU（CUDA）対応の版を入れ直す。
+入れ直すコマンドは，PyTorch の公式サイト（\texttt{pytorch.org} の「Get Started」）で，
+自分の環境に合うものを選んで表示させる。版は \texttt{torch} 2.8.0 / \texttt{torchvision} 0.23.0 に合わせる。
+次は，CUDA 12.6 向けの例である（CUDA の版は環境によって違うので，このまま使えるとは限らない）。
+
+\begin{cmd}
+pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu126
+\end{cmd}
+
+\paragraph{3. クライアントへの割り当てが必要な理由。}
+Flower は，クライアントを 1 台ずつ別のプロセスで動かす。NVIDIA の GPU は，サーバからは常に見えるが，
+クライアントからは，割り当てたときだけ見える。割り当てを忘れると，
+「GPU で回しているつもりが，クライアントは CPU で学習している」という状態が，エラーなしで起きる。
+\texttt{client-num-gpus} は，クライアント 1 台に GPU の何割を割り当てるかを表す。
+
+\begin{itemize}
+  \item 0.2 なら，1 枚の GPU を同時に最大 5 台で分け合う（20 台は 5 台ずつ順に学習する）。
+  \item 値を小さくすると同時に動く台数が増えて速くなるが，GPU のメモリを多く使う。
+        メモリ不足（\texttt{CUDA out of memory}）になる場合は，値を大きくする。
+  \item GPU の無いマシンでは，必ず 0.0 にする。0 より大きいままだと，クライアントが起動できない。
+\end{itemize}
+
+\paragraph{設定の食い違いは，回す前に止まる。}
+\texttt{run\_experiments.py} は，実行の最初に GPU の設定を確かめ，次の場合は 1 条件も回さずに止まる。
+(a) \texttt{client-num-gpus} が 0 より大きいのに，そのマシンで NVIDIA の GPU が使えない。
+(b) NVIDIA の GPU が使えるのに \texttt{client-num-gpus} が 0.0 で，\texttt{device} が \texttt{"cpu"} でない。
+
+\paragraph{実際に GPU が使われたかの確かめ方。}
+実行の最初に画面に表示される \texttt{device : cuda} の行と，
+\texttt{run\_config.txt} の \texttt{device (effective)} の行で，サーバが使った装置が分かる。
+クライアントが GPU を使っているかは，実行中に別のターミナルで \texttt{nvidia-smi} を実行し，
+Python のプロセスが GPU を使っているかを見る。
+
+\paragraph{速さについて。}
+GPU で速くなるのは，クライアントの学習の計算の部分だけである。
+サーバ側の処理（検知スコアの計算，採点に使うテストデータの読み込みと前処理）と，条件ごとの起動（約 1 分）は，GPU を使っても短くならない。
+参考として，Apple Silicon の Mac で測ったところ，20 台で 1 ラウンドあたり CPU が約 8.2 秒，内蔵 GPU が約 7.1 秒だった。
+Windows の NVIDIA GPU での速さは，まだ測っていない。
+
+\subsection{クライアントの台数の設定}
+
+「実際に何台のクライアントを起動するか」は，\texttt{pyproject.toml} ではなく，Flower 側の設定（\texttt{num-supernodes}）で決まる。
+この台数と \texttt{pyproject.toml} の \texttt{num-clients} が一致していないと，
+実験は最初のラウンドでエラーになって止まる（\S\ref{sec:guards}）。
+
+\begin{itemize}
+  \item \texttt{run\_experiments.py} でスイープを回す場合は，実行の最初に，
+        スクリプトが Flower 側の台数を \texttt{num-clients} に合わせる。手で設定する必要はない。
+  \item 手で \texttt{flwr run} を実行する場合は，自分で合わせる（\S\ref{sec:run-single}）。
+\end{itemize}
+
+\subsection{初回実行時の注意（MNIST のダウンロード）}
+
+初回の実行で，HuggingFace Hub から MNIST（約 11\,MB）が自動でダウンロードされる。
+2 回目以降は，手元に保存されたものが使われる。
+\texttt{Warning: You are sending unauthenticated requests to the HF Hub} と表示されても，動作に支障はない。
+
+% =========================================================
+\section{設定（\texttt{pyproject.toml}）}
+\label{sec:config}
+
+\subsection{設定はここだけに書く}
+
+実験の設定値は，\texttt{pyproject.toml} の 2 つの欄だけに書く。Python のファイルには設定値を書かない。
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{4.3cm} P{11.0cm}@{}}
+\toprule
+欄 & 内容 \\
+\midrule
+\texttt{[tool.flwr.app.config]} & 全実行で共通の値。手で \texttt{flwr run .} を実行したときは，この値で動く。 \\
+\texttt{[tool.sweep]} & スイープで変えながら回す軸と，出力先のフォルダ名。\texttt{run\_experiments.py} だけが読む。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+スイープでは，\texttt{[tool.sweep]} の軸に対応する項目だけが，条件ごとに上書きされる。
+それ以外の項目（台数，ラウンド数，学習率など）は，全条件で \texttt{[tool.flwr.app.config]} の値が使われる。
+
+\subsection{共通の設定}
+
+\begin{table}[H]
+\centering
+\caption{\texttt{[tool.flwr.app.config]} の項目。「上書き」は，スイープで条件ごとに上書きされる項目。}
+\label{tab:config}
+\small
+\begin{tabular}{@{}P{3.5cm} P{2.0cm} P{1.2cm} P{8.2cm}@{}}
+\toprule
+項目 & 値 & 上書き & 意味 \\
+\midrule
+\texttt{num-server-rounds} & \texttt{50} & & 通信ラウンド数。 \\
+\texttt{num-clients} & \texttt{20} & & クライアントの総数。実際に起動する台数と一致させる。 \\
+\texttt{local-epochs} & \texttt{2} & & 各クライアントが，1 ラウンドで手元のデータを何周するか。 \\
+\texttt{learning-rate} & \texttt{0.01} & & 学習率（1 回の更新で重みを動かす倍率）。 \\
+\texttt{batch-size} & \texttt{32} & & 学習で一度に使うデータの枚数。 \\
+\texttt{device} & \texttt{"auto"} & & 計算に使う装置。\texttt{auto} / \texttt{cuda}（NVIDIA の GPU）/ \texttt{mps}（Mac の GPU）/ \texttt{cpu}。
+\texttt{auto} は，使える中で一番速いものを選ぶ。 \\
+\texttt{fraction-evaluate} & \texttt{0.2} & & クライアント側の評価に参加する割合（結果は画面に表示するだけ）。 \\
+\texttt{aggregation-method} & \texttt{"fedavg"} & ○ & 集約手法。現在使えるのは \texttt{fedavg} だけ。 \\
+\texttt{data-split} & \texttt{"dirichlet\_equal"} & & データの分割方式。\texttt{dirichlet\_equal}（枚数は全員同じ）と \texttt{dirichlet}（以前の方式。枚数も偏る）が使える。 \\
+\texttt{samples-per-client} & \texttt{1500} & & クライアント 1 台に配る枚数（\texttt{dirichlet\_equal} のときだけ使う）。 \\
+\texttt{dirichlet-alpha} & \texttt{5.0} & ○ & Dirichlet の濃度。大きいほど IID に近く，小さいほど偏る。 \\
+\texttt{attack-type} & \texttt{"none"} & ○ & 攻撃。\texttt{none} / \texttt{sign\_flip} / \texttt{alie}。 \\
+\texttt{alie-z} & \texttt{1.0} & ○ & ALIE の強さ $z$（ALIE のときだけ上書き）。 \\
+\texttt{malicious-ratio} & \texttt{0.2} & ○ & 悪性クライアントの割合。\texttt{num-clients} との積が整数になる値にする。
+攻撃なしのときは，この値に関係なく悪性 0 台として扱われる。 \\
+\texttt{malicious-seed} & \texttt{1} & ○ & 悪性クライアントを選ぶ乱数の種（スイープでは \texttt{trial} と同じ値）。 \\
+\texttt{trial} & \texttt{1} & ○ & 繰り返しの番号。乱数の種として，データ分割・モデルの初期値・学習時の並べ替えに使う。 \\
+\texttt{output-dir} & \texttt{"."} & ○ & 出力先。\texttt{final\_model.pt} はここに，ログはその 1 つ上のフォルダの \texttt{\_logs/} に出る。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{スイープの軸}
+
+\begin{table}[H]
+\centering
+\caption{\texttt{[tool.sweep]} の項目}
+\begin{tabular}{@{}P{3.6cm} P{5.2cm} P{6.5cm}@{}}
+\toprule
+項目 & 値 & 意味 \\
+\midrule
+\texttt{output-root} & \texttt{"experiments\_detection\_v3"} & 出力先の親フォルダ。 \\
+\texttt{client-num-gpus} & \texttt{0.2} & クライアント 1 台に割り当てる NVIDIA GPU の割合（\S\ref{sec:gpu}）。GPU の無いマシンでは 0.0。 \\
+\texttt{aggregation-methods} & \texttt{["fedavg"]} & 集約手法（1 通り）。 \\
+\texttt{dirichlet-alphas} & \texttt{[1000.0, 5.0, 1.0]} & Non-IID 度（3 通り）。 \\
+\texttt{attack-types} & \texttt{["none", "sign\_flip", "alie"]} & 攻撃（3 種類）。 \\
+\texttt{alie-zs} & \texttt{[0.385, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0]} & ALIE の $z$（8 通り。ALIE のときだけ使う）。 \\
+\texttt{trials} & \texttt{[1, 2, ..., 10]} & 繰り返し（10 回）。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+条件の数は，$1 \times 3 \times (\text{攻撃なし } 1 + \text{符号反転 } 1 + \text{ALIE } 8) \times 10 = 300$ である。
+
+\paragraph{決まり。}
+コードを変えてログの列が変わったら，\texttt{output-root} の名前を変える（例：\texttt{\_v3}）。
+ログは同じファイルに追記されていくので，列を変えた後に同じフォルダへ書き足すと，見出しと合わない行が混ざってしまう。
+
+% =========================================================
+\section{実行手順}
+\label{sec:run}
+
+以下は，仮想環境を有効にした状態（\texttt{source .venv/bin/activate}）で行う。
+
+\subsection{手順 1：テスト}
+
+コードに手を入れたら，まずテストを回す。それぞれ「すべてのテストに合格しました。」と表示されればよい。
+
+\begin{cmd}
+python test_detection.py
+python test_attack.py
+python test_aggregation.py
+python test_malicious.py
+\end{cmd}
+
+\subsection{手順 2：条件の確認}
+
+実行はせず，条件の一覧と，実際に使われるコマンドを表示する。
+\texttt{pyproject.toml} を変えたら，まずこれで意図どおりかを確かめる。
+
+\begin{cmd}
+python run_experiments.py --dry-run
+\end{cmd}
+
+先頭に，条件の数（300）と，共通の設定（台数，ラウンド数，学習率など）が表示される。
+
+\subsection{手順 3：動作確認（1 条件だけ短く回す）}
+\label{sec:run-single}
+
+スイープの前に，1 条件だけ短く回して，ログが出るかを確かめる（1 行で入力する）。
+
+\begin{cmd}
+flwr run . local-simulation --stream --run-config
+    \textquotesingle{}num-server-rounds=2 num-clients=10 attack-type="alie" alie-z=0.5 output-dir="_smoke/run1"\textquotesingle{}
+\end{cmd}
+
+\begin{itemize}
+  \item 指定していない項目は，\texttt{pyproject.toml} の値で動く。
+  \item \texttt{num-clients} は，実際に起動するクライアントの台数と一致させる。
+        \texttt{local-simulation} の台数は \texttt{\textasciitilde/.flwr/config.toml} の \texttt{num-supernodes} で決まり，既定は 10 である。
+  \item 完了すると，\texttt{\_smoke/\_logs/detection\_updates.csv} に，1 ラウンドあたり \texttt{num-clients} 行が記録される。
+  \item 確認用の出力（\texttt{\_smoke/}）は消してよい。
+  \item このコマンドは Mac / Linux の書き方である。Windows の PowerShell やコマンドプロンプトでは，
+        引用符の書き方が違うため，このままでは動かないことがある。
+        Windows では，手順 2 の \texttt{-{}-dry-run} で条件を確かめたうえで，手順 4 のスイープを始め，
+        最初の 1 条件が完了するのを見届ける方法が確実である。
+\end{itemize}
+
+\subsection{手順 4：スイープ}
+
+\begin{cmd}
+python run_experiments.py
+\end{cmd}
+
+\begin{itemize}
+  \item 300 条件を順に実行する。所要時間は環境によって大きく変わるので，
+        最初の 1 条件にかかった時間を 300 倍して見積もる。
+        参考：以前の 54 条件のスイープは，CPU で約 12 時間（1 条件あたり約 13 分）かかった。再スイープの 300 条件は，CPU で約 62 時間（1 条件あたり約 11 分，回し直しを含む）かかった。
+        Windows の NVIDIA GPU での所要時間は，まだ測っていない。
+  \item 途中で止めても，もう一度同じコマンドを実行すれば，未完了の条件から続く。
+  \item 失敗した条件は \texttt{experiments\_detection\_v3/failures.csv} に記録され，スイープは止まらない。
+  \item \textbf{最初の 1 条件が完了するまで（数分）は，様子を見ること。}
+        台数の食い違いなどの設定の誤りは，最初の条件の最初のラウンドで止まる形で現れる。
+        GPU で回す場合は，このあいだに \texttt{nvidia-smi} で，GPU が使われていることも確かめる。
+\end{itemize}
+
+\subsection{手順 5：分析}
+
+\begin{cmd}
+python analyze_detection.py experiments_detection_v3/_logs
+\end{cmd}
+
+引数は，\texttt{detection\_metrics.csv} が入っているフォルダである（省略できない）。
+実行すると，読み込んだファイルの場所，行数，実行の数，ラウンドの範囲が表示されるので，意図したデータかを確かめる。
+図と表は，指定したフォルダの中の \texttt{analysis/} に出力される（\texttt{-{}-outdir} で変更できる）。
+最後の何ラウンドを平均するかは \texttt{-{}-last-k} で指定する（既定は 5）。
+
+\paragraph{最初に見る図。}
+検知は「そのラウンドの更新ベクトルの集まりを見分けられるか」という問題なので，
+モデルが最終的な精度に達している必要はない。ただし，AUC がラウンドをまたいで大きく暴れると，結果の解釈が難しくなる。
+分析したら，まず \texttt{analysis/detection\_auc\_by\_round.png} を見て，AUC の推移が解釈できる範囲に収まっているかを確かめる。
+学習の進み具合は \texttt{results.csv} の精度で確かめられる。
+学習率やラウンド数を変える場合は，\texttt{pyproject.toml} の \texttt{learning-rate} と \texttt{num-server-rounds} を書き換え，
+\texttt{output-root} の名前も変えてから回し直す。
+
+% =========================================================
+\section{出力ファイル}
+\label{sec:output}
+
+スイープの出力は，すべて \texttt{<output-root>/}（既定では \texttt{experiments\_detection\_v3/}）の下にできる。
+
+\begin{table}[H]
+\centering
+\caption{出力されるファイル。行数は，300 条件・50 ラウンド・20 台の場合。}
+\small
+\begin{tabular}{@{}P{5.0cm} P{2.4cm} P{7.9cm}@{}}
+\toprule
+ファイル & 行数の目安 & 内容 \\
+\midrule
+\texttt{<条件名>/final\_model.pt} & 300 個 & 最終のグローバルモデル。完了したかどうかの目印にもなる。 \\
+\texttt{\_logs/run\_config.txt} & 300 かたまり & 実行ごとに，実際に使われた設定の全項目と，悪性クライアントの番号。 \\
+\texttt{\_logs/detection\_updates.csv} & 300{,}000 行 & 生の記録。1 クライアント $\times$ 1 ラウンドで 1 行。 \\
+\texttt{\_logs/detection\_metrics.csv} & 60{,}000 行 & 成績の記録。1 検知器 $\times$ 1 ラウンドで 1 行。分析の入力。 \\
+\texttt{\_logs/results.csv} & 15{,}000 行 & ラウンドごとの精度と損失（サーバがテストデータで測った値）。 \\
+\texttt{\_logs/summary.csv} & 300 行 & 最終ラウンドの精度と損失。 \\
+\texttt{failures.csv} & （失敗時のみ） & 失敗した条件の名前，コマンド，出力の末尾。 \\
+\texttt{\_logs/analysis/} & 4 ファイル & 分析の出力（図 2 枚，表 2 つ）。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+どの CSV にも，実験条件を表す列（\texttt{aggregation\_method}，\texttt{data\_split}，\texttt{alpha}，
+\texttt{attack\_type}，\texttt{alie\_z}，\texttt{malicious\_ratio}，\texttt{trial}）と，実行を見分ける \texttt{run\_id} が入っている。
+
+\subsection{\texttt{detection\_updates.csv}（1 クライアント 1 行）}
+
+集約の直前（攻撃の適用後）の各クライアントの更新について記録する。
+検知の入力は更新ベクトル $g_i = w_i - w_{\text{global}}$（届いた重みから，配った重みを引いたもの）である。
+
+\begin{table}[H]
+\centering
+\caption{\texttt{detection\_updates.csv} の主な列}
+\begin{tabular}{@{}P{4.4cm} P{10.9cm}@{}}
+\toprule
+列 & 内容 \\
+\midrule
+\texttt{round} & 通信ラウンドの番号（1 から始まる）。 \\
+\texttt{client\_pos} / \texttt{partition\_id} & 表の中の行の位置 / クライアントの番号（番号順に並べているので，同じ値になる）。 \\
+\texttt{is\_malicious} & 正解（1 が悪性）。\textbf{成績を付けるためだけに使う。}検知器には渡していない。 \\
+\texttt{delta\_norm} & 更新ベクトルの長さ $\|g_i\|_2$。 \\
+\texttt{d1\_norm} 〜 \texttt{d4\_spectral} & 検知器 D1--D4 のスコア。大きいほど悪性らしい。 \\
+\texttt{benign\_spread} & そのラウンドの，良性クライアントの広がり（同じラウンドの行では同じ値）。 \\
+\texttt{push\_ratio} & そのラウンドの，悪性の押し出し距離 $\div$ 良性の広がり（悪性 0 台のときは空）。 \\
+\texttt{pc1\_ratio} など 6 列 & 分布構造の診断指標（同じラウンドの行では同じ値）。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{\texttt{detection\_metrics.csv}（1 検知器 1 行）}
+
+実験中に \texttt{robust\_strategy.py} が計算して記録する。1 行が「ある実行の，あるラウンドの，ある検知器の成績」である。
+
+\begin{table}[H]
+\centering
+\caption{\texttt{detection\_metrics.csv} の主な列}
+\begin{tabular}{@{}P{4.4cm} P{10.9cm}@{}}
+\toprule
+列 & 内容 \\
+\midrule
+\texttt{detector} & 検知器の名前（\texttt{d1\_norm} / \texttt{d2\_cosine} / \texttt{d3\_kmeans} / \texttt{d4\_spectral}）。 \\
+\texttt{auc} & ROC-AUC。悪性 1 台と良性 1 台を選んだとき，悪性のスコアのほうが高い確率。 \\
+\texttt{ap} & 平均適合率（average precision）。 \\
+\texttt{recall\_at\_f} / \texttt{precision\_at\_f} & スコアの上位 $f$ 台を悪性と判定したときの再現率 / 適合率（$f$ は実際の悪性の台数）。 \\
+\texttt{n\_clients} / \texttt{n\_malicious} & そのラウンドのクライアントの台数 / 悪性の台数。 \\
+\texttt{benign\_spread}，\texttt{push\_ratio} など & \texttt{detection\_updates.csv} と同じ指標。 \\
+\texttt{mean\_dist\_unfiltered} / \texttt{mean\_dist\_filtered} & \textbf{参考の値（記録するだけ）。}検知器が疑った上位 $f$ 台を仮に取り除いたとき，残りの平均が，良性の重心からどれだけ離れているか。\texttt{unfiltered} は何も取り除かない場合，\texttt{filtered} はその検知器のスコア上位 $f$ 台を取り除いた場合。小さいほど良性だけの平均に近い。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{参考の値について。}
+\texttt{mean\_dist\_*} の 2 列は，研究計画書に当初あった「防御効用」にあたる値である。
+本研究を「検知できるかどうか」に絞ったため，計画書の評価指標からは外し，卒業論文では扱わない。
+それでも記録しているのは，計算に更新ベクトルそのものが必要で，スイープの後からは計算できないためである
+（増える実行時間は，スイープ全体で約 20 秒）。
+使う場合は，ここでの平均が単純な平均であり，実際の集約（データ数で重み付けする FedAvg）とは一致しないことに注意する。
+\texttt{analyze\_detection.py} は，この 2 列を使わない。
+
+\paragraph{ROC-AUC の読み方。}
+1.0 は「悪性のほうが常にスコアが高い」（完全に見分けられる），0.5 は「でたらめと同じ」，
+0.0 は「悪性のほうが常にスコアが低い」（悪性のほうが良性らしいと判定されている）である。
+0.0 に近い値は，「見分けられていない」のではなく，「逆向きにはっきり分かれている」ことを意味する。
+攻撃なしの条件は悪性が 0 台なので，\texttt{auc} は NaN（計算できない）になる。これは正常である。
+
+\subsection{分析の出力（\texttt{analysis/}）}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{5.6cm} P{9.7cm}@{}}
+\toprule
+ファイル & 内容 \\
+\midrule
+\texttt{detection\_auc\_by\_round.png} & 検知器（行）$\times$ 攻撃（列）ごとに，AUC のラウンド推移を $\alpha$ 別に描いた図。線が \texttt{trial} の平均，帯が標準偏差。 \\
+\texttt{detection\_pushratio\_vs\_auc.png} & 符号反転だけを対象にした，横軸 \texttt{push\_ratio}，縦軸 AUC の散布図（中心仮説の主図）。1 点が 1 実行の 1 ラウンド。右下の数値は順位相関係数。 \\
+\texttt{detection\_pushratio\_}\allowbreak\texttt{corr\_table.csv} & 符号反転での \texttt{push\_ratio} と AUC の順位相関係数（全体と $\alpha$ ごと）。$\alpha$ ごとの値が小さければ，両者の関係は $\alpha$ の違いで説明できてしまう。 \\
+\texttt{detection\_auc\_by\_z.png} & ALIE だけを対象にした，横軸 $z$，縦軸 AUC の図。最後の数ラウンドの平均を \texttt{trial} ごとに求め，その平均と標準偏差を $\alpha$ 別に描く。 \\
+\texttt{detection\_final\_auc\_table.csv} & 最後の数ラウンドの AUC（$\alpha \times$ 攻撃 $\times$ 検知器）。\texttt{trial} ごとに平均してから，\texttt{trial} のあいだの平均（\texttt{\_mean}）と標準偏差（\texttt{\_std}）を出す。 \\
+\texttt{detection\_structure\_table.csv} & 最後の数ラウンドの，広がり・\texttt{push\_ratio}・分布構造の診断指標と，AUC の対応表。 \\
+\texttt{detection\_segment\_auc\_table.csv} & ラウンドを第 1〜5，6〜15，16〜30，31〜50 の区間に分け，区間ごとに平均した AUC（\texttt{trial} 平均。検知器 $\times$ 攻撃 $\times$ $\alpha$）。卒論の付録 B の表は，これと同じ値である。 \\
+\texttt{detection\_segment\_}\allowbreak\texttt{pushratio\_table.csv} & 同じ区間ごとの push\_ratio（\texttt{trial} 平均。攻撃 $\times$ $\alpha$）。卒論の付録 C の表は，これと同じ値である。 \\
+\texttt{accuracy\_by\_round.png} & テスト精度のラウンド推移（$\alpha$ ごと。攻撃なし・符号反転・ALIE の $z=1$ と $z=3$）。\texttt{results.csv} があるときだけ作る。 \\
+\texttt{accuracy\_table.csv} & 最終ラウンドの精度（\texttt{trial} 間の平均・標準偏差・最小）と，最後の数ラウンドでの精度の上がり幅（学習が収束しているかの目安）。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent
+考察（卒論 9.1）のための図表。\texttt{detection\_updates.csv} があるときだけ作る。読み方は\S\ref{sec:read-signflip}，\S\ref{sec:read-alie}。
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{5.6cm} P{9.7cm}@{}}
+\toprule
+ファイル & 内容 \\
+\midrule
+\texttt{signflip\_d2\_score\_}\allowbreak\texttt{by\_round.png} & 符号反転での D2 スコアのラウンド推移を，正常（塗りつぶしの印）と悪性（白抜きの印）に分けて描いた図。 \\
+\texttt{signflip\_separation\_}\allowbreak\texttt{table.csv} & 符号反転の第 1〜5 ラウンドと最終ラウンド付近での，D2 スコアの平均（正常・悪性），完全に分かれたラウンドの割合，悪性方向と第 1 主成分の $|\cos|$。 \\
+\texttt{signflip\_norm\_ratio\_}\allowbreak\texttt{by\_round.png} & 悪性 $\div$ 正常のノルムの比のラウンド推移。符号反転と，攻撃なしで同じ 4 台を悪性とみなした対照を重ねる。 \\
+\texttt{signflip\_norm\_}\allowbreak\texttt{dispersion\_table.csv} & 符号反転の最終ラウンド付近での，ノルムの比，正常のノルムの変動係数（攻撃なしとの比較），D1・D4 が順位を誤った組の割合とその内訳，正常どうしでの D4 スコアとノルムの順位相関。 \\
+\texttt{signflip\_norm\_cv\_}\allowbreak\texttt{by\_segment\_table.csv} & 正常のノルムの変動係数を，ラウンドの区間ごとに，符号反転と攻撃なしで比べた表。 \\
+\texttt{alie\_d2\_score\_}\allowbreak\texttt{by\_z.png} & ALIE の $z$ ごとの，最終ラウンド付近の D2 スコア（正常は塗りつぶし，悪性は白抜きの印。\texttt{trial} 平均 $\pm$ 標準偏差）。 \\
+\texttt{alie\_d2\_score\_}\allowbreak\texttt{by\_z\_table.csv} & 上の図の数値。最後の行は攻撃なしの正常の D2 スコア。 \\
+\texttt{alie\_norm\_ratio\_}\allowbreak\texttt{by\_z\_table.csv} & ALIE の $z$ ごとの，最終ラウンド付近の悪性 $\div$ 正常のノルムの比。 \\
+\texttt{alie\_shell\_by\_z.png} & 卒論 9.3。$z$ ごとの距離の比（push\_ratio）とノルムの比を $\alpha$ ごとに描き，正常の殻の厚み（$1 \pm$ ノルムの変動係数）を帯で重ねた図。 \\
+\texttt{alie\_shell\_table.csv} & 上の図の数値と，正常の平均からの距離の変動係数。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =========================================================
+\part{卒論の主張と根拠}
+\label{part:claims}
+
+\section{この部の使い方}
+\label{sec:claims-howto}
+
+この部は，卒論（\texttt{Memo/soturon3.tex}）を吟味するための手引きである。
+考察の章は 2026 年 10 月から \texttt{soturon3.tex} で書き直している。書き直しが済んだのは今のところ 9.1「検知器間の違い」（\S\ref{sec:claim-sf}，\S\ref{sec:claim-alie}），9.2「Non-IID 度が検知性能に与える影響」（\S\ref{sec:claim-noniid}），9.3「攻撃のステルス性と検知破綻の境界」（\S\ref{sec:claim-rq3}），9.4「中心仮説の評価」（\S\ref{sec:claim-hyp4}），9.5「妥当性への脅威と今後の課題」（\S\ref{sec:claim-threats}）だけで，ほかの節はまだ以前の版（\texttt{soturon2.tex}）の考察に対応している。
+卒論の主張を 1 つずつ取り上げ，次の 4 点をまとめる。
+\begin{enumerate}
+  \item \textbf{何を主張しているか。}
+  \item \textbf{根拠はどこにあるか。}どの表・図か，どのログのどの列か。
+  \item \textbf{その数値をどう計算したか。}自分で計算し直せるように書く（\S\ref{sec:claims-recompute}）。
+  \item \textbf{どこまで確かか。}下の 4 段階で示す。
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{主張の確かさの 4 段階。}
+\label{tab:certainty}
+\begin{tabular}{@{}P{3.4cm} P{11.9cm}@{}}
+\toprule
+段階 & 意味 \\
+\midrule
+【観測】 & ログの数値そのもの。集計の方法が正しければ，疑う余地はない。 \\
+【予測で確認】 & 実験の\textbf{前に}予測を書き，結果がそのとおりになったもの。後付けの説明より強い。 \\
+【解釈】 & 観測を説明する考え方。筋は通っているが，別の説明がありうる。 \\
+【推測】 & 確かめていない説明。論文では「可能性がある」と書くべきもの。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{使うデータ。}
+すべて \texttt{experiments\_detection\_v3/\_logs/} にある（再スイープ，300 回の実行）。
+\begin{itemize}
+  \item \texttt{detection\_metrics.csv}：ラウンドごと・検知器ごとの AUC と，spread・push\_ratio・分布構造の指標。
+  \item \texttt{detection\_updates.csv}：ラウンドごと・クライアントごとのノルムと検知スコア（\texttt{.gz} を展開したもの）。
+  \item \texttt{results.csv}：ラウンドごとのテスト精度。 \texttt{summary.csv}：最終ラウンドの精度。
+  \item \texttt{run\_config.txt}：実行ごとの設定。300 回すべてで，計画どおりの設定（エポック 2，学習率 0.01 など）だったことを確認済み。
+  \item \texttt{analysis/}：\texttt{analyze\_detection.py} が作った図と表。卒論の表の多くは，ここの CSV から作った。
+\end{itemize}
+途中で失敗して回し直した実行の行もログに残っているが，集計では条件ごとに最後の実行だけを使う（\texttt{keep\_last\_runs}）。
+また，1 回の実行（$\alpha = 1000$，ALIE $z = 3$，\texttt{trial} 9）だけ，\texttt{detection\_updates.csv} の第 48 ラウンドの行が欠けている。
+AUC は \texttt{detection\_metrics.csv} から取るので影響はない。
+
+\paragraph{卒論に書いていないこと。}
+以前の 54 回の実行（データ数も偏る分け方，$z \le 1$，各 3 試行）は，卒論には書いていない。
+実験の設計を変えた理由（データ数を揃えた，$z > 1$ を足した，試行を 10 回にした）と，その実行で分かったことは，
+本書の\S\ref{sec:decisions}，この部の各節の「読むときの注意」，および研究計画書（\texttt{sotsuron\_plan2.tex}）に残してある。
+卒論（\texttt{soturon3.tex}）では，計画書の「実行前に記す予測」を\textbf{主張の根拠に使わない}（2026 年 10 月 21 日に決めた）。
+予測は再スイープの前に書かれていたことを確認できたが（\S\ref{sec:claims-predictions}），計画書の文章の多くは AI に書かせたもので，予測を本人が立てたと説明できないためである。
+そのため，殻の解釈（\S\ref{sec:claim-shell}，\S\ref{sec:claim-rq3}）は，卒論では「結果を見たあとに整理した解釈」として書いている。
+
+\paragraph{ラウンド推移も主張の一部である。}
+卒論は，AUC を「各ラウンドで測れる指標」として使い，学習の段階によって検知性能がどう変わるかを追っている（関連研究の章の「本研究の特徴」の 1 つ目）。
+「収束していなくても測れる」という便利さではなく，「途中の変化が見える」ことを利点として書いている。
+実際，D2 は ALIE（$z = 1.5$，2）を序盤には見つけていたのに後半には逆転し，D1 は符号反転を序盤はほとんど見つけられず後半に見つけるようになった（\texttt{detection\_auc\_by\_round.png}）。
+最終 5 ラウンドの値だけを見ると，これらは見えない。$\alpha = 1$ が収束していないこと（\S\ref{sec:claim-acc}）も，この立場から「学習の段階による違い」として扱う。
+
+\paragraph{卒論の節との対応。}
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{6.6cm} P{8.7cm}@{}}
+\toprule
+卒論の節 & 本書の節 \\
+\midrule
+実験結果「学習の収束と攻撃が精度に与える影響」 & \S\ref{sec:claim-acc}（精度と収束），\S\ref{sec:claim-harm}（ALIE はほぼ無害） \\
+実験結果「検知性能の全体像」「AUC のラウンド推移」 & \S\ref{sec:claims-overview}（全体像） \\
+考察「検知器間の違い」 & 符号反転：\S\ref{sec:claim-sf}（D1〜D4）。ALIE：\S\ref{sec:claim-alie}（D1〜D4） \\
+考察「Non-IID 度が検知性能に与える影響」 & \S\ref{sec:claim-noniid}（ばらつきの配分），\S\ref{sec:claim-d4}（以前の版の D4 の説明） \\
+考察「攻撃のステルス性と検知破綻の境界」 & \S\ref{sec:claim-rq3}（殻と D1 の U 字型），\S\ref{sec:claim-shell}（以前の版の説明） \\
+考察「中心仮説の評価」 & \S\ref{sec:claim-hyp4}（3 つの主張と評価，push\_ratio の逆転），\S\ref{sec:claim-hyp}（以前の版） \\
+考察「妥当性への脅威と今後の課題」 & \S\ref{sec:claim-threats}（制約と今後の課題） \\
+実験結果「正常更新の分布構造」 & \S\ref{sec:claim-d4}，\S\ref{sec:claim-tail}（裾の重さ） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------------------------------------------------------
+\section{図と表の読み方}
+\label{sec:claims-reading}
+
+卒論の第 8 章（実験結果）の図と表を読むための手引きである。
+図表ごとに，\textbf{何を描いているか}，\textbf{まずどこを見るか}，\textbf{この実験での読み取り例}，\textbf{読み間違えやすい点}の 4 つをまとめる。
+ファイルはすべて \texttt{experiments\_detection\_v3/\_logs/analysis/} にある（卒論の \texttt{Memo/fig/} にはその写しを置いている）。
+
+\paragraph{すべての図表に共通する約束。}
+\begin{itemize}
+  \item \textbf{AUC の目盛り}：1 は完全に見分けられる，0.5 は見分けられない，0 は\textbf{逆向きに}完全に分かれている（\S\ref{sec:auc}）。
+        図の点線（AUC $= 0.5$）より上か下かで，まず「正しい向きか，逆向きか」を判断する。
+  \item \textbf{平均とばらつき}：特に断りがなければ，値は 10 回の試行（\texttt{trial}）の平均，帯や棒は試行間の標準偏差である。
+        帯や棒が長いのは，「試行によって結果が割れている」ことを意味する。
+  \item \textbf{$\alpha$ の色}：赤の実線（○）が $\alpha = 1000$（ほぼ IID），青の破線（□）が $\alpha = 5$，緑の一点鎖線（△）が $\alpha = 1$（強い Non-IID）。
+        白黒で印刷しても，線の種類と印で区別できるようにしてある。
+  \item \textbf{「最終 5 ラウンド」}：第 46〜50 ラウンドのこと。条件を 1 つの数値にまとめるときに使う。
+\end{itemize}
+
+\subsection{精度の推移（\texttt{accuracy\_by\_round.png}）と精度の表（\texttt{accuracy\_table.csv}）}
+
+\paragraph{何を描いているか。}
+横に 3 枚，左から $\alpha = 1000, 5, 1$。横軸がラウンド，縦軸がテスト精度（\%，60\% 以上だけを表示）。
+線は攻撃なし（黒の実線），符号反転（赤の破線），ALIE の $z = 1$（青）と $z = 3$（緑）。
+表には，最終ラウンドの精度（平均・標準偏差・最小）と，最後の 5 ラウンドでの上がり幅（\texttt{gain\_last\_5}）がある。
+
+\paragraph{まずどこを見るか。}
+\begin{enumerate}
+  \item 黒の線（攻撃なし）が右端で平らになっているか $\rightarrow$ 学習が収束しているか。表の上がり幅で数値を確かめる。
+  \item 黒の線と他の線の差 $\rightarrow$ 攻撃がどれだけ精度を下げたか。
+\end{enumerate}
+
+\paragraph{この実験での読み取り例。}
+\begin{itemize}
+  \item 5 ラウンドごとの上がり幅は，$\alpha = 1000$ では第 35 ラウンド以降およそ 0.1 ポイントで横ばい，$\alpha = 5$ でも 0.2 ポイント程度まで小さくなる。$\alpha = 1$ は最後の区間でも 0.5 ポイント前後で，まだ上がっている。
+  \item 符号反転（赤）は $\alpha = 1$ で 76\% 前後に落ち，帯も広い（試行によって 63〜85\% まで割れる）。
+  \item ALIE は，$\alpha = 1000, 5$ では黒の線とほとんど重なる（ほぼ無害）。$\alpha = 1$ だけ，$z = 3$ で黒より下にはっきり離れる。
+\end{itemize}
+
+\paragraph{読み間違えやすい点。}
+$\alpha = 1$ の符号反転の上がり幅は 0.05 と小さいが，これは「収束した」のではなく，攻撃で学習が止まっているだけである。
+上がり幅は，精度そのものと合わせて読む。
+
+\subsection{最終 AUC の表（卒論の表\ \texttt{tab:final-auc}，\texttt{detection\_final\_auc\_table.csv}）}
+
+\paragraph{何を描いているか。}
+行が攻撃（ALIE の 8 つの $z$ と符号反転），列が $\alpha$ ごとの D1〜D4。値は最終 5 ラウンドの AUC。
+求め方は，まず試行ごとに 5 ラウンドを平均し，その 10 個の値の平均を取る。
+卒論の表では，試行間の標準偏差が 0.10 以上のときだけ「$\pm$」で書いている。CSV には，全部の値の平均（\texttt{\_mean}）と標準偏差（\texttt{\_std}）がある。
+
+\paragraph{まずどこを見るか。}
+\begin{enumerate}
+  \item 0 に近い値（逆向き）と，0.5 付近の値（見分けられない）を探す。この 2 つは意味が違う。
+  \item 同じ行（同じ攻撃）で，$\alpha$ によって値が大きく変わる検知器を探す $\rightarrow$ Non-IID が効いている場所。
+  \item 「$\pm$」が付いた値 $\rightarrow$ 試行によって結果が割れている場所。平均だけで結論を出さない。
+\end{enumerate}
+
+\paragraph{この実験での読み取り例。}
+D2 の列は，ALIE の $z \le 1.5$ ですべて 0.00（逆向き）。D1 の列は $z = 1.25$ の行だけが 0.09〜0.16 と低い。
+D4 の列は，$z = 0.75$ の行で $\alpha$ によって 1.00 / 0.39 / 0.16 と大きく変わる。
+
+\paragraph{読み間違えやすい点。}
+\begin{itemize}
+  \item 0.00 を「全く検知できない」と読まない。スコアの向きを逆にすれば完全に見つかる状態である。
+  \item 1 回のラウンドの AUC は，悪性 4 台 $\times$ 良性 16 台 $= 64$ 組の比較で決まるので，$1/64$ 刻みの粗い値になる。平均すれば細かい値になるが，0.01 程度の差には意味を持たせない。
+\end{itemize}
+
+\subsection{$z$ と AUC の図（\texttt{detection\_auc\_by\_z.png}）}
+
+\paragraph{何を描いているか。}
+ALIE だけを対象に，横に 4 枚（D1〜D4）。横軸が $z$，縦軸が最終 5 ラウンドの AUC。$\alpha$ ごとに 1 本の線で，棒は試行間の標準偏差。
+最終 AUC の表の ALIE の部分を，検知器ごとに線でつないだものと考えてよい。
+
+\paragraph{まずどこを見るか。}
+\begin{enumerate}
+  \item 線の形：右上がりか，谷があるか，ある $z$ で急に跳ぶか。
+  \item 3 本の線が離れている $z$ $\rightarrow$ その $z$ では Non-IID が検知のしやすさを変えている。ALIE では push\_ratio が $z$ でほぼ決まるので，ここでの差は push\_ratio では説明できない差である。
+\end{enumerate}
+
+\paragraph{この実験での読み取り例。}
+\begin{itemize}
+  \item D1：$z = 1.25$ に深い谷があり，その前後では高い（\S\ref{sec:claim-shell}「高次元の殻」）。
+  \item D2：$z = 1.5$ まで 0 に張り付き，$z = 2$ で赤だけが上がり，$z = 3$ で全部上がる。
+  \item D3：どの $z$ でも上の方で平ら。
+  \item D4：低い位置から，ある $z$ で 1.0 に跳ぶ。跳ぶ位置は赤（$\alpha = 1000$）が一番左で，Non-IID が強いほど右にずれる（\S\ref{sec:claim-d4}）。
+\end{itemize}
+
+\paragraph{読み間違えやすい点。}
+横軸の $z$ は等間隔ではない（0.385, 0.5, 0.75, 1, 1.25, 1.5, 2, 3）。点と点の間の線は「その間を測っていない」ので，跳ぶ位置は「2 つの点の間のどこか」としか言えない。
+
+\subsection{AUC のラウンド推移（\texttt{detection\_auc\_by\_round.png}）}
+
+\paragraph{何を描いているか。}
+格子状の小さなグラフ。行が検知器（上から D1〜D4），列が攻撃（左端が符号反転，その右に ALIE の各 $z$）。
+1 枚の中で，横軸がラウンド，縦軸がその回の AUC。線が試行の平均，薄い帯が標準偏差。
+\texttt{analysis/} の図は ALIE の 8 水準をすべて並べた 9 列だが，卒論の図（\texttt{Memo/fig/detection\_auc\_by\_round\_v3\_sel.png}）は，符号反転と $z = 0.75, 1.25, 1.5, 2$ の 5 列に絞った版である。全水準の 9 列版は，卒論の付録 A に載せている（本文の「$z \le 1$ の全水準で D2 は 0 のまま」といった記述は，付録の図で確かめる）。\texttt{analyze\_detection.py} に \texttt{-{}-round-zs 0.75,1.25,1.5,2} を付けて実行すると，\texttt{analysis/detection\_auc\_by\_round\_selected.png} として作られる。
+
+\paragraph{まずどこを見るか。}
+\begin{enumerate}
+  \item 線が右端（終盤）でどこにいるか $\rightarrow$ 最終 AUC の表の値と同じ。
+  \item 序盤と終盤で値が大きく違う線 $\rightarrow$ 学習の段階で検知のしやすさが変わる場所。最終 5 ラウンドの値だけでは見えない。
+  \item 帯の幅 $\rightarrow$ 試行による割れ方。
+\end{enumerate}
+
+\paragraph{この実験での読み取り例。}
+\begin{itemize}
+  \item D2 の ALIE $z = 1.5$：最初の数ラウンドだけ高く，10 ラウンド以内に 0 へ落ちる。$z = 2$ でも，青（$\alpha = 5$）はゆっくり，緑（$\alpha = 1$）は 10 ラウンドほどで 0 近くまで落ちる。赤（$\alpha = 1000$）は高いまま。
+  \item D1 の符号反転：0.5 付近から始まり，ラウンドとともに 0.9 前後まで上がる（\S\ref{sec:claim-d1sf}）。
+  \item D4 の符号反転：$\alpha = 1$（緑）だけが，ラウンドとともに 1.0 から 0.86 くらいまで下がる。
+\end{itemize}
+
+\paragraph{読み間違えやすい点。}
+第 1 ラウンドの値は，初期のモデルからの 1 回分の更新なので，不安定になりやすい。序盤の 1〜2 ラウンドの急な上下だけで結論を出さない。
+卒論では，第 1〜5，6〜15，16〜30，31〜50 ラウンドの区間ごとに平均した値で傾向を述べている（\S\ref{sec:claims-recompute}）。その値は卒論の付録 B に全条件ぶん載せてある。区間の平均は，区間の中で値が急に動くと，図のどの点とも一致しないことに注意する（たとえば D4 の ALIE $z = 0.75$，$\alpha = 1000$ は，第 1 ラウンドの 0.32 から第 4 ラウンドで 0.99 に跳ねるので，第 1〜5 ラウンドの平均は 0.76 になる）。
+
+\subsection{push\_ratio と AUC の散布図（\texttt{detection\_pushratio\_vs\_auc.png}）と相関の表}
+
+\paragraph{何を描いているか。}
+符号反転だけを対象に，2 $\times$ 2 の 4 枚（D1〜D4）。横軸が push\_ratio（\textbf{対数目盛り}），縦軸が AUC。
+1 つの点が「1 回の実行の 1 ラウンド」なので，各 $\alpha$ で 10 試行 $\times$ 50 ラウンド $= 500$ 点ある。
+右下の枠の数値は順位相関係数 $\rho$（Spearman）。1 行目の all が全部の点，その下が $\alpha$ ごと。
+同じ数値は \texttt{detection\_pushratio\_corr\_table.csv} にもある。
+
+\paragraph{まずどこを見るか。}
+\begin{enumerate}
+  \item 中心仮説が正しければ，点は「左（push\_ratio が小さい）ほど下（AUC が低い）」に並び，$\rho$ は正になるはずである。そうなっているかを見る。
+  \item 色ごとの点の固まりの位置 $\rightarrow$ $\alpha$ によって push\_ratio がどう違うか。
+  \item all の $\rho$ と，$\alpha$ ごとの $\rho$ の違い。
+\end{enumerate}
+
+\paragraph{この実験での読み取り例。}
+D2・D3 は push\_ratio によらず，ほぼ全部の点が 1.0 に並ぶ。$\rho$ は全体でも $\alpha$ ごとでも弱いか負で，仮説の形にはなっていない。
+例外は $\alpha = 1$ の D1（$\rho = 0.69$）だけである。
+
+\paragraph{読み間違えやすい点。}
+\begin{itemize}
+  \item \textbf{all の $\rho$ だけで判断しない。}符号反転の push\_ratio は主に $\alpha$ で決まるので，all の相関は「$\alpha$ が違うと AUC が違う」ことを言い換えているだけかもしれない。$\alpha$ ごとの $\rho$ でも同じ向きなら，push\_ratio そのものが効いていると言いやすい。
+  \item n/a は，その $\alpha$ で AUC がほぼ常に 1.0 で，順位が付けられず計算できないことを表す（相関がないのではない）。
+  \item 序盤のラウンドでは，$\alpha = 1000$ の点が push\_ratio 10 前後まで右に伸びる。散布図には全ラウンドの点が入っているので，序盤と終盤が混ざっている。
+\end{itemize}
+
+\subsection{spread・push\_ratio の表と，分布構造の表（\texttt{detection\_structure\_table.csv}）}
+
+\paragraph{何を描いているか。}
+条件ごとに，最終 5 ラウンドで平均した「説明する側の指標」を並べた表。卒論では，spread と push\_ratio の表と，分布構造の表に分けて載せている。
+\begin{table}[H]
+\centering
+\caption{分布構造の表の列と，値の読み方。}
+\small
+\begin{tabular}{@{}P{3.4cm} P{5.9cm} P{6.0cm}@{}}
+\toprule
+列（卒論の表での名前） & 何を測っているか & 値が大きいと \\
+\midrule
+\texttt{benign\_spread}（spread） & 良性が重心からどれだけ散らばっているか（平均距離） & 良性どうしのばらつきが大きい \\
+\texttt{push\_ratio} & 悪性の重心からの距離 $\div$ spread & 悪性が良性の殻より外にいる（1 を境に内・外） \\
+\texttt{pc1\_ratio}（寄与率・正常） & 良性のばらつきのうち，一番大きい 1 方向が占める割合 & 良性が特定の方向に細長く広がっている（丸くない） \\
+\texttt{pc1\_ratio\_all}（寄与率・全更新） & 同じ量を，悪性も含めた全員で求めたもの（D4 が見ている行列） & 全員のばらつきが 1 方向に集中している \\
+\texttt{mal\_cos\_pc1}（$|\cos\theta|$・正常） & 悪性のずれの方向と，良性の第 1 主成分の重なり（0〜1） & 悪性が良性の主なばらつきの方向にずれている \\
+\texttt{mal\_cos\_pc1\_all}（$|\cos\theta|$・全更新） & 悪性のずれの方向と，全員の第 1 主成分の重なり & 悪性のずれが「一番目立つ方向」になっている（D4 が見つけやすい） \\
+\texttt{mal\_rank\_mean}（順位・平均） & 各座標で「悪性の値以下の良性が何割か」の平均 & 悪性が良性の分布の中ほどにいる（正規分布なら $\Phi(-z)$） \\
+\texttt{mal\_rank\_std}（順位・SD） & 上の割合の，座標によるばらつき & 座標によって，悪性の位置がまちまち \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{まずどこを見るか。}
+\begin{enumerate}
+  \item 攻撃なしの行の spread と寄与率を $\alpha$ で比べる $\rightarrow$ Non-IID が良性の「大きさ」と「形」のどちらを変えたか。
+  \item 同じ $z$ の行を $\alpha$ で比べ，$|\cos\theta|$（全更新）と D4 の AUC が一緒に動いているかを見る。
+\end{enumerate}
+
+\paragraph{この実験での読み取り例。}
+\begin{itemize}
+  \item 攻撃なしで，spread は 0.143 / 0.143 / 0.155 とほぼ同じなのに，寄与率は 0.086 / 0.122 / 0.193 と 2 倍以上違う（\S\ref{sec:claim-hyp}，\S\ref{sec:claim-d4}）。
+  \item ALIE の $z = 0.75$ で，$|\cos\theta|$（全更新）0.920 / 0.305 / 0.138 と D4 の AUC 0.998 / 0.385 / 0.161 が同じ順に並ぶ。
+\end{itemize}
+
+\paragraph{読み間違えやすい点。}
+\begin{itemize}
+  \item spread と push\_ratio 以外の列は，正解ラベル（誰が悪性か）を使って計算した「考察のための量」である。検知器はこれらを知らない。
+  \item $|\cos\theta|$（全更新）は D4 の判定のしかたそのものに近いので，D4 の AUC と連動するのはある意味当然である。「原因」ではなく「D4 が失敗する様子の言い換え」として読む（\S\ref{sec:claim-d4}）。
+  \item 攻撃なしの行には悪性がいないので，悪性に関する列は空欄（NaN）になる。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{符号反転の考察の図表（卒論 9.1）}
+\label{sec:read-signflip}
+
+この 4 つの図表は第 8 章ではなく，考察の章（9.1「検知器間の違い」）に載せている。主張との対応は\S\ref{sec:claim-sf}。
+
+\paragraph{D2 スコアのラウンド推移（\texttt{fig:signflip-d2}，\texttt{signflip\_d2\_score\_by\_round.png}）。}
+横軸がラウンド，縦軸が D2 スコア（$1 - \cos$）の平均。$\alpha$ ごとに 2 本ずつで，\textbf{白抜きの印が悪性}（上の 3 本），\textbf{塗りつぶしの印が正常}（下の 3 本）。
+まず点線（1.0）を挟んで上下に分かれているかを見る。分かれていれば D2 は見分けられている。
+次に，ラウンドが進むと上下の線が 1 に寄っていくこと，$\alpha$ が小さいほど序盤から 1 に近いことを見る。
+読み間違えやすい点：線は平均なので，$\alpha = 1$ の終盤で一部のラウンドが完全には分かれていないこと（0.94）は図からは見えない。それは次の表で見る。
+
+\paragraph{分離の表（\texttt{tab:signflip-sep}，\texttt{signflip\_separation\_table.csv}）。}
+行が $\alpha$，列が区間（第 1〜5 ラウンドと最終 5 ラウンド）ごとの 4 つの量。
+D2 スコアの正常・悪性の平均，完全分離（悪性のスコアがすべて正常より大きいラウンドの割合），悪性方向と第 1 主成分の $|\cos|$。
+$|\cos|$ が 1 に近いほど，第 1 主成分が「正常と悪性の 2 群を結ぶ軸」になっている。D3 と D4 の議論の根拠に使う。
+
+\paragraph{ノルムの比のラウンド推移（\texttt{fig:signflip-norm}，\texttt{signflip\_norm\_ratio\_by\_round.png}）。}
+縦軸は「悪性のノルムの平均 $\div$ 正常のノルムの平均」。\textbf{白抜きの印が符号反転}，\textbf{塗りつぶしの印が攻撃なしの対照}（同じ 4 台を悪性とみなしたもの）。
+白抜きが学習とともに 1 から離れ，塗りつぶしが 1 に張り付いていれば，「ノルムの差は攻撃によって生じた」と言える。
+読み間違えやすい点：$\alpha = 1$ の帯が広いのは，試行によって比が大きく違うためである。比が大きいほど D1 が見つけやすい，とは限らない（次の表）。
+
+\paragraph{ノルムのばらつきと D1・D4 の誤りの表（\texttt{tab:signflip-norm}，\texttt{signflip\_norm\_dispersion\_table.csv}）。}
+最終 5 ラウンドの値。列は左から，ノルムの比，正常のノルムの変動係数（符号反転・攻撃なし），D1 の誤りとその「下側」，D4 の誤りとその「上側」，D4 の相関。
+\begin{itemize}
+  \item 「誤り」は，正常 1 台と悪性 1 台の組のうち，検知器が正常のほうを疑わしいとした割合で，$1 - \mathrm{AUC}$ に等しい。
+  \item 「下側（上側）」は，誤った組のうち，その正常のノルムが中央値より小さい（大きい）ものの割合。この 2 列だけは，試行ごとではなく全試行の組をまとめて割合を出している（誤りの少ない試行で値が揺れるため）。
+  \item 「相関」は，正常どうしでの D4 スコアとノルムの順位相関。1 に近いほど「ノルムの大きい正常ほど D4 で疑われる」。
+\end{itemize}
+まず見るところ：D1 は「下側」，D4 は「上側」が大きい。両方の検知器が，正常のノルムのばらつきのせいで，それぞれ別の側で間違えていることが 1 つの表で比べられる。
+
+\paragraph{区間ごとの変動係数（\texttt{signflip\_norm\_cv\_by\_segment\_table.csv}，卒論には表として載せていない）。}
+正常のノルムの変動係数を，第 1〜5，6〜15，16〜30，31〜50 ラウンドの区間ごとに，符号反転と攻撃なしで並べた表。
+卒論 9.1 のまとめの段落の数値（$\alpha = 1$ で 0.18 $\rightarrow$ 0.37，攻撃なしは 0.18〜0.25）の出典である。
+読み間違えやすい点：区間が第 31〜50 ラウンドなので，最終 5 ラウンドの表の値（0.39）とは少し違う。
+
+\subsection{ALIE の考察の図表（卒論 9.1）}
+\label{sec:read-alie}
+
+主張との対応は\S\ref{sec:claim-alie}。
+
+\paragraph{$z$ と D2 スコアの図（\texttt{fig:alie-d2-z}，\texttt{alie\_d2\_score\_by\_z.png}）。}
+横軸が ALIE の $z$，縦軸が第 46〜50 ラウンドの D2 スコア（$1 - \cos$）。$\alpha$ ごとに 2 本ずつで，\textbf{塗りつぶしの印が正常}（上の 3 本，約 0.9〜1.0），\textbf{白抜きの印が悪性}（下から右上がりの 3 本）。縦棒は試行間の標準偏差。
+まず見るところ：
+\begin{enumerate}
+  \item 悪性の線が正常の線より下にある $z$ では，悪性のほうが参照方向に近い $\rightarrow$ D2 の AUC は 0 に近い。
+  \item 悪性の線が正常の線を越える $z$ $\rightarrow$ D2 が検知に転じるところ。$\alpha = 1000, 5$ では $z = 2$ の付近，$\alpha = 1$ では $z = 2$ と 3 の間。
+  \item $\alpha = 1$（緑）は，正常の線が上に，悪性の線が下にずれている $\rightarrow$ 交わる $z$ が右にずれる。
+\end{enumerate}
+読み間違えやすい点：正常のスコアも $z$ が大きいとやや下がる（$\alpha = 1000$ で 0.89 $\rightarrow$ 0.61）。正常は $z$ で作られるわけではないので，これは悪性の作り方が変わったことによる間接的な変化である（$r$ や学習の進み方が変わる）。理由は確かめていない。
+
+\paragraph{表 \texttt{alie\_d2\_score\_by\_z\_table.csv}。}
+図と同じ平均と標準偏差を，$z \times \alpha \times$ 正常・悪性で並べた表。最後の行（\texttt{alie\_z} が \texttt{none}）は攻撃なしの実行の正常の値で，「$\mu$ に比べて $e_i$ がどれくらい大きいか」の目安に使う（1 に近いほど $e_i$ が大きい）。
+
+\paragraph{表 \texttt{alie\_norm\_ratio\_by\_z\_table.csv}。}
+行が $z$，列が $\alpha$ で，悪性 $\div$ 正常のノルムの比（第 46〜50 ラウンド）。1 に近い $z$（1.25）で D1 が見分けられなくなる。$\alpha$ によらずほぼ同じ値になる。
+
+\subsection{高次元の殻の図（卒論 9.3）}
+\label{sec:read-shell}
+
+主張との対応は\S\ref{sec:claim-rq3}。
+
+\paragraph{$z$ と距離の比・ノルムの比（\texttt{fig:alie-shell}，\texttt{alie\_shell\_by\_z.png}）。}
+横に 3 枚，左から $\alpha = 1000, 5, 1$。横軸が $z$，縦軸が「悪性 $\div$ 正常」の比（第 46〜50 ラウンド，10 試行の平均）。
+\textbf{破線（白抜きの印）が平均からの距離の比}（push\_ratio，ほぼ $y = z$），\textbf{実線（塗りつぶしの印）がノルムの比}。灰色の帯は $1 \pm$ 正常のノルムの変動係数で，正常の殻の厚みの目安である。
+まず見るところ：
+\begin{enumerate}
+  \item 線が帯より下 $\rightarrow$ 悪性は殻の内側。帯の中 $\rightarrow$ 殻の上（見分けにくい）。帯より上 $\rightarrow$ 殻の外。
+  \item 破線は $z = 1$ で，実線は $z \approx 1.25$ で帯を通る $\rightarrow$ 距離が揃う $z$ とノルムが揃う $z$ は違う。D1 の最小は実線のほう（$z = 1.25$）。
+  \item $\alpha = 1$ だけ帯が太い $\rightarrow$ 実線が帯の中にいる $z$ の範囲が広く，D1 が見分けにくい範囲も広い。
+\end{enumerate}
+読み間違えやすい点：帯は\textbf{ノルム}の変動係数で描いている。距離の変動係数（\texttt{benign\_dist\_cv}）もほぼ同じ値（0.08〜0.18）なので，破線にも同じ帯を当てはめて読んでよい。
+
+\paragraph{表 \texttt{alie\_shell\_table.csv}。}
+$(\alpha, z)$ ごとの距離の比（\texttt{dist\_ratio}），ノルムの比（\texttt{norm\_ratio}），正常のノルムの変動係数（\texttt{benign\_norm\_cv}），正常の平均からの距離の変動係数（\texttt{benign\_dist\_cv}）。
+距離の変動係数は，push\_ratio $\div z = \sqrt{1 + \text{変動係数}^2}$ から求めている（卒論の式 \texttt{eq:alie-pushratio}）。
+
+\section{結果の全体像}
+\label{sec:claims-overview}
+
+細かい数値に入る前に，検知器ごとの結果を 1 枚にまとめる（表\ref{tab:overview}）。
+数値は最終 5 ラウンドの AUC（\texttt{trial} ごとに平均してから 10 試行の平均。\texttt{analysis/detection\_final\_auc\_table.csv}）。
+3 つの数値は，$\alpha = 1000 / 5 / 1$ の順である。
+
+\begin{table}[H]
+\centering
+\caption{検知器 $\times$ 攻撃の AUC のまとめ（$\alpha = 1000 / 5 / 1$）。0.5 は見分けられない，0 に近いのは逆向きに分かれている（\S\ref{sec:auc}）。}
+\label{tab:overview}
+\small
+\begin{tabular}{@{}P{2.0cm} P{3.0cm} P{3.0cm} P{3.4cm} P{3.4cm}@{}}
+\toprule
+検知器 & 符号反転 & ALIE $z = 0.385$ & ALIE $z = 1.25$ & ALIE $z = 3$ \\
+\midrule
+D1 ノルム & 0.97 / 0.94 / 0.88 & 1.00 / 1.00 / 0.97 & \textbf{0.16 / 0.09 / 0.14} & 1.00 / 1.00 / 1.00 \\
+D2 コサイン & 1.00 / 1.00 / 1.00 & \textbf{0.00 / 0.00 / 0.00} & \textbf{0.00 / 0.00 / 0.00} & 1.00 / 1.00 / 0.97 \\
+D3 k-means & 1.00 / 0.99 / 0.98 & 0.96 / 1.00 / 0.97 & 0.98 / 0.99 / 0.98 & 1.00 / 1.00 / 0.98 \\
+D4 スペクトル & 1.00 / 0.97 / 0.85 & \textbf{0.09 / 0.04 / 0.04} & 1.00 / 1.00 / 1.00 & 1.00 / 1.00 / 1.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+この表から読み取れる骨組みは，次の 4 つである。後の節で 1 つずつ根拠を確かめる。
+\begin{itemize}
+  \item 符号反転は，どの検知器でもおおむね見つかる。Non-IID が強いと D1・D4 が少し下がる（\S\ref{sec:claim-d1sf}，\S\ref{sec:claim-hyp}）。
+  \item ALIE を，D2 は $z \le 1.5$ でいつも\textbf{逆向き}に分ける（\S\ref{sec:claim-d2}）。
+  \item D1 は $z = 1.25$ だけで崩れ，その前後では見つかる（\S\ref{sec:claim-shell}）。
+  \item D4 は小さい $z$ では逆向き，ある $z$ を境に完全に見つかる。その境は Non-IID で動く（\S\ref{sec:claim-d4}）。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{主張：精度と収束}
+\label{sec:claim-acc}
+
+\paragraph{主張。}
+攻撃なしの精度は $\alpha = 1000 / 5 / 1$ で 98.0\% / 97.4\% / 94.3\%。$\alpha = 1000, 5$ は 50 ラウンドでほぼ頭打ちだが，$\alpha = 1$ はまだ上がっている。
+
+\paragraph{根拠。}
+\texttt{analysis/accuracy\_table.csv}（\texttt{results.csv} から作る）と \texttt{accuracy\_by\_round.png}。
+収束の目安は，45 ラウンドから 50 ラウンドまでの精度の上がり幅（\texttt{gain\_last\_5}）である。
+攻撃なしで 5 ラウンドごとの上がり幅を並べると，$\alpha = 1000$ は 0.40 / 0.21 / 0.14 / 0.11 / 0.14（第 25〜50 ラウンド），$\alpha = 5$ は 0.48 / 0.41 / 0.29 / 0.20 / 0.17，$\alpha = 1$ は 1.22 / 0.87 / 0.77 / 0.44 / 0.53。【観測】
+「何ポイント未満なら収束」という決まった基準はないので，卒論では閾値を使わず，上がり幅が小さくなって横ばいになったか（$\alpha = 1000$），まだ大きいまま続いているか（$\alpha = 1$）で判断している。
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item $\alpha = 1$ の「最終 5 ラウンドの検知性能」は，学習が進みきる前の値である。ラウンド数を増やすと変わる可能性がある。
+  \item 本番前の簡易な確認（Flower を通さない，1 試行）では上がり幅は 0.3 だった。本番の 10 試行の平均のほうが大きかった。
+  \item $\alpha = 1$ の符号反転は約 76\% で頭打ちになっている（上がり幅 0.05）。これは「収束した」のではなく，攻撃で学習が止まっている状態である。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{主張：D2 は ALIE を逆向きに完全に分ける}
+\label{sec:claim-d2}
+
+（卒論 \texttt{soturon3.tex} の 9.1 に合わせた詳しい説明は\S\ref{sec:claim-alie-d2}。）
+
+\paragraph{主張。}
+D2（参照方向とのコサイン距離）の AUC は，$z \le 1.5$ の ALIE で全 $\alpha$ とも 0.00。悪性が\textbf{いつも一番正常らしい}と判定されている。
+
+\paragraph{根拠。}
+\begin{itemize}
+  \item AUC：\texttt{detection\_final\_auc\_table.csv}。$z = 2$ で $\alpha$ により 0.83 / 0.12 / 0.00 と分かれ，$z = 3$ で 1.00 / 1.00 / 0.97。【観測】
+  \item スコアそのもの：\texttt{detection\_updates.csv} の \texttt{d2\_cosine} 列を，\texttt{is\_malicious} で分けて平均する。
+        $z \le 1.5$ の全ラウンドで，良性は 0.65〜0.89，悪性は 0.21〜0.23。悪性のスコアは $z$ とともに上がる（$z = 0.385$ で 0.05，$z = 1.5$ で 0.44）。【観測】
+\end{itemize}
+
+\paragraph{なぜそうなるか。}【解釈】
+ALIE の悪性は「良性の平均 $-$ 少し」なので，向きが良性の平均にとても近い。
+D2 の参照方向は全員の座標ごとの中央値で，これも平均に近い。だから悪性のほうが参照方向に近くなる。
+さらに，悪性 4 台は同じベクトルなので，中央値そのものが悪性の側に引き寄せられ，逆転が強まる。
+良性はそれぞれ自分のデータの方向に引っ張られるので，参照方向から離れる。
+
+\paragraph{読むときの注意。}
+AUC 0 は「見分けられない」ではない。スコアの向きを逆にすれば完全に見分けられる。
+壊れているのは「スコアが大きいほど悪性」という片側だけの判定規則である。
+卒論では，この結果を Wang ら（2023）の指摘と結びつけている。
+Wang らは「パラメータの値が大きく違うのに，類似度では似ていると評価されてしまう」ことを示し，それを突く攻撃 Faker を作った。
+ALIE の悪性は，良性の平均に\textbf{実際に近い}ので似ていると評価される。仕組みは違うので，卒論では「同じ脆弱性が生じた」とは言わず，
+「類似度だけに頼る検知の限界という点で整合する」と書いている。【解釈】
+審査では「両側を見る検知器にすれば済むのでは」と聞かれうる。その答えは \S\ref{sec:claim-shell} の D1 が実例になる（D1 は「中央値からのずれの絶対値」なので両側を見ている）。
+
+% ---------------------------------------------------------
+\section{主張：D3 はいつも高いが，理由に注意}
+\label{sec:claim-d3}
+
+（卒論 \texttt{soturon3.tex} の 9.1 に合わせた詳しい説明は\S\ref{sec:claim-alie-d3}。）
+
+\paragraph{主張。}
+D3（k-means）は全条件で AUC 0.92 以上。$z$ にも $\alpha$ にもほとんど依存しない。【観測】
+
+\paragraph{なぜそうなるか。}【推測】
+ALIE の悪性 4 台は\textbf{まったく同じベクトル}を送る（原論文どおり）。
+特徴量の空間で 4 点が 1 点に重なるので，2 つに分けると，この固まりが切り出されやすい。
+D3 が ALIE の「巧妙さ」を見破っているのか，「4 台が同じ」という性質を拾っているだけなのかは，この実験では区別できない。
+
+\paragraph{読むときの注意。}
+これは卒論で一番突かれやすい弱点の 1 つである（\S\ref{sec:claims-qa}）。
+「同じ更新が複数届いたら怪しい」と調べるだけで ALIE は見つかってしまう。この攻撃の設定の限界として書く。
+確かめるには，悪性 4 台の更新に小さなばらつきを足した ALIE で D3 がどうなるかを見る必要がある（未実施）。
+
+% ---------------------------------------------------------
+\section{主張：重心に近すぎる悪性も目立つ（高次元の殻）}
+\label{sec:claim-shell}
+
+卒論の考察の中心である。直感に反するので，ていねいに説明する。
+
+\paragraph{主張。}
+中心仮説は「悪性が良性の広がりの内側（push\_ratio $< 1$）に入ると見つからなくなる」と予測した。
+しかし，push\_ratio $\approx 0.39$（$z = 0.385$）の ALIE は，D1・D3 で AUC 0.96 以上で見つかった。
+D1 が一番見つけにくかったのは $z = 1.25$ で，$z$ をさらに上げると再び見つかった。
+
+\paragraph{直感：低い次元と高い次元の違い。}
+2 次元で点をばらまくと，重心の近くにも点がある（\S\ref{sec:spread} の図\ref{fig:spread}）。
+このとき，重心の近くに置いた悪性は，良性の中に紛れる。中心仮説は，この絵を前提にしていた。
+
+ところが，次元がとても高いと事情が変わる。
+重心からの距離は，たくさんの座標のずれを 2 乗して足したものの平方根である。
+足し合わせる項が多いと，その合計はどの点でもだいたい同じ値になる（多数の値を足すと，ばらつきが平均に比べて小さくなるのと同じ理屈）。
+その結果，良性の点は「重心からほぼ同じ距離」に集まり，重心のまわりには\textbf{点がほとんどない}。
+良性は，中身の詰まった玉ではなく，薄い\textbf{殻}（球の表面の近く）に乗っている（図\ref{fig:shell}）。
+本実験の更新ベクトルは約 26 万次元である。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \fill[black!8] (0,0) circle (1.75);
+  \fill[white] (0,0) circle (1.25);
+  \draw[dashed] (0,0) circle (1.5);
+  \foreach \a in {10,40,75,110,150,185,215,250,290,330}
+    \fill ({1.5*cos(\a)},{1.5*sin(\a)}) circle (2pt);
+  \draw (0,0) node[cross out, draw, inner sep=2pt] {};
+  \node[lab] at (0,-0.3) {重心};
+  \node[draw, fill=black!30, inner sep=2.5pt] at (0.55,0.15) {};
+  \node[lab, anchor=west] at (2.3,1.2) {$z$ が小さい：殻の内側（重心に近すぎる）};
+  \draw[->] (2.25,1.2) -- (0.65,0.2);
+  \node[draw, fill=black!30, inner sep=2.5pt] at (1.12,-1.02) {};
+  \node[lab, anchor=west] at (2.3,-0.2) {$z \approx 1.25$：殻の上（良性と区別しにくい）};
+  \draw[->] (2.25,-0.2) -- (1.25,-0.95);
+  \node[draw, fill=black!30, inner sep=2.5pt] at (-2.3,-1.4) {};
+  \node[lab, anchor=west] at (2.3,-1.6) {$z$ が大きい：殻の外側};
+  \draw[->] (2.25,-1.6) -- (-2.15,-1.42);
+\end{tikzpicture}
+\caption{高い次元での良性の配置のイメージ（2 次元で描いた模式図）。黒い点（良性）は重心からほぼ同じ距離の殻（灰色の帯）に集まり，重心のまわりは空いている。灰色の四角が ALIE の悪性。}
+\label{fig:shell}
+\end{figure}
+
+殻の内側にいる悪性は，「重心に近すぎる」という点で目立つ。殻の上に来たときが一番紛れ，殻の外に出るとまた目立つ。
+
+\paragraph{根拠 1：良性は本当に殻に乗っているか。}【観測】
+良性の重心からの距離を $d_i$ とする。ALIE では，式から
+\begin{equation*}
+  \frac{\mathrm{push\_ratio}}{z} = \frac{\text{$d_i$ の 2 乗平均の平方根}}{\text{$d_i$ の平均}} = \sqrt{1 + \mathrm{CV}^2}
+\end{equation*}
+が成り立つ（CV は $d_i$ の変動係数 $=$ 標準偏差 $\div$ 平均）。
+よって，ログの push\_ratio と $z$ から，$\mathrm{CV} = \sqrt{(\mathrm{push\_ratio}/z)^2 - 1}$ と求められる。
+最終 5 ラウンドの ALIE の行で求めると，$\mathrm{push\_ratio}/z$ は $\alpha = 1000 / 5 / 1$ で 1.003 / 1.004 / 1.016，CV は約 0.08 / 0.09 / 0.18 になる。
+つまり，良性の重心からの距離は，平均の $\pm$ 1〜2 割の範囲に集まっている。殻の厚さは，Non-IID が強いほど厚い。
+
+\paragraph{根拠 2：ノルムの比。}【観測】
+\texttt{detection\_updates.csv} の \texttt{delta\_norm} 列から，ラウンドごとに「悪性のノルムの平均 $\div$ 良性のノルムの平均」を求め，最終 5 ラウンドで平均する（表\ref{tab:normratio}）。
+
+\begin{table}[H]
+\centering
+\caption{ALIE の悪性のノルム $\div$ 良性のノルム（最終 5 ラウンド。3 つの $\alpha$ でほぼ同じ）と，D1 の AUC。}
+\label{tab:normratio}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+$z$ & 0.385 & 0.75 & 1 & 1.25 & 1.5 & 3 \\
+\midrule
+ノルムの比 & 0.37〜0.40 & 0.65〜0.66 & 0.84〜0.85 & \textbf{1.03〜1.04} & 1.21〜1.23 & 2.23〜2.31 \\
+D1 の AUC（$\alpha = 1000$） & 1.00 & 1.00 & 0.88 & \textbf{0.16} & 0.99 & 1.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+D1 が一番崩れる $z = 1.25$ は，悪性と良性のノルムがほぼ揃う $z$ と一致する。
+$z$ が小さいときは「ノルムが小さすぎる」ことで，$z$ が大きいときは「大きすぎる」ことで見つかっている。
+
+\paragraph{根拠 3：予測が当たった（卒論では使わない）。}【予測で確認】，ただし卒論では【解釈】として扱う（\S\ref{sec:claims-howto}）
+以前の 54 回の実行は $z \le 1$ しかなく，「D1 は $z$ を上げると下がる」ところまでしか見えていなかった。
+殻の解釈が正しければ，「$z$ が 1 をやや超えたところで最小になり，その先で回復する」はずである。
+これを再スイープの\textbf{前に}計画書に書き，結果は全 $\alpha$ で $z = 1.25$ が最小，$z \ge 1.5$ で回復となった。
+以前の版では，この節の主張を卒論の中で一番強い根拠を持つものとしていた。卒論（\texttt{soturon3.tex}）では予測を根拠に使わないので，殻の解釈は「結果を見たあとに整理したもの」として書いている（\S\ref{sec:claim-rq3}）。
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 最小が $z = 1$ でなく 1.25 なのは，D1 が「重心からの距離」ではなく「原点からのノルム」を見ているためと考えられる。ノルムが揃う $z$ が 1.25 だった（根拠 2）。【解釈】
+  \item 「殻」は，距離やノルムだけで見たときの話である。向きを見る D2 は，殻の上（$z \approx 1$）を過ぎても $z = 2$〜3 まで逆向きのままだった。
+  \item ALIE が見つかったのは，原論文の失敗ではない。原論文が避けようとしたのは Trimmed Mean や Krum であり，「重心に近すぎる更新を怪しむ」検知は想定していない（\S\ref{sec:alie}）。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{主張：D4 の境界は Non-IID で動く（分布の形）}
+\label{sec:claim-d4}
+
+（卒論 \texttt{soturon3.tex} の 9.2 に合わせた詳しい説明は\S\ref{sec:claim-noniid}。）
+
+\paragraph{主張。}
+D4（スペクトル）は，$z$ が小さいと逆向き（AUC 0.04〜0.16），ある $z$ を境に 1.0 近くへ切り替わる。
+その境は Non-IID が強いほど大きい $z$ にずれる。
+これは，Non-IID が良性の広がりの\textbf{大きさ}ではなく\textbf{形}を変えるためと考えられる。
+
+\paragraph{根拠 1：同じ push\_ratio でも AUC が違う。}【観測】
+$z = 0.75$ では push\_ratio はどの $\alpha$ でも約 0.75 なのに，D4 の AUC は 0.998 / 0.385 / 0.161（$\alpha = 1000 / 5 / 1$）。
+push\_ratio では説明できない違いである。
+
+\paragraph{根拠 2：良性の広がりの形。}【観測】
+\texttt{detection\_structure\_table.csv} の \texttt{pc1\_ratio}（攻撃なし，最終 5 ラウンド）は 0.086 / 0.122 / 0.193。
+第 1 主成分の寄与率は，「良性のばらつきのうち，一番大きい 1 方向が何割を占めるか」である。
+値が大きいほど，良性は特定の方向に細長く広がっている（丸くない）。
+一方，広がりの大きさ（spread）は 0.143 / 0.143 / 0.155 で，ほとんど変わらない（\S\ref{sec:claim-hyp}）。
+
+\paragraph{根拠 3：D4 の AUC と連動する量。}【観測】
+\texttt{mal\_cos\_pc1\_all}（悪性のずれの方向と，全員の更新の第 1 主成分の重なり，0〜1）は，$z = 0.75$ で 0.920 / 0.305 / 0.138 であり，D4 の AUC と並ぶ。
+ALIE の 24 条件で順位相関 0.92，ラウンド単位で 0.85。
+
+\paragraph{なぜそうなるか。}【解釈】
+D4 は「全員の更新が一番ばらついている方向」に射影して，そこで外れているものを怪しむ。
+悪性のずれがその方向になれば見つかり，ならなければ悪性の射影はほぼ 0 になって逆転する。
+Non-IID が強いと，良性自身が特定の方向に大きくばらつくので，悪性はその方向を「奪えず」，より大きな $z$ が必要になる。
+
+\paragraph{くわしく 1：ALIE の悪性は，いつも同じ向きにずれる。}【観測から導ける事実】
+悪性のずれの方向 $a$ は「悪性の重心 $-$ 良性の重心」である。ALIE の悪性 4 台は全員 $\mu - z\sigma$ を送るので，悪性の重心はその点そのもの，良性の重心は $\mu$ である。よって
+\begin{equation*}
+  a = (\mu - z\sigma) - \mu = -z\sigma
+\end{equation*}
+になる。$\sigma$ は座標ごとの標準偏差を並べたベクトルなので，\textbf{悪性がずれる向きは $z$ によらず「$\sigma$ の向き」で，$z$ はずれの長さだけを決める}。
+$\sigma$ の向きは，「どの座標も，その座標のばらつきの分だけ少しずつ」という，全部の座標に薄く広がった向きである。
+
+\paragraph{くわしく 2：その向きは，良性の主なばらつきの方向とほぼ直交する。}【観測】
+良性だけの第 1 主成分は，たとえば「ある数字を多く持つクライアントと，別の数字を多く持つクライアントの違い」のような，特定の向きである。
+26 万次元の空間では，このような特定の向きと，全座標に薄く広がった $\sigma$ の向きは，ほとんど重ならない。
+実際，悪性のずれと良性だけの第 1 主成分の重なり（\texttt{mal\_cos\_pc1}）は，ALIE のどの条件でも 0.08 以下だった。
+
+\paragraph{くわしく 3：全員の第 1 主成分には，2 つの候補がある。}【解釈】
+悪性 4 台を加えた全員の雲で「一番広がっている方向」になりうるのは，次の 2 つである（図\ref{fig:d4-candidates}）。
+\begin{itemize}
+  \item \textbf{候補 1}：もともとの良性の主なばらつきの方向（良性どうしの違い）。
+  \item \textbf{候補 2}：悪性 4 台が良性から離れている方向（$\sigma$ の向き）。
+\end{itemize}
+どちらが第 1 主成分になるかで，D4 の結果は真逆になる。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}P{3.6cm} P{3.2cm} P{3.0cm} P{2.2cm} P{2.8cm}@{}}
+\toprule
+第 1 主成分になるのは & 悪性の投影 & D4 の判定 & AUC & \texttt{mal\_cos\_pc1\_all} \\
+\midrule
+候補 2（悪性のずれ） & 一番大きい & 悪性が一番怪しい & 1 に近い & 1 に近い \\
+候補 1（良性どうしの違い） & ほぼ 0（直交しているため） & 悪性が一番怪しくない & 0 に近い & 0 に近い \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.9]
+  \begin{scope}
+    \draw[dashed] (0,0) ellipse (2.0 and 0.6);
+    \foreach \x/\y in {-1.6/0.2,-1.1/-0.3,-0.5/0.35,0.2/-0.25,0.8/0.3,1.4/-0.2,1.7/0.1,-0.2/0.05}
+      \fill (\x,\y) circle (2pt);
+    \node[draw, fill=black!30, inner sep=2.5pt] at (0,0.9) {};
+    \draw[arr, line width=0.8pt] (-2.4,-1.1) -- (2.4,-1.1);
+    \node[lab] at (0,-1.45) {第 1 主成分 $=$ 候補 1（横）};
+    \node[lab] at (0,-1.95) {$z$ が小さい：悪性は横軸に投影するとほぼ 0 $\rightarrow$ AUC $\approx 0$};
+  \end{scope}
+  \begin{scope}[xshift=7.4cm]
+    \draw[dashed] (0,0) ellipse (2.0 and 0.6);
+    \foreach \x/\y in {-1.6/0.2,-1.1/-0.3,-0.5/0.35,0.2/-0.25,0.8/0.3,1.4/-0.2,1.7/0.1,-0.2/0.05}
+      \fill (\x,\y) circle (2pt);
+    \node[draw, fill=black!30, inner sep=2.5pt] at (0,2.4) {};
+    \draw[arr, line width=0.8pt] (2.6,-0.8) -- (2.6,2.6);
+    \node[lab, anchor=west] at (2.7,0.9) {第 1 主成分 $=$ 候補 2（縦）};
+    \node[lab] at (0,-1.95) {$z$ が大きい：悪性が縦に大きく離れる $\rightarrow$ AUC $\approx 1$};
+  \end{scope}
+\end{tikzpicture}
+\caption{D4 の第 1 主成分の 2 つの候補（2 次元で描いた模式図）。黒い点が良性，灰色の四角が悪性 4 台（同じ点に重なっている）。良性は横に細長く広がり，悪性は縦（$\sigma$ の向き）にずれる。}
+\label{fig:d4-candidates}
+\end{figure}
+
+\paragraph{くわしく 4：どちらが勝つかの簡単な見積もり。}【解釈（結果を見たあとの近似計算）】
+2 つの候補の「広がりの大きさ」を比べる。広がりは，各点の重心からのずれを 2 乗して足したもので測る。
+\begin{itemize}
+  \item \textbf{候補 2 の広がり}：悪性 4 台と良性 16 台が，距離 $\|a\| = z\|\sigma\|$ だけ離れた 2 つの固まりになっている。
+        2 つの固まりの間の広がりは $\dfrac{4 \times 16}{20} \|a\|^2 = 3.2\, z^2 \|\sigma\|^2$ になる。
+  \item \textbf{候補 1 の広がり}：良性 16 台の広がりの合計は $16 \|\sigma\|^2$ である（$\|\sigma\|^2$ は，良性の重心からの距離の 2 乗の平均なので）。
+        そのうち第 1 主成分の方向が占める割合が寄与率（\texttt{pc1\_ratio}）なので，$\text{寄与率} \times 16 \|\sigma\|^2$ になる。
+\end{itemize}
+候補 2 が勝つ（悪性のずれが第 1 主成分になる）のは，$3.2\, z^2 > 16 \times \text{寄与率}$，つまり
+\begin{equation*}
+  z > \sqrt{5 \times \text{寄与率}}
+\end{equation*}
+のときである。$\|\sigma\|$ は両辺で消えるので，良性のばらつきの\textbf{大きさ}（spread）は境目に関係せず，\textbf{形}（寄与率）だけで決まる。
+
+ALIE の条件での良性の寄与率（最終 5 ラウンド，$z$ をまたいだ平均）を入れると，表\ref{tab:d4-threshold}のようになる。
+
+\begin{table}[H]
+\centering
+\caption{見積もった境目の $z$ と，実際に D4 の AUC が跳んだ区間。}
+\label{tab:d4-threshold}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+$\alpha$ & 良性の寄与率 & 見積もった境目 $\sqrt{5 \times \text{寄与率}}$ & 実際に跳んだ区間 \\
+\midrule
+1000 & 0.101 & 0.71 & $z = 0.5$〜$0.75$ の間（$z = 0.75$ で 1.00） \\
+5 & 0.141 & 0.84 & $z = 0.75$〜$1$ の間 \\
+1 & 0.208 & 1.02 & $z = 0.75$〜$1$ の間（$z = 1$ でも 0.81 と跳びきらない） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+見積もりは，観測した境目とよく合っている。特に $\alpha = 1$ では，見積もった境目（1.02）がちょうど $z = 1$ の付近にあり，$z = 1$ の AUC が 0.81 という中途半端な値になったこととも一致する。
+この見積もりから，卒論の「Non-IID は良性のばらつきの大きさではなく形を変え，それが D4 を難しくする」という解釈を，次のように言い直せる。
+\begin{quote}
+D4 が ALIE を見つけられるかどうかは，悪性のずれの大きさ（$z$）と，良性のばらつきが 1 方向に集中する度合い（寄与率）の比べ合いで決まる。
+Non-IID が強いと寄与率が大きくなるので，同じ $z$ では悪性が「一番目立つ方向」を奪えなくなる。
+\end{quote}
+
+\paragraph{見積もりの限界。}
+\begin{itemize}
+  \item 悪性のずれと良性の主なばらつきが\textbf{完全に直交している}と仮定した近似である（実際の重なりは 0.08 以下で，ほぼ成り立つ）。
+  \item 良性自身の $\sigma$ の向きへのばらつきは，候補 2 の広がりに足していない。厳密には境目は少し小さめにずれる。
+  \item 結果を見たあとで立てた計算であり，予測で確かめたものではない。卒論では 9.2 節に入れ，結果を見たあとの近似であることを明記している。
+  \item 悪性 4 台が\textbf{同じ点}に重なっていることを使っている。悪性がばらつく場合は，候補 2 の広がりが変わる。
+\end{itemize}
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 根拠 3 の \texttt{mal\_cos\_pc1\_all} は，D4 の判定のしかたそのものに近い量である。「D4 が失敗する仕組み」を言い換えている面があり，独立な証拠としては弱い。
+  \item $\alpha$ は 3 水準しかない。「形が原因」というのは対応関係であって，因果を示したわけではない。
+  \item この解釈は，以前の 54 回の実行の結果を見たあとで立てたものである（予測で確認したものではない）。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{主張：中心仮説は支持されなかった（符号反転と push\_ratio）}
+\label{sec:claim-hyp}
+
+（卒論 \texttt{soturon3.tex} の 9.4 に合わせた詳しい説明は\S\ref{sec:claim-hyp4}。下の「それでも Non-IID は検知を難しくしている」の D4 の説明は以前の推測で，今は\S\ref{sec:claim-sf-d4}（2 乗で符号が消える）の説明を使う。）
+
+\paragraph{主張。}
+中心仮説は「Non-IID $\to$ 良性の広がりが大きくなる $\to$ push\_ratio が下がる $\to$ 見つけにくくなる」という連鎖だった。
+符号反転で確かめたが，この連鎖は学習が進んだ段階では成り立たなかった。
+
+\paragraph{根拠。}【観測】
+\begin{table}[H]
+\centering
+\caption{spread（攻撃なし）と符号反転の push\_ratio。$\alpha = 1000 / 5 / 1$ の順。}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & 第 1〜5 ラウンド & 最終 5 ラウンド & 全ラウンド \\
+\midrule
+spread & 0.149 / 0.353 / 0.434 & 0.143 / 0.143 / 0.155 & 0.151 / 0.182 / 0.211 \\
+符号反転の push\_ratio & 8.62 / 2.85 / 1.96 & 1.58 / 2.03 / 2.55 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+\begin{itemize}
+  \item 学習の序盤は，仮説どおり Non-IID で spread が約 2.4〜2.9 倍になり，push\_ratio も下がる。
+  \item 学習が進むと，spread の差は 1.08 倍まで縮み，push\_ratio の大小関係は\textbf{逆転}する。最終 5 ラウンドで 1 を下回った試行はない。
+  \item push\_ratio と AUC の順位相関（\texttt{detection\_pushratio\_corr\_table.csv}）は，全体で $-0.32$〜$-0.02$，$\alpha$ ごとでも弱いか負。例外は $\alpha = 1$ の D1（0.69）だけ。
+\end{itemize}
+
+\paragraph{それでも Non-IID は検知を難しくしている。}【観測】
+符号反転の D4 は 1.00 / 0.97 / 0.85，D1 は 0.97 / 0.94 / 0.88 と，Non-IID で下がる。
+ただし，その原因は push\_ratio ではない。
+$\alpha = 1$ では，符号反転のずれの方向と良性の第 1 主成分の重なり（\texttt{mal\_cos\_pc1}）が 0.403 と大きく（他は 0.051 / 0.307），
+悪性が良性の主なばらつきの方向に重なって目立ちにくくなった可能性がある。【推測】
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 以前の 54 回の実行（データ数も偏る分け方）では，符号反転が最も Non-IID な条件で AUC 0.55〜0.65 まで落ちた。データ数を揃えた本実験では，そこまで落ちない。以前の低下にはデータ数の偏りが関わっていた可能性がある。ただし 2 つの分け方はラベルの偏り方も違うので，断定はできない。【推測】
+  \item 仮説が外れたこと自体は，隠さずに報告するのが正しい。卒論では「なぜ外れたか」（\S\ref{sec:claim-shell}）と「代わりに何が効いていたか」（\S\ref{sec:claim-d4}）まで書けている。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{主張：符号反転に対する検知器の違い（卒論 9.1）}
+\label{sec:claim-sf}
+\label{sec:claim-d1sf}
+
+卒論（\texttt{Memo/soturon3.tex}）の考察「検知器間の違い」のうち，符号反転（A1）の部分の手引きである。
+2026 年 10 月 20 日に，対話で解釈を 1 つずつ確かめながら組み立てた。
+途中で間違えた考え方も「読むときの注意」に残してある。同じところで迷わないためである。
+
+\paragraph{全体の主張。}
+符号反転に対して，D2・D3 は学習の段階や $\alpha$ によらず高い AUC を保ち，D1・D4 は大きく変動した（D1 は序盤にランダムに近く，その後上昇する。D4 は $\alpha = 1$ で学習とともに低下する）。
+分かれ目は，\textbf{「正常更新の共通の方向に対して，悪性が反対側にいる」という符号の情報を使うかどうか}である。
+D2 は符号をそのまま使い，D3 はそれを特徴量として受け継ぐ。D1 は向きを見ず，D4 は 2 乗で符号を捨てるので，判定が「中心からの離れ具合」（大きさ）に頼り，正常更新のノルムのばらつきに左右される。
+
+\paragraph{使う図表。}読み方は \S\ref{sec:read-signflip}。
+\begin{itemize}
+  \item 卒論の図 \texttt{fig:signflip-d2}：\texttt{signflip\_d2\_score\_by\_round.png}
+  \item 卒論の表 \texttt{tab:signflip-sep}：\texttt{signflip\_separation\_table.csv}
+  \item 卒論の図 \texttt{fig:signflip-norm}：\texttt{signflip\_norm\_ratio\_by\_round.png}
+  \item 卒論の表 \texttt{tab:signflip-norm}：\texttt{signflip\_norm\_dispersion\_table.csv}
+  \item 本文の数値だけに使う：\texttt{signflip\_norm\_cv\_by\_segment\_table.csv}
+\end{itemize}
+以下の数値は，特に断りがなければ $\alpha = 1000 / 5 / 1$ の順である。
+
+% ---------------------------------------------------------
+\subsection{D2：反転すると角度が $\pi - \theta$ になり，必ず分かれる}
+\label{sec:claim-sf-d2}
+
+\paragraph{主張。}
+D2 は符号反転を，学習の序盤から完全に見分ける（AUC 1.00 / 1.00 / 1.00）。
+
+\paragraph{なぜそうなるか。}【解釈】
+正常更新 $g$ と参照方向 $r$（全員の座標ごとの中央値）のなす角を $\theta$ とする。
+符号を反転した悪性 $-g$ と $r$ のなす角は $\pi - \theta$ になる（図\ref{fig:sf-d2-angle} 左）。
+$\cos(\pi - \theta) = -\cos\theta$ なので，D2 のスコア（$1 - \cos$）は
+\begin{equation}
+  \text{正常：} 1 - \cos\theta, \qquad \text{悪性：} 1 + \cos\theta
+\end{equation}
+となる。正常が参照方向と同じ側（$\cos\theta > 0$）にいる限り，正常は 1 より下，悪性は 1 より上に分かれる（図\ref{fig:sf-d2-angle} 右）。
+これは攻撃そのものの幾何的な性質なので，学習の段階によらない。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \begin{scope}
+    \draw[arr, line width=1.0pt] (0,0) -- (0:2.8);
+    \node[lab, anchor=west] at (2.85,0) {参照方向 $r$\\（中央値）};
+    \draw[arr] (0,0) -- (30:2.3);
+    \node[lab, anchor=south west] at (30:2.3) {正常 $g$};
+    \draw[arr, dashed, line width=0.8pt] (0,0) -- (210:2.3);
+    \node[lab, anchor=north east] at (210:2.3) {悪性 $-g$\\（符号反転）};
+    \draw (0.85,0) arc (0:30:0.85);
+    \node[lab] at (15:1.15) {$\theta$};
+    \draw (0.5,0) arc (0:-150:0.5);
+    \node[lab] at (-75:0.85) {$\pi-\theta$};
+  \end{scope}
+  \begin{scope}[xshift=7.6cm, yshift=-0.2cm]
+    \draw[->] (0,0) -- (4.6,0);
+    \node[lab, anchor=west] at (4.6,0) {D2 スコア};
+    \foreach \x/\l in {0/0, 2/1, 4/2} {
+      \draw (\x,0.08) -- (\x,-0.08);
+      \node[lab, below] at (\x,-0.1) {\l};
+    }
+    \draw[dotted] (2,-0.6) -- (2,1.5);
+    \node[lab] at (2,-0.85) {$\cos\theta = 0$};
+    \fill (0.6,0) circle (2.5pt);
+    \node[lab, above] at (0.6,0.15) {正常\\$1-\cos\theta$};
+    \node[draw, fill=black!30, inner sep=2.5pt] at (3.4,0) {};
+    \node[lab, above] at (3.4,0.15) {悪性\\$1+\cos\theta$};
+    \draw[<->] (0.6,1.25) -- (3.4,1.25);
+    \node[lab, above] at (2,1.25) {差 $2\cos\theta$};
+  \end{scope}
+\end{tikzpicture}
+\caption{D2 が符号反転を見分ける仕組み（2 次元で描いた概念図）。左：反転すると参照方向とのなす角が $\theta$ から $\pi - \theta$ になる。右：D2 のスコアは 1 を挟んで対称に分かれ，差は $2\cos\theta$。}
+\label{fig:sf-d2-angle}
+\end{figure}
+
+\paragraph{根拠。}【観測】
+表 \texttt{tab:signflip-sep}（\texttt{signflip\_separation\_table.csv}）。
+第 1〜5 ラウンドの D2 スコアの平均は，正常 0.04 / 0.24 / 0.48，悪性 1.95 / 1.71 / 1.43。$\alpha = 1000$ では 1 を挟んでほぼ鏡写しである。
+ラウンドの中で「悪性のスコアがすべて正常より大きい」ラウンドの割合（完全分離）は，第 1〜5 ラウンドで全 $\alpha$ とも 1.00。
+
+\paragraph{崩れうる条件。}【観測】＋【推測】
+この仕組みは「正常更新が共通の方向を持つ（$\cos\theta > 0$）」ことが前提である。
+正常更新の向きがばらつき $\cos\theta$ が 0 に近づくと，差 $2\cos\theta$ が縮む（図\ref{fig:sf-d2-shrink}）。
+実際，第 46〜50 ラウンドの平均は正常 0.74 / 0.73 / 0.79，悪性 1.16 / 1.25 / 1.24 と，どちらも 1 に寄っている。
+$\alpha = 1$ ではスコアが 1 を超える正常更新が現れ，完全分離は 0.94 に下がった（AUC の平均は 1.00 のまま）。
+学習が長い場合や Non-IID がもっと強い場合には，D2 も崩れうる【推測】。
+また，参照方向は全員の中央値なので，\textbf{悪性が少数派である}ことも前提である。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \foreach \row/\name/\b/\m in {0/{第 1〜5 ラウンド（$\alpha=1000$）}/0.08/3.9, -1.3/{第 46〜50 ラウンド（$\alpha=1$）}/1.58/2.48} {
+    \begin{scope}[yshift=\row cm]
+      \node[lab, anchor=east] at (-0.3,0) {\name};
+      \draw[->] (0,0) -- (4.6,0);
+      \foreach \x/\l in {0/0, 2/1, 4/2} \draw (\x,0.08) -- (\x,-0.08);
+      \draw[dotted] (2,-0.35) -- (2,0.35);
+      \fill (\b,0) circle (2.5pt);
+      \node[draw, fill=black!30, inner sep=2.5pt] at (\m,0) {};
+    \end{scope}
+  }
+  \foreach \x/\l in {0/0, 2/1, 4/2} \node[lab, below] at (\x,-1.4) {\l};
+  \node[lab, anchor=west] at (4.8,0) {正常（●）と悪性（■）は\\遠く離れている};
+  \node[lab, anchor=west] at (4.8,-1.3) {どちらも 1 に寄る。\\1 を越える正常も現れる};
+\end{tikzpicture}
+\caption{D2 スコアの平均の位置（実測値を目盛りに置いた）。学習が進む，または Non-IID が強いと，正常と悪性の差が縮む。}
+\label{fig:sf-d2-shrink}
+\end{figure}
+
+% ---------------------------------------------------------
+\subsection{D3：D2 のスコアと第 1 主成分の両方で分かれる}
+\label{sec:claim-sf-d3}
+
+\paragraph{主張。}
+D3 も符号反転を高い AUC で見分ける（1.00 / 0.99 / 0.98）。D2 と同じ原因（正常更新の共通の方向）によるものである。
+
+\paragraph{D3 の中身（確認）。}
+D3 は，高次元の更新を\textbf{そのまま} k-means にかけるのではない。各クライアントを次の 4 つの数で表し，特徴量ごとに標準化してから，4 次元の点として 2 つに分ける。
+\begin{enumerate}
+  \item 更新のノルム $\|g_i\|$
+  \item D2 のスコア
+  \item 第 1 主成分への射影
+  \item 第 2 主成分への射影
+\end{enumerate}
+主成分は，更新ベクトルそのもの（高次元）を全 20 台の平均で中心化してから求める。
+「特徴量ごとの標準化（値 $-$ 平均）$/$ 標準偏差」は，それとは別の，あとの段階の処理である。
+
+\paragraph{なぜそうなるか。}【解釈】
+符号反転では「共通の方向を向いた正常 16 台」と「その逆を向いた悪性 4 台」の 2 群ができる。
+中心化すると，一番大きくばらつく方向（第 1 主成分）は，この 2 群を結ぶ軸になる。
+平均が 0 になるので，正常が $+a$ 付近なら，悪性は $-4a$ 付近に来る（$16 \times a = 4 \times 4a$。図\ref{fig:sf-pc1}）。
+つまり悪性は，D2 のスコアでも第 1 主成分への射影でも，正常と反対側の遠くにいる。k-means はその隙間で切るだけである。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \draw[->] (-5.0,0) -- (3.2,0);
+  \node[lab, anchor=west] at (3.2,0) {第 1 主成分への射影};
+  \draw (0,0.1) -- (0,-0.1);
+  \node[lab, below] at (0,-0.15) {全体の平均（0）};
+  \foreach \x in {0.35, 0.5, 0.65, 0.8, 0.95, 1.1, 1.25, 1.4}
+    \fill (\x,0) circle (2pt);
+  \node[lab, above] at (0.9,0.15) {正常 16 台（$+a$ 付近）};
+  \foreach \x in {-3.6, -3.3, -3.0, -2.7}
+    \node[draw, fill=black!30, inner sep=2.3pt] at (\x,0) {};
+  \node[lab, above] at (-3.15,0.18) {悪性 4 台（$-4a$ 付近）};
+\end{tikzpicture}
+\caption{符号反転のときの第 1 主成分上の並び（概念図）。2 群を結ぶ軸がそのまま第 1 主成分になる。}
+\label{fig:sf-pc1}
+\end{figure}
+
+\paragraph{根拠。}【観測】
+悪性方向（悪性の平均 $-$ 正常の平均）と全更新の第 1 主成分の $|\cos|$（\texttt{detection\_metrics.csv} の \texttt{mal\_cos\_pc1\_all}）は，
+第 1〜5 ラウンドで 1.00 / 1.00 / 0.99，第 46〜50 ラウンドで 0.99 / 0.97 / 0.96。どの条件でも，第 1 主成分は 2 群を結ぶ軸になっている。
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 「8 割の正常に 2 割の悪性は影響できないから分かれる」という説明は不正確である。k-means 自体は多数派・少数派を区別しない。
+        8 割:2 割が効くのは，あとの「大きい方のクラスタを正常とみなす」規則のほうである（悪性が過半数なら逆転する）。
+  \item 第 1 主成分は「正常の共通の方向そのもの」ではなく，中心化したあとの「2 群を結ぶ軸」である。2 群を結ぶのは第 2 主成分ではない（第 2 主成分は第 1 主成分と直交する）。
+  \item 符号反転は大きさを変えないので，ノルムの特徴量は\textbf{序盤には}分離に役立たない。ただし終盤は悪性のノルムが大きくなる（次の小節）ので，役立っている可能性がある【推測】。
+  \item どの特徴量がどれだけ効いているかは，特徴量を 1 つずつ外して計算し直さないと分からない（未実施）。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{D1：序盤はランダム，攻撃の副作用でノルムが開いて上がる}
+\label{sec:claim-sf-d1}
+
+\paragraph{主張。}
+D1 は向きを見ないので，符号反転の直後（序盤）は見分けられない（第 1〜5 ラウンドの AUC 0.50 / 0.57 / 0.55）。
+学習が進むと悪性のノルムが大きくなり，見分けられるようになる（第 46〜50 ラウンド 0.97 / 0.94 / 0.88）。
+
+\paragraph{根拠。}【観測】
+図 \texttt{fig:signflip-norm}（\texttt{signflip\_norm\_ratio\_by\_round.png}）。
+悪性のノルム $\div$ 正常のノルムは，第 1〜5 ラウンドの 1.00 / 1.07 / 1.15 から，第 46〜50 ラウンドの 1.30 / 1.65 / 2.18 へ開く。
+\textbf{対照}：攻撃なしの実行で，同じ \texttt{trial} で符号反転のときに悪性になる 4 台を「悪性」とみなすと，比は全ラウンドで 0.98〜1.06 のまま開かない。
+悪性クライアントの選び方は \texttt{trial} ごとに固定なので，この比較ができる。
+したがって，ノルムの差は 4 台のデータの性質ではなく，\textbf{攻撃によって生じた}。
+
+\paragraph{なぜそうなるか。}【推測】
+鍵は「符号反転はノルムを変えない」ことである。記録された悪性のノルムは，その悪性クライアントが\textbf{正直に学習したときの}更新のノルムそのものである。
+だから問いは「なぜ悪性クライアントの正直な更新が大きくなるのか」になる（図\ref{fig:sf-d1-flow}）。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.45cm]
+  \tikzset{fbox/.style={box, text width=2.55cm, minimum height=1.25cm}}
+  \node[fbox] (a) {悪性の更新を\\反転して集約};
+  \node[fbox, right=of a] (b) {モデルが悪性の\\データに合わない\\方向へ動く};
+  \node[fbox, data, right=of b] (c) {悪性のデータでの\\損失が大きいまま};
+  \node[fbox, data, right=of c] (d) {悪性が計算する\\（反転前の）更新\\が大きくなる};
+  \node[fbox, core, right=of d] (e) {ノルムの差が開き\\D1 の AUC が\\上がる};
+  \draw[arr] (a) -- (b);
+  \draw[arr] (b) -- (c);
+  \draw[arr] (c) -- (d);
+  \draw[arr] (d) -- (e);
+  \draw[arr, rounded corners] (d.south) -- ++(0,-0.45) -| node[lab, pos=0.25, below] {毎ラウンド積み重なる} (a.south);
+\end{tikzpicture}
+\caption{D1 が符号反転を見つけられるようになる流れ。破線の箱は確かめていない段階（クライアントごとの学習の損失はログにない）。}
+\label{fig:sf-d1-flow}
+\end{figure}
+
+正常のノルムも攻撃で少し大きくなる（最終 5 ラウンドの平均ノルム，攻撃なし $\rightarrow$ 符号反転の正常：0.146 $\rightarrow$ 0.164，0.147 $\rightarrow$ 0.184，0.157 $\rightarrow$ 0.247）。
+攻撃でモデル全体の学習が妨げられていることと整合する。悪性はそれよりずっと大きい（0.213 / 0.308 / 0.549）。【観測】
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 序盤の AUC は「低い」のではなく「0.5 付近（ランダム）」である。0.5 より下（逆向き）とは区別する。
+  \item 「大きさが修正される」という言い方は避ける。正しい値に戻るのではなく，攻撃を続けた結果として悪性の更新が大きくなっていく。
+  \item 「適合するために勾配が大きくなる」も避ける。勾配は目的を持たない。\textbf{適合していないから，結果として}大きくなる。
+        また，悪性が計算する更新の向きは普通の向き（自分のデータに合う向き）であり，送る直前に反転される。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{D1：$\alpha = 1$ でノルムの差が一番大きいのに AUC が一番低い}
+\label{sec:claim-sf-d1alpha}
+
+\paragraph{主張。}
+$\alpha = 1$ ではノルムの比が 2.18 と一番大きいのに，D1 の AUC は 0.88 と一番低い。
+正常更新どうしのノルムのばらつきが大きく，中央値から遠い正常更新が悪性と同じくらい疑わしく見えるためである。
+
+\paragraph{根拠。}【観測】
+表 \texttt{tab:signflip-norm}（\texttt{signflip\_norm\_dispersion\_table.csv}，第 46〜50 ラウンド）。
+\begin{itemize}
+  \item 正常のノルムの変動係数（標準偏差 $\div$ 平均）：0.08 / 0.17 / 0.39。攻撃なしでは 0.09 / 0.09 / 0.19。
+  \item D1 が「悪性より正常のほうが疑わしい」とした（正常 1 台，悪性 1 台の）組の割合：0.035 / 0.057 / 0.122（$= 1 - \mathrm{AUC}$）。
+  \item そのうち，正常のノルムが中央値より\textbf{小さい}もの：73\% / 60\% / 55\%。誤りの半分以上は「小さすぎる正常」から来ている。
+\end{itemize}
+
+\paragraph{なぜそうなるか。}【解釈】
+D1 のスコアは $|\|g_i\| - \mathrm{中央値}|$ なので，中央値から\textbf{上にも下にも}離れた正常を疑う（図\ref{fig:sf-d1-two-sided}）。
+$\alpha = 1000$ では正常のノルムが中央値の近くに集まり，悪性だけが遠い。
+$\alpha = 1$ では正常のノルムが上下に大きくばらつくので，平均では悪性が 2 倍以上大きくても，中央値から遠い正常が悪性と同じくらいの点数になる。
+ばらつく理由は，ラベルの偏りが強いとクライアントごとにモデルへの合い方が違うためと考えられる【推測】。
+さらに $\alpha = 1$ では，符号反転のもとでの変動係数（0.39）が攻撃なし（0.19）の約 2 倍であり，攻撃そのものもばらつきを広げている【観測】。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \foreach \row/\name in {0/{$\alpha = 1000$}, -1.4/{$\alpha = 1$}} {
+    \begin{scope}[yshift=\row cm]
+      \node[lab, anchor=east] at (-0.4,0) {\name};
+      \draw[->] (0,0) -- (9.6,0);
+      \node[lab, anchor=west] at (9.6,0) {ノルム};
+      \draw[dotted] (3.0,-0.45) -- (3.0,0.45);
+    \end{scope}
+  }
+  \node[lab] at (3.0,0.6) {中央値};
+  % alpha=1000：正常は中央値の近く，悪性は右に離れる
+  \foreach \x in {2.6, 2.75, 2.85, 2.95, 3.05, 3.15, 3.3, 3.4}
+    \fill (\x,0) circle (2pt);
+  \foreach \x in {3.95, 4.1, 4.25, 4.4}
+    \node[draw, fill=black!30, inner sep=2.3pt] at (\x,0) {};
+  % alpha=1：正常は上下に広くばらつく
+  \begin{scope}[yshift=-1.4cm]
+    \foreach \x in {0.6, 1.2, 1.9, 2.5, 3.0, 3.5, 4.4, 6.9}
+      \fill (\x,0) circle (2pt);
+    \foreach \x in {5.3, 6.1, 6.6, 7.4}
+      \node[draw, fill=black!30, inner sep=2.3pt] at (\x,0) {};
+    \draw[<->] (0.6,-0.35) -- (3.0,-0.35);
+    \node[lab, below] at (1.8,-0.4) {小さすぎる正常も遠い};
+    \draw[<->] (3.0,-0.35) -- (6.9,-0.35);
+    \node[lab, below] at (5.2,-0.4) {大きすぎる正常も遠い};
+  \end{scope}
+\end{tikzpicture}
+\caption{D1 は中央値からの距離（両側）で疑う（概念図。●が正常，■が悪性）。$\alpha = 1$ では正常が上下に広がり，悪性と混ざる。}
+\label{fig:sf-d1-two-sided}
+\end{figure}
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 「FedAvg の重みの偏り」は原因にならない。本実験の分割（\texttt{dirichlet\_equal}）では全クライアントのデータ数が同じなので，重みは $\alpha$ によらず全員等しい。
+        しかも D1 のスコアは集約の重みを使わない。重みが効くのはモデルの精度のほうである。
+  \item 「大きすぎる正常が悪性に見える」だけでは半分しか説明していない。誤りの半分以上は小さすぎる正常から来る（上の根拠）。
+  \item 「精度」と「AUC」を混ぜない。卒論で「精度」はモデルのテスト精度を指す。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{D4：第 1 主成分は合っているのに，2 乗で符号が消えて混ざる}
+\label{sec:claim-sf-d4}
+
+\paragraph{主張。}
+$\alpha = 1$ の D4 は，序盤は符号反転を見分ける（第 1〜5 ラウンド 0.99）が，学習とともに下がる（第 46〜50 ラウンド 0.85）。
+第 1 主成分は悪性方向を向いたままなので，「見る方向がずれた」のではない。
+射影を 2 乗するので符号が消え，ノルムの大きい正常が悪性と同じくらい疑わしくなるためである。
+
+\paragraph{根拠。}【観測】
+\begin{itemize}
+  \item $\alpha = 1$ の第 46〜50 ラウンド（50 ラウンド分）で，悪性方向と第 1 主成分の $|\cos|$ は最小でも 0.87，中央値 0.97。
+        AUC が一番低かったラウンド（\texttt{trial} 4 の第 48 ラウンド，AUC 0.59）でも 0.92。
+        AUC が 0.9 未満のラウンドの $|\cos|$ は平均 0.944，0.9 以上は 0.981（低いラウンドほどやや低いが，高いまま）。
+  \item 表 \texttt{tab:signflip-norm}：D4 が「悪性より正常のほうが疑わしい」とした組の割合は 0.000 / 0.035 / 0.146。
+        そのうち正常のノルムが中央値より\textbf{大きい}もの：$\alpha = 5$ で 82\%，$\alpha = 1$ で 70\%（$\alpha = 1000$ は誤りなし）。
+  \item 正常どうしでの D4 のスコアとノルムの順位相関：0.51 / 0.74 / 0.78。ノルムの大きい正常ほど D4 のスコアが大きい。
+  \item 区間ごと（\texttt{signflip\_norm\_cv\_by\_segment\_table.csv}，$\alpha = 1$）：正常のノルムの変動係数は第 1〜5，6〜15，16〜30，31〜50 ラウンドで 0.18，0.28，0.32，0.37 と広がり，
+        D4 の AUC は 0.99，0.93，0.87，0.86 と下がる。攻撃なしでは変動係数は 0.18〜0.25 のまま。
+\end{itemize}
+
+\paragraph{なぜそうなるか。}【解釈】（射影の符号の部分は【推測】）
+第 1 主成分は正常の共通の方向とほぼ同じ軸なので，射影（符号つき）では，正常が $+$ 側，悪性が $-$ 側にいる（図\ref{fig:sf-d4-fold} 上）。
+ノルムの大きい正常ほど，共通の方向に沿って $+$ 側の遠くにいる。
+D4 のスコアは射影の 2 乗なので，$-$ 側の悪性も $+$ 側の遠い正常も，「中心から遠い」という同じ扱いになる（図\ref{fig:sf-d4-fold} 下）。
+$\alpha = 1000$ では正常のノルムがそろっていて，遠くにいるのは悪性だけである。$\alpha = 1$ では学習とともに正常のノルムがばらつき，遠い正常が増えて混ざる。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  % 上：符号つきの射影
+  \node[lab, anchor=east] at (-4.6,0) {射影（符号つき）};
+  \draw[->] (-4.4,0) -- (4.6,0);
+  \draw (0,0.1) -- (0,-0.1);
+  \node[lab, below] at (0,-0.12) {0};
+  \foreach \x in {0.3, 0.5, 0.7, 0.9, 1.1, 1.4, 1.8, 3.1}
+    \fill (\x,0) circle (2pt);
+  \foreach \x in {-2.3, -2.7, -3.0, -3.4}
+    \node[draw, fill=black!30, inner sep=2.3pt] at (\x,0) {};
+  \node[lab, above] at (-2.85,0.15) {悪性（$-$ 側）};
+  \node[lab, above] at (1.0,0.15) {正常（$+$ 側）};
+  \node[lab, above] at (3.1,0.15) {ノルムの大きい正常};
+  % 下：2 乗（順位は |射影| と同じ）
+  \begin{scope}[yshift=-1.7cm]
+    \node[lab, anchor=east] at (-4.6,0) {D4 スコア\\（$|$射影$|$ の順）};
+    \draw[->] (0,0) -- (4.6,0);
+    \draw (0,0.1) -- (0,-0.1);
+    \node[lab, below] at (0,-0.12) {0};
+    \foreach \x in {0.3, 0.5, 0.7, 0.9, 1.1, 1.4, 1.8, 3.1}
+      \fill (\x,0) circle (2pt);
+    \foreach \x in {2.3, 2.7, 3.0, 3.4}
+      \node[draw, fill=black!30, inner sep=2.3pt] at (\x,0.22) {};
+    \draw[<->] (2.2,-0.4) -- (3.5,-0.4);
+    \node[lab, below] at (2.85,-0.45) {正常と悪性が混ざる};
+  \end{scope}
+  \draw[arr, dashed, black!60] (-2.85,-0.25) to[out=-90, in=180] (2.1,-1.48);
+  \node[lab, anchor=east] at (-3.0,-0.95) {2 乗で $-$ 側が\\$+$ 側に折り返る};
+\end{tikzpicture}
+\caption{D4 で符号が消える様子（$\alpha = 1$ の終盤を想定した概念図。●が正常，■が悪性）。射影の値そのものはログにないので，並び方は $|\cos|$ とスコアの関係からの推測である。}
+\label{fig:sf-d4-fold}
+\end{figure}
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 最初に考えた「Non-IID では良性どうしの違いのほうが大きくなり，第 1 主成分が良性の方向に切り替わる」は，\textbf{符号反転には}当てはまらない（$|\cos|$ が高いまま）。
+        ALIE の D4 では，まさにそれが起きている（\S\ref{sec:claim-d4}）。攻撃によって D4 の崩れ方が違うことに注意する。
+  \item 「2 乗するとノルムが強調されるから」は誤り。2 乗は大小の順を変えないので，順位で決まる AUC には効かない。効いているのは\textbf{符号が消えること}である。
+  \item 「悪性が紛れた」より「ノルムの大きい正常のスコアが悪性の高さまで上がってきた」のほうが正確（誤りの 70\% は中央値より大きい正常）。
+  \item 序盤の $\alpha = 1$ も変動係数は 0.18 あるのに AUC は 0.99 だった。ばらつきの大きさだけでなく，序盤は共通の方向が強く悪性が軸の上で十分遠かったためと考えられる【推測】。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{まとめ：符号を使うか，大きさに頼るか}
+\label{sec:claim-sf-summary}
+
+\begin{table}[H]
+\centering
+\caption{符号反転に対する検知器の違いの早見表。}
+\label{tab:sf-summary}
+\small
+\begin{tabular}{@{}l P{3.3cm} P{2.2cm} P{4.4cm} P{4.0cm}@{}}
+\toprule
+検知器 & 何を見るか & 符号を使うか & 判定が左右されるもの & 符号反転での結果 \\
+\midrule
+D1 & ノルムと中央値の差（両側） & 使わない（向きを見ない） & 悪性とのノルムの差，正常のノルムのばらつき & 序盤 0.5 付近 $\rightarrow$ 上昇。$\alpha = 1$ で低め \\
+D2 & 参照方向との角度 & 使う（$\cos\theta$ の正負） & 正常の共通の方向の強さ & 序盤から 1.00 \\
+D3 & ノルム・D2・PC1・PC2 & D2 と PC1 を通じて使う & ほぼなし（D2 の分離を受け継ぐ） & 0.98 以上 \\
+D4 & 第 1 主成分への射影の 2 乗 & 使わない（2 乗で消える） & 正常のノルムのばらつき & 序盤 1.00。$\alpha = 1$ で学習とともに低下 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+D1・D4 はどちらも「中心から遠いほど疑う」両側のスコアなので，正常のノルムのばらつきに弱い。
+D1 は小さすぎる正常で，D4 は大きすぎる正常で，主に間違える。
+一方，ALIE の D2 で AUC が 0 になった話（\S\ref{sec:claim-alie-d2}）は，「大きいほど悪性」という片側だけを見るスコアの弱点であり，対になっている。
+
+% ---------------------------------------------------------
+\section{主張：ALIE に対する検知器の違い（卒論 9.1）}
+\label{sec:claim-alie}
+
+卒論（\texttt{Memo/soturon3.tex}）の考察「検知器間の違い」のうち，ALIE（A2）の部分の手引きである。
+符号反転の節（\S\ref{sec:claim-sf}）と同じく，2026 年 10 月 20 日に対話で解釈を確かめながら組み立てた。途中で間違えた考え方も「読むときの注意」に残してある。
+\S\ref{sec:claim-d2}（D2），\S\ref{sec:claim-d3}（D3），\S\ref{sec:claim-d4}（D4）は以前の版の説明で，この節はそれを詳しくしたものである。
+
+\paragraph{全体の主張。}
+ALIE に対する検知の成否は，\textbf{検知器が見る量の上で，悪性が正常の分布のどこにいるか}と，\textbf{検知器がどの向きの外れを異常とみなすか}の組み合わせで決まる。
+\begin{itemize}
+  \item D2：悪性は D2 スコアの上で正常から外れているが，外れる向きが「大きいほど悪性」という片側の規則と逆なので，順位が完全に逆転する（AUC 0.00）。
+  \item D4：$z$ が小さいと，悪性は第 1 主成分への射影の上で中心（ほぼ 0）にいるので，一番正常らしく見える。
+  \item D1：悪性はノルムの上で小さい側に外れているので，両側を見る D1 は検知できる。ノルムが揃う $z = 1.25$ 付近だけ検知できない。
+  \item D3：外れる向きを問わず，しかも悪性 4 台が 1 点に重なるので，全条件で検知できる。
+\end{itemize}
+
+\paragraph{使う図表。}読み方は \S\ref{sec:read-alie}。
+\begin{itemize}
+  \item 卒論の図 \texttt{fig:alie-d2-z}：\texttt{alie\_d2\_score\_by\_z.png}（数値は \texttt{alie\_d2\_score\_by\_z\_table.csv}）
+  \item 本文の数値だけに使う：\texttt{alie\_norm\_ratio\_by\_z\_table.csv}（ノルムの比），\texttt{alie\_d2\_score\_by\_z\_table.csv} の最後の行（攻撃なしの正常の D2 スコア）
+  \item AUC：卒論の表 \texttt{tab:final-auc}（\texttt{detection\_final\_auc\_table.csv}）
+\end{itemize}
+以下の数値は，特に断りがなければ第 46〜50 ラウンドの値で，$\alpha = 1000 / 5 / 1$ の順である。
+
+\paragraph{記号の確認。}
+悪性は 4 台とも同じベクトル $g^{\mathrm{mal}} = \mu - z\sigma$ を送る（$\mu_j$，$\sigma_j$ は正常更新の座標 $j$ ごとの平均と標準偏差）。
+正常の更新は $g_i = \mu + e_i$ と書く。$e_i$ はそのクライアント自身のずれである。
+D2 のスコアは $1 - \cos\theta$（$\theta$ は参照方向 $r$ とのなす角）で，0 なら同じ向き，1 なら直角，2 なら正反対。スコアと角度は大小の順がいつも一致する。
+
+\begin{table}[H]
+\centering
+\caption{D2 スコアと角度の対応（目安。表の値はスコアの平均なので，角度の平均とは少しずれる）。}
+\label{tab:alie-d2-angle}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & D2 スコア & $\cos\theta$ & 角度の目安 \\
+\midrule
+悪性，$z = 0.385$（$\alpha = 1000$） & 0.09 & 0.91 & 約 24° \\
+悪性，$z = 1$（$\alpha = 1000$） & 0.33 & 0.67 & 約 48° \\
+正常，$z = 1$（$\alpha = 1000$） & 0.89 & 0.11 & 約 84° \\
+正常，$z = 1$（$\alpha = 1$） & 1.01 & $-0.01$ & 約 91° \\
+悪性，$z = 3$（$\alpha = 1000$） & 1.21 & $-0.21$ & 約 102° \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------------------------------------------------------
+\subsection{D2：参照方向が悪性の側に寄り，正常は直交する}
+\label{sec:claim-alie-d2}
+
+\paragraph{主張。}
+$z \le 1.5$ では，全 $\alpha$ で D2 の AUC が 0.00。悪性 4 台すべてが，正常 16 台すべてより「正常らしい」と判定されている。
+これは「見分けられない（0.5）」ではなく「逆向きに完全に分かれている」である。
+
+\paragraph{根拠。}【観測】
+\texttt{alie\_d2\_score\_by\_z\_table.csv}。$z = 1$ で正常 0.89 / 0.93 / 1.01，悪性 0.33 / 0.29 / 0.22。
+悪性のスコアは $z$ とともに単調に大きくなる（$\alpha = 1000$ で 0.09，0.33，0.57，0.82，1.21。$z = 0.385, 1, 1.5, 2, 3$）。正常は 0.85〜1.01 でほぼ直角。
+
+\paragraph{なぜそうなるか（1）：参照方向 $r$ が悪性の側に寄る。}【解釈】
+$r$ は全 20 台の\textbf{座標ごとの中央値}である。座標 $j$ ごとに見ると（図\ref{fig:alie-median}），
+\begin{itemize}
+  \item 正常 16 台の値は $\mu_j$ を中心に上下にばらつく。
+  \item 悪性 4 台は 4 台とも $\mu_j - z\sigma_j$，つまり\textbf{平均より下の同じ側}にいる。$\sigma_j > 0$ なので，これは\textbf{すべての座標で}そうである。
+\end{itemize}
+中央値は「値が近いか遠いか」ではなく「何台がどちら側にいるか」で動く。悪性 4 台がどの座標でも同じ側にいるので，$r$ はどの座標でも少しずつ悪性の側に寄り，そのずれはまとまって\textbf{悪性の方向}を向く。
+正常のずれは座標ごとに上だったり下だったりするので，中央値の中で打ち消し合い，$r$ を特定の方向へは動かさない。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \draw[->] (-0.2,0) -- (9.4,0);
+  \node[lab, anchor=west] at (9.4,0) {座標 $j$ の値};
+  \foreach \x in {1.0, 1.7, 2.6, 3.3, 3.9, 4.4, 4.8, 5.2, 5.6, 6.0, 6.5, 7.0, 7.5, 8.0, 8.4, 8.9}
+    \fill (\x,0) circle (2pt);
+  \foreach \y in {0.25, 0.5, 0.75, 1.0}
+    \node[draw, fill=black!30, inner sep=2.2pt] at (3.6,\y) {};
+  \node[lab, anchor=south] at (3.6,1.15) {悪性 4 台（$\mu_j - z\sigma_j$）};
+  \draw[dashed] (5.4,-0.45) -- (5.4,0.45);
+  \node[lab, below] at (5.4,-0.45) {$\mu_j$（正常だけの真ん中）};
+  \draw[line width=0.9pt] (4.6,-0.3) -- (4.6,0.3);
+  \node[lab, anchor=south west] at (5.5,0.75) {20 台の中央値（悪性の側へ寄る）};
+  \draw[black!60] (5.5,0.85) -- (4.6,0.3);
+\end{tikzpicture}
+\caption{1 つの座標で見た中央値の動き（概念図。●が正常，■が悪性）。悪性 4 台が同じ側にいるので，中央値は悪性の側へ少し寄る。これが全座標で同じ向きに起きる。}
+\label{fig:alie-median}
+\end{figure}
+
+\paragraph{なぜそうなるか（2）：終盤は $\mu$ が小さいので，$r$ の向きは悪性の方向で決まる。}【観測】＋【解釈】
+攻撃なしの実行で，正常と参照方向（ほぼ $\mu$ の向き）の D2 スコアは，第 1〜5 ラウンドで 0.09 / 0.28 / 0.51，第 46〜50 ラウンドで 0.81 / 0.84 / 0.90。
+$e_i$ が $\mu$ とほぼ直交するとみなすと，$\cos$ は「更新のうち $\mu$ の成分が占める割合」の目安になる。
+終盤はどの $\alpha$ でも $\cos$ が小さく（0.19 / 0.17 / 0.10），\textbf{$\mu$ は $e_i$ に比べて小さい}（$\|e_i\|/\|\mu\|$ は $\alpha = 1000$ で約 5 倍，$\alpha = 1$ で約 10 倍。直交の近似での目安）。
+$r \approx \mu + (\text{悪性の方向への小さなずれ})$ のうち $\mu$ が小さいので，$r$ の向きは主に悪性の方向へのずれで決まる（図\ref{fig:alie-r}）。
+だから，$\mu$ からの距離が正常とほぼ同じ $z = 1$ でも，悪性のほうが $r$ に近い（約 48° 対 約 84°）。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \begin{scope}
+    \node[font=\footnotesize] at (1.4,2.6) {序盤・IID に近い（$\mu$ が大きい）};
+    \draw[arr, line width=1.0pt] (0,0) -- (2.6,0.6);
+    \node[lab, anchor=west] at (2.65,0.65) {$\mu$};
+    \draw[arr, dashed] (0,0) -- (2.75,0.35);
+    \node[lab, anchor=west] at (2.8,0.25) {$r$};
+    \foreach \a/\l in {20/2.6, 5/2.8, 30/2.5}
+      \draw[arr, black!55] (0,0) -- (\a:\l);
+    \node[lab] at (1.3,-0.9) {正常も $r$ も $\mu$ の向き。\\D2 スコアは小さい};
+  \end{scope}
+  \begin{scope}[xshift=7.4cm]
+    \node[font=\footnotesize] at (1.0,2.6) {終盤・Non-IID（$\mu$ が小さい）};
+    \draw[arr, line width=1.0pt] (0,0) -- (0.6,0.15);
+    \node[lab, anchor=south] at (0.6,0.18) {$\mu$};
+    \draw[arr, dashed] (0,0) -- (1.6,-1.2);
+    \node[lab, anchor=west] at (1.65,-1.25) {$r$（ほぼ悪性の方向）};
+    \node[draw, fill=black!30, inner sep=2.3pt] at (2.1,-1.55) {};
+    \node[lab, anchor=west] at (2.25,-1.6) {悪性};
+    \foreach \a/\l in {80/2.0, 120/2.1, 150/1.9, 40/2.0}
+      \draw[arr, black!55] (0,0) -- (\a:\l);
+    \node[lab, anchor=east] at (-1.6,0.6) {正常（$\mu + e_i$）：\\向きはばらばらで，\\$r$ とほぼ直角};
+  \end{scope}
+\end{tikzpicture}
+\caption{$\mu$ の大きさで参照方向 $r$ の向きが変わる様子（2 次元で描いた概念図。灰色の矢印が正常）。終盤は $r$ の向きが悪性の方向で決まり，正常の $e_i$ はそれと直交する。}
+\label{fig:alie-r}
+\end{figure}
+
+\paragraph{なぜそうなるか（3）：正常のずれ $e_i$ は悪性の方向と直交する。}【解釈】
+$\mu$ が小さいので，正常と $r$ の角度は，ほぼ「$e_i$ と悪性の方向 $-z\sigma$ の角度」で決まる。その余弦は
+\begin{equation}
+  \cos\theta = \frac{\sum_{j=1}^{d} e_{ij}\,(-z\sigma_j)}{\|e_i\|\,\|z\sigma\|}
+\end{equation}
+で，分子の内積は，座標 $j$ を標本とみなした共分散 $\operatorname{Cov}_j$ と座標の平均 $\bar{e}_i$，$\bar{\sigma}$ を使って
+\begin{equation}
+  \sum_{j=1}^{d} e_{ij}\,\sigma_j = d\left(\operatorname{Cov}_j(e_{ij}, \sigma_j) + \bar{e}_i\,\bar{\sigma}\right)
+  \label{eq:man-cov}
+\end{equation}
+と分解できる。$e_i$ は平均からのずれなので $\bar{e}_i \approx 0$ で，第 2 項は消える。
+残るのは共分散なので，\textbf{内積がほぼ 0 $\Leftrightarrow$ 座標ごとに見て $e_{ij}$ と $\sigma_j$ に相関がない}。
+$\sigma_j$ はすべての座標で正なのに，$e_{ij}$ の符号は座標ごとにばらばらなので（図\ref{fig:alie-cov}），積は正と負で打ち消し合い，26 万次元の和はほぼ 0 になる。
+したがって正常は $r$ とほぼ直角になり，悪性のほうが $r$ に近くなる。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \node[lab, anchor=east] at (-0.2,0.5) {$\sigma_j$（すべて正）};
+  \node[lab, anchor=east] at (-0.2,-1.3) {$e_{ij}$（符号はばらばら）};
+  \node[lab, anchor=east] at (-0.2,-3.0) {積 $e_{ij}\sigma_j$};
+  \draw[black!50] (0,0) -- (9.8,0);
+  \draw[black!50] (0,-1.3) -- (9.8,-1.3);
+  \draw[black!50] (0,-3.0) -- (9.8,-3.0);
+  \foreach \i/\s/\e in {0/0.6/0.5, 1/0.9/-0.6, 2/0.4/0.3, 3/0.7/-0.4, 4/1.0/0.7, 5/0.5/-0.5, 6/0.8/-0.3, 7/0.6/0.6, 8/0.9/0.4, 9/0.5/-0.7, 10/0.7/0.2, 11/0.8/-0.5} {
+    \pgfmathsetmacro{\x}{0.4+0.8*\i}
+    \fill[black!35] (\x-0.15,0) rectangle (\x+0.15,\s);
+    \fill[black!65] (\x-0.15,-1.3) rectangle (\x+0.15,-1.3+\e);
+    \pgfmathsetmacro{\p}{\s*\e}
+    \fill[black!50] (\x-0.15,-3.0) rectangle (\x+0.15,-3.0+\p);
+  }
+  \node[lab, anchor=west] at (10.0,-3.0) {和はほぼ 0};
+  \node[lab] at (5.0,-3.9) {座標 $j = 1, 2, \dots$（実際は約 26 万個）};
+\end{tikzpicture}
+\caption{内積がほぼ 0 になる理由（概念図）。$\sigma_j$ はすべて正だが，$e_{ij}$ の符号が座標ごとに違うので，積は正と負が混ざって打ち消し合う。}
+\label{fig:alie-cov}
+\end{figure}
+
+\paragraph{$z$ を大きくすると検知に転じる。}【観測】＋【解釈】
+悪性 $\mu - z\sigma$ は，$z$ を大きくすると $\mu$ から（したがって $r$ から）離れ，角度が大きくなる。
+正常の角度（約 90°）を越えた $z$ で，D2 は検知に転じる（\texttt{fig:alie-d2-z} で悪性の線が正常の線を越えるところ）。
+越える $z$ は，$\alpha = 1000$ では $z = 2$ の付近（AUC 0.83），$\alpha = 1$ では $z = 2$ と 3 の間（$z = 2$ で 0.00，$z = 3$ で 0.97）。
+
+\paragraph{$\alpha = 1$ で検知に転じる $z$ が大きい理由。}【解釈】
+Non-IID が強いと，各クライアントの更新は自分のラベルに合う方向へ，クライアントごとに違う向きを向く。平均すると打ち消し合うので，$\mu$ は $e_i$ に比べてさらに小さくなる（攻撃なしの正常の D2 スコア 0.81 / 0.84 / 0.90）。
+$\mu$ が相対的に小さいと，D2 の仕組みの 2 つの部分が両方とも強まる。
+\begin{itemize}
+  \item 正常の更新のうち，$r$ と関係のない $e_i$ の割合が大きくなるので，\textbf{正常はさらに直角に近くなる}（$z = 1$ で 0.89 $\rightarrow$ 1.01）。
+  \item $r$ の向きがさらに悪性の方向で決まるので，\textbf{悪性はさらに $r$ に近くなる}（$z = 1$ で 0.33 $\rightarrow$ 0.22）。
+\end{itemize}
+正常の線は上に，悪性の線は下にずれるので，2 本が交わる $z$ が右へずれる。
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 「悪性 4 台が同じ方向なので，角度の\textbf{平均}が小さくなる」は誤り。4 台は同じベクトルなので 4 台とも同じ角度を持つ。1 台ずつの角度がもともと小さいのである。「4 台が同じ」が効くのは，中央値を同じ側に引っ張る点である。
+  \item 「$r$ が悪性に引っ張られるのは，悪性が近いから」も不正確。中央値は距離ではなく，何台がどちら側にいるかで動く。
+  \item 「直角は一番遠い」は誤り。一番遠いのは 180°（正反対。符号反転の悪性）。90° は「$r$ と関係のない向き（直交）」である。
+  \item 「$e_i$ と悪性の方向は関係がある」は逆。関係があれば角度は 90° からずれるはず。正常がほぼ 90° なのは，関係がない（直交する）からである。
+  \item $z$ は一定ではない。条件として 0.385〜3 の 8 通りに振っている。一定なのは「同じ $z$ なら $\alpha$ を変えても push\_ratio が変わらない」ことである。
+  \item push\_ratio は「悪性と $\mu$ の距離 $\div$ 正常と $\mu$ の距離の平均」なので，$z < 1$ では悪性のほうが $\mu$ に\textbf{近い}。「悪性のほうが遠い」という直感は，ALIE の $z < 1$ では逆になる（理由は\S\ref{sec:claim-shell}）。
+  \item $z$ を変えて動くのは悪性だけである。正常の更新は $z$ で作られるわけではないので，spread は $z$ で直接は変わらない。
+  \item $\alpha = 1$ で検知に転じる $z$ が大きいのを「Non-IID で分布がばらつき，悪性の距離を余計に広げる必要がある」と説明するのは誤り。距離の比は $\alpha$ によらず $z$ で決まり，spread も $\alpha$ でほとんど変わらない。違いは距離ではなく角度（$\mu$ と $e_i$ の大きさの比）にある。
+  \item 「相関がない」と「無関係」は違う。相関が 0 でも線形でない関係はありうる。卒論では「直交する」と書く。
+  \item $r$ や $e_i$ そのものはログにないので，(1)〜(3) は D2 スコアの値と矛盾しない，という段階の【解釈】である。たとえば $\sigma_j$ の大きい座標ほど $e_{ij}$ が一方の符号に偏るなら，相関は 0 にならない。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{D3：両側を見るので，内側への外れも見つける}
+\label{sec:claim-alie-d3}
+
+\paragraph{主張。}
+D3 は ALIE の全条件で AUC 0.92 以上。D2 が完全に逆転していても高い。【観測】
+
+\paragraph{なぜそうなるか。}【解釈】
+\begin{enumerate}
+  \item \textbf{両側を見る。}D3 のスコアは，標準化した特徴量の空間での正常クラスタの重心からの距離なので，重心からどちらの向きに外れても大きくなる。
+        悪性の D2 スコアは正常より大きく\textbf{下回る}（0.07〜0.57 対 0.85〜1.01）。D2 は「大きいほど悪性」という片側の規則なので逆転したが，D3 にとっては「大きく外れている」ことに変わりない。
+        ノルムも，$z = 1.25$ 付近を除けば悪性と正常で違う（\S\ref{sec:claim-alie-d1}）。
+  \item \textbf{4 台が 1 点に重なる。}悪性 4 台は同じベクトルなので，特徴量の空間で 1 点に重なり，k-means で切り出されやすい。
+\end{enumerate}
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item D3 も D2 スコア（角度）を特徴量に使っている。D2 との違いは「何を見るか」ではなく「どう点数をつけるか」（片側か両側か）である。
+  \item 2 は原論文の作り方に由来する，攻撃の側の弱さである。悪性に小さなばらつきを足されたら同じ結果になるかは確かめていない（\S\ref{sec:claim-d3}）。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{D1：ノルムで見ると悪性は外れている（U 字型）}
+\label{sec:claim-alie-d1}
+
+\paragraph{主張。}
+D1 の AUC は $z$ に対して U 字型になる。$z \le 0.5$ で全 $\alpha$ とも 0.95 以上，$z = 1.25$ で最小（0.16 / 0.09 / 0.14），$z \ge 2$ で再び 0.99 以上。
+
+\paragraph{根拠。}【観測】
+\texttt{alie\_norm\_ratio\_by\_z\_table.csv}（悪性 $\div$ 正常のノルム）：$z = 0.385$ で 0.37〜0.40，$z = 1$ で 0.84〜0.85，$z = 1.25$ で 1.03〜1.04，$z = 1.5$ で 1.21〜1.23，$z = 3$ で 2.23〜2.31。どの $\alpha$ でもほぼ同じ。
+
+\paragraph{なぜそうなるか。}【解釈】
+D1 は $|\|g_i\| - \text{中央値}|$ で疑うので，悪性のノルムが小さすぎても大きすぎても検知できる（図\ref{fig:alie-d1}）。
+$z$ が小さいと悪性のノルムは正常よりずっと小さく，$z$ が大きいと大きい。ノルムがちょうど揃う $z = 1.25$ 付近で見分けられなくなる。
+このとき AUC が 0.5 ではなく 0.1 前後まで下がるのは，悪性 4 台が同じノルムで中央値の近くにぴったり乗り，正常よりも中央値に近くなるためである。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \foreach \row/\name/\m in {0/{$z = 0.385$}/1.6, -1.0/{$z = 1.25$}/4.35, -2.0/{$z = 3$}/8.8} {
+    \begin{scope}[yshift=\row cm]
+      \node[lab, anchor=east] at (-0.3,0) {\name};
+      \draw[->] (0,0) -- (9.8,0);
+      \draw[dotted] (4.2,-0.35) -- (4.2,0.35);
+      \foreach \x in {3.4, 3.7, 3.9, 4.05, 4.2, 4.35, 4.5, 4.75, 5.0}
+        \fill (\x,0) circle (2pt);
+      \node[draw, fill=black!30, inner sep=2.3pt] at (\m,0.22) {};
+    \end{scope}
+  }
+  \node[lab] at (4.2,0.55) {中央値};
+  \node[lab, anchor=west] at (9.9,0) {小さい側に外れる $\rightarrow$ 検知};
+  \node[lab, anchor=west] at (9.9,-1.0) {揃う $\rightarrow$ 逆転};
+  \node[lab, anchor=west] at (9.9,-2.0) {大きい側に外れる $\rightarrow$ 検知};
+  \node[lab] at (4.9,-2.6) {ノルム};
+\end{tikzpicture}
+\caption{ALIE の $z$ と悪性のノルムの位置（概念図。●が正常，■が悪性 4 台。4 台は同じノルムなので 1 つの印で描いた）。}
+\label{fig:alie-d1}
+\end{figure}
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item D1 は，符号反転の $\alpha = 1$ でも ALIE の $z = 1.25$ でも下がった。どちらも「悪性のノルムが正常のノルムの分布と重なる」という同じ形の失敗である（符号反転では正常が広がって重なり，ALIE では悪性が正常に揃って重なる）。
+  \item $z$ が小さいと悪性のノルムが小さい理由（高次元では正常が平均から一定の距離に集まる）は\S\ref{sec:claim-shell} と卒論 9.3 で扱う。9.1 では「ノルムが揃う $z$ で見分けられなくなる」までにとどめている。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{D4：第 1 主成分を奪えるかどうかで切り替わる}
+\label{sec:claim-alie-d4}
+
+\paragraph{主張。}
+D4 の AUC は，$z$ が小さいと 0.04〜0.16 と逆転し，ある $z$ を境に 1.0 近くへ急に切り替わる。切り替わる $z$ は，$\alpha = 1000$ で 0.5〜0.75，$\alpha = 5, 1$ で 0.75〜1 の間。
+
+\paragraph{なぜそうなるか。}【解釈】
+\begin{itemize}
+  \item $z$ が小さいと悪性のずれは小さく，一番大きくばらつく方向（第 1 主成分）は\textbf{正常どうしの違いの方向}になる。悪性は平均の近くにいるので射影はほぼ 0 で，一番正常らしく見える（図\ref{fig:alie-d4} 左）。
+  \item $z$ が大きくなると，悪性 4 台が同じ方向にそろってずれるので，その方向が一番大きなばらつきになり，第 1 主成分を「奪う」。悪性の射影が最大になり，AUC が 1 近くに切り替わる（図\ref{fig:alie-d4} 右）。
+  \item Non-IID では正常どうしの違いが特定の方向に集中する（第 1 主成分の寄与率が大きい）ので，奪うにはより大きな $z$ が要る（詳しくは\S\ref{sec:claim-d4}，卒論 9.2）。
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \begin{scope}
+    \node[font=\footnotesize] at (0,2.2) {$z$ が小さい};
+    \draw[black!50, dashed] (-2.4,-0.8) -- (2.4,0.8);
+    \node[lab, anchor=west] at (2.4,0.85) {第 1 主成分\\（正常どうしの違い）};
+    \foreach \x/\y in {-1.8/-0.3, -1.1/-0.6, -0.6/0.1, 0.5/0.4, 1.2/0.1, 1.7/0.9, -1.4/-1.0, 0.9/1.0}
+      \fill (\x,\y) circle (2pt);
+    \node[draw, fill=black!30, inner sep=2.3pt] at (0.15,-0.25) {};
+    \node[lab, anchor=north] at (0.15,-0.45) {悪性（中心，射影 $\approx 0$）};
+  \end{scope}
+  \begin{scope}[xshift=8.2cm]
+    \node[font=\footnotesize] at (0,2.2) {$z$ が大きい};
+    \draw[black!50, dashed] (-1.0,1.8) -- (0.9,-1.7);
+    \node[lab, anchor=west] at (0.95,-1.75) {第 1 主成分（悪性のずれ）};
+    \foreach \x/\y in {-1.8/-0.3, -1.1/-0.6, -0.6/0.1, 0.5/0.4, 1.2/0.1, 1.7/0.9, -1.4/-1.0, 0.9/1.0}
+      \fill (\x,\y) circle (2pt);
+    \node[draw, fill=black!30, inner sep=2.3pt] at (0.65,-1.3) {};
+    \node[lab, anchor=west] at (0.8,-1.15) {悪性（遠い）};
+  \end{scope}
+\end{tikzpicture}
+\caption{ALIE の D4 が切り替わる様子（2 次元で描いた概念図。●が正常，■が悪性 4 台）。悪性のずれが正常どうしの違いより大きくなると，第 1 主成分が悪性の方向に移る。}
+\label{fig:alie-d4}
+\end{figure}
+
+\paragraph{読むときの注意。}
+符号反転の D4 との違いを区別する。
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & 第 1 主成分の向き & AUC が下がった原因 \\
+\midrule
+符号反転（$\alpha = 1$ の終盤） & 悪性の方向（$|\cos|$ 0.96） & 2 乗で符号が消え，ノルムの大きい正常と混ざる \\
+ALIE（$z$ が小さい） & 正常どうしの違いの方向 & 悪性は中心にいて射影がほぼ 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+符号反転では「向きは合っているのに混ざる」，ALIE では「向きが合っていない」。
+
+% ---------------------------------------------------------
+\subsection{まとめ：見る量の上で，悪性は中心にいるか，外れているか}
+\label{sec:claim-alie-summary}
+
+\begin{table}[H]
+\centering
+\caption{ALIE に対する検知器の違いの早見表（$z$ が小さいとき）。}
+\label{tab:alie-summary}
+\small
+\begin{tabular}{@{}l P{2.6cm} P{4.1cm} P{2.6cm} P{4.0cm}@{}}
+\toprule
+検知器 & 見る量 & 悪性の位置 & 外れの向き & 結果 \\
+\midrule
+D1 & ノルム & 小さい側に外れる（正常の約 0.4 倍） & 両側 & 検知（$z = 1.25$ 付近だけ逆転） \\
+D2 & $r$ との角度 & 角度が小さい側に外れる & 片側（大きいほど悪性） & 完全に逆転（AUC 0.00，$z \le 1.5$） \\
+D3 & ノルム・D2・PC1・PC2 & 重心から外れる（4 台が 1 点） & 両側 & 全条件で 0.92 以上 \\
+D4 & 第 1 主成分への射影 & 中心（射影 $\approx 0$） & 両側 & 逆転（ある $z$ で 1.0 に切り替わる） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+D1 と D4 はどちらも「中心から遠いほど疑う」両側のスコアなのに，$z$ が小さい ALIE に対して結果が分かれた。
+違いは，\textbf{悪性が，その検知器の見ている量の上で中心にいるか，外れているか}である。
+悪性は平均の近くにいるが，高次元では「平均に近い」ことはノルムが小さいことを意味するので，ノルムの軸では外れて見える（\S\ref{sec:claim-shell}）。
+第 1 主成分への射影の軸では中心にいる。
+
+卒論 9.1 の結論（RQ1 への答え）：検知の成否は，攻撃が悪性をどこに置くかと，検知器がどの量を見て，どの向きの外れを異常とみなすかの組み合わせで決まる。
+符号反転では符号を使う D2・D3 が安定し，大きさに頼る D1・D4 はノルムのばらつきに左右された。
+ALIE では，片側の規則の D2 と，中心からの射影の D4 が，悪性を一番正常らしいと判定した。
+
+% ---------------------------------------------------------
+\section{主張：Non-IID が変えたのは，ばらつきの大きさではなく配分（卒論 9.2）}
+\label{sec:claim-noniid}
+
+卒論（\texttt{Memo/soturon3.tex}）の考察「Non-IID 度が検知性能に与える影響」の手引きである。2026 年 10 月 21 日に，対話で解釈を確かめながら組み立てた。
+\S\ref{sec:claim-d4}（D4 の境界）は以前の版の説明で，この節はそれを 9.2 の流れに合わせて詳しくしたものである。
+push\_ratio が Non-IID で大きくなった話と，push\_ratio と AUC の相関が弱かった話は，中心仮説の中核を否定する結果なので，9.4「中心仮説の評価」でまとめて扱う（\S\ref{sec:claim-hyp}）。
+
+\paragraph{全体の主張（RQ2 への答え）。}
+Non-IID は検知性能を下げるが，その低下は正常更新のばらつきの\textbf{大きさ}（spread）の増大では説明できない。
+検知性能の低下と対応していたのは，ばらつきの\textbf{配分}である。
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{ノルムの間の配分}：正常更新のノルムのばらつきが大きくなる $\rightarrow$ 符号反転の D1・D4（\S\ref{sec:claim-sf}）。
+  \item \textbf{共通の成分と各クライアントのずれの間の配分}：$\mu$ が $e_i$ に比べて小さくなる $\rightarrow$ ALIE の D2 が検知に転じる $z$ が大きくなる（\S\ref{sec:claim-alie-d2}）。
+  \item \textbf{方向の間の配分}：正常更新のばらつきが特定の方向に集中する $\rightarrow$ ALIE の D4 の境目の $z$ が大きくなる（この節）。
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{Non-IID が検知性能を下げた 3 つの経路。}
+\label{tab:noniid-paths}
+\small
+\begin{tabular}{@{}P{3.9cm} P{2.9cm} P{4.2cm} P{4.0cm}@{}}
+\toprule
+Non-IID が変えたもの & 効いた例 & 根拠の数値（$\alpha = 1000 \rightarrow 1$） & 出典 \\
+\midrule
+(a) 正常のノルムのばらつき & 符号反転の D1・D4 & 変動係数 0.08 $\rightarrow$ 0.39 & 表 \texttt{tab:signflip-}\allowbreak\texttt{norm} \\
+(b) $\mu$ が $e_i$ に比べて小さい & ALIE の D2 & 攻撃なしの正常の D2 スコア 0.81 $\rightarrow$ 0.90 & \texttt{alie\_d2\_score\_}\allowbreak\texttt{by\_z\_table.csv} \\
+(c) ばらつきが 1 方向に集中 & ALIE の D4 & 寄与率 0.086 $\rightarrow$ 0.193 & 表 \texttt{tab:spread} \\
+\midrule
+（参考）spread の増大 & ― & 後半は 1.00〜1.08 倍で差がない & 表 \texttt{tab:spread} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------------------------------------------------------
+\subsection{spread の増大では説明できない}
+\label{sec:claim-noniid-spread}
+
+\paragraph{根拠。}【観測】
+卒論の表 \texttt{tab:spread}（攻撃なし）。spread は第 1〜5 ラウンドで 0.149 / 0.353 / 0.434（$\alpha = 1$ は $\alpha = 1000$ の約 2.9 倍），第 46〜50 ラウンドで 0.143 / 0.143 / 0.155（1.00〜1.08 倍）。
+
+\paragraph{なぜ説明できないと言えるか。}【観測】＋【解釈】
+大事なのは「時間とともに増えるか減るか」ではなく，「\textbf{同じ時期に}，Non-IID が強いほど spread が大きいか」である（図\ref{fig:noniid-spread}）。
+検知性能が $\alpha$ で大きく違ったのは主に\textbf{後半}だった（符号反転の D1・D4，ALIE の D4 など）。その後半には，spread に $\alpha$ による差がほとんどない。
+したがって，spread の増大ではこの低下を説明できない。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \draw[->] (0,0) -- (0,3.3);
+  \node[lab, anchor=south] at (0,3.3) {spread};
+  \draw (0,0) -- (8.4,0);
+  \foreach \x/\v/\c in {0.6/0.149/black!15, 1.3/0.353/black!40, 2.0/0.434/black!70} {
+    \fill[\c] (\x-0.3,0) rectangle (\x+0.3,\v*6.5);
+    \node[lab, above] at (\x,\v*6.5) {\v};
+  }
+  \foreach \x/\v/\c in {5.2/0.143/black!15, 5.9/0.143/black!40, 6.6/0.155/black!70} {
+    \fill[\c] (\x-0.3,0) rectangle (\x+0.3,\v*6.5);
+    \node[lab, above] at (\x,\v*6.5) {\v};
+  }
+  \node[lab, below] at (1.3,-0.1) {第 1〜5 ラウンド\\$\alpha$ で約 2.9 倍の差};
+  \node[lab, below] at (5.9,-0.1) {第 46〜50 ラウンド\\差は 1.08 倍まで};
+  \node[lab, anchor=west] at (7.2,1.2) {$\leftarrow$ 検知性能が $\alpha$ で\\大きく違ったのは\\こちらの時期};
+  \fill[black!15] (4.2,3.0) rectangle (4.5,3.2); \node[lab, anchor=west] at (4.55,3.1) {$\alpha = 1000$};
+  \fill[black!40] (5.9,3.0) rectangle (6.2,3.2); \node[lab, anchor=west] at (6.25,3.1) {$\alpha = 5$};
+  \fill[black!70] (7.3,3.0) rectangle (7.6,3.2); \node[lab, anchor=west] at (7.65,3.1) {$\alpha = 1$};
+\end{tikzpicture}
+\caption{攻撃なしの spread（実測値）。検知性能が $\alpha$ で違った後半には，spread の差がほとんどない。}
+\label{fig:noniid-spread}
+\end{figure}
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 「$\alpha$ は spread に影響しない」と言い切るのは誤り。前半には約 2.9 倍の差がある。正しくは「学習が進むと差がほとんどなくなる」。
+  \item 後半で spread の差がなくなる理由は確かめていない。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{寄与率は「大きさ」ではなく「集中の度合い」}
+\label{sec:claim-noniid-pc1}
+
+\textbf{第 1 主成分の寄与率}（\texttt{pc1\_ratio}）は，「正常更新のばらつきの\textbf{合計のうち}，一番大きい 1 方向が何割を占めるか」である。
+\begin{itemize}
+  \item 寄与率が小さい：ばらつきが多くの方向に均等に散らばっている（丸い広がり）。
+  \item 寄与率が大きい：ばらつきが特定の 1 方向に集中している（細長い広がり）。
+\end{itemize}
+ばらつきの合計を表すのは spread のほうである。後半は spread がどの $\alpha$ でもほぼ同じなので，\textbf{合計は同じで，配分が違う}（図\ref{fig:noniid-shape}）。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \begin{scope}
+    \draw[dashed, black!50] (0,0) circle (1.2);
+    \foreach \x/\y in {0.6/0.7, -0.8/0.5, -0.4/-0.9, 0.9/-0.4, 0.1/-1.0, -1.0/-0.2, 0.7/0.2, -0.2/0.9, 0.3/0.3, -0.5/-0.3}
+      \fill (\x,\y) circle (2pt);
+    \node[font=\footnotesize] at (0,-1.7) {$\alpha = 1000$（寄与率 0.086）};
+    \node[lab] at (0,-2.15) {丸く広がる。一番大きい方向も小さい};
+  \end{scope}
+  \begin{scope}[xshift=7.0cm]
+    \draw[dashed, black!50, rotate=20] (0,0) ellipse (2.1 and 0.62);
+    \foreach \x/\y in {1.6/0.75, -1.5/-0.4, 0.9/0.5, -0.8/-0.5, 0.2/0.35, -0.3/-0.1, 1.2/0.15, -1.1/-0.75, 0.5/-0.1, -0.1/0.4}
+      \fill (\x,\y) circle (2pt);
+    \draw[<->, line width=0.8pt, rotate=20] (-2.1,0) -- (2.1,0);
+    \node[lab, anchor=south west] at (1.2,0.9) {この方向に集中};
+    \node[font=\footnotesize] at (0,-1.7) {$\alpha = 1$（寄与率 0.193）};
+    \node[lab] at (0,-2.15) {細長く広がる。一番大きい方向が大きい};
+  \end{scope}
+\end{tikzpicture}
+\caption{spread（ばらつきの合計）が同じでも，配分が違う（2 次元で描いた概念図）。}
+\label{fig:noniid-shape}
+\end{figure}
+
+\paragraph{読むときの注意。}
+「寄与率が大きい $=$ ばらつきが大きい」は誤り。寄与率は割合であり，大きさではない。同じ合計でも，1 方向に集中していれば寄与率は大きい。
+
+% ---------------------------------------------------------
+\subsection{ALIE の D4：集中しているほど，悪性は第 1 主成分を奪いにくい}
+\label{sec:claim-noniid-d4}
+
+\paragraph{主張。}
+ALIE の D4 は，$z$ がある境目を越えると悪性が第 1 主成分を奪い，AUC が 1 近くに切り替わる（\S\ref{sec:claim-alie-d4}）。
+その境目は，Non-IID が強いほど大きい $z$ にずれる。正常のばらつきが 1 方向に集中しているほど，その方向のばらつきが大きく，悪性が上回りにくいためである。
+
+\paragraph{根拠。}【観測】
+卒論の表 \texttt{tab:structure}，ALIE $z = 0.75$ の行。
+\begin{itemize}
+  \item push\_ratio はどの $\alpha$ でも約 0.75（同じ強さのずれ）。
+  \item D4 の AUC は 1.00 / 0.39 / 0.16（\texttt{tab:structure} では 0.998 / 0.385 / 0.161）。
+  \item 悪性方向と全更新の第 1 主成分の $|\cos|$ は 0.92 / 0.31 / 0.14。$\alpha = 1000$ だけ悪性が第 1 主成分を奪えている。
+\end{itemize}
+同じ push\_ratio で結果が正反対になったので，「広がりの大きさに対する悪性の距離」だけでは検知できるかどうかは決まらない。
+
+\paragraph{なぜそうなるか。}【解釈】
+D4 は全 20 台の中で一番大きくばらつく方向を第 1 主成分に選ぶ。候補は 2 つある。
+\begin{enumerate}
+  \item 正常どうしの違いの一番大きい方向。
+  \item 悪性のずれの方向（4 台が同じ方向にそろってずれる）。
+\end{enumerate}
+spread（合計）が同じでも，正常のばらつきが 1 方向に集中しているほど，1 のばらつきは絶対的に大きくなる（図\ref{fig:noniid-shape}）。
+悪性が第 1 主成分を奪うには，2 が 1 を上回る必要があるので，Non-IID では奪いにくい。
+
+\paragraph{境目の見積もり。}【解釈】（結果を見たあとの近似）
+悪性のずれ $-z\sigma$ が，正常の主要な変動方向とほぼ直交するとして，2 つのばらつき（平均からのずれの 2 乗の和）を比べる。
+\begin{itemize}
+  \item \textbf{1（正常どうしの違い）}：正常 16 台のずれの 2 乗の和は，$\sigma_j$ の定義から $\sum_i \|e_i\|^2 \approx 16\|\sigma\|^2$。そのうち一番大きい方向が占める割合が寄与率なので，
+        \begin{equation}
+          (\text{1 のばらつき}) \approx \text{寄与率} \times 16\|\sigma\|^2 .
+        \end{equation}
+  \item \textbf{2（悪性のずれ）}：悪性のずれの方向に沿って並べると（図\ref{fig:noniid-est}），中心化の前は正常 16 台が 0，悪性 4 台が $-z\|\sigma\|$ にいる。
+        全 20 台の平均は $-\frac{4}{20} z\|\sigma\|$ なので，中心化すると正常は $+\frac{4}{20} z\|\sigma\|$，悪性は $-\frac{16}{20} z\|\sigma\|$ に来る。2 乗の和は
+        \begin{equation}
+          16 \left(\tfrac{4}{20}\right)^2 z^2\|\sigma\|^2 + 4 \left(\tfrac{16}{20}\right)^2 z^2\|\sigma\|^2 = \frac{4 \times 16}{20}\, z^2 \|\sigma\|^2 .
+        \end{equation}
+\end{itemize}
+2 が 1 を上回る条件は
+\begin{equation}
+  \frac{4 \times 16}{20}\, z^2 \|\sigma\|^2 > \text{寄与率} \times 16\|\sigma\|^2
+  \quad\Longleftrightarrow\quad
+  z > \sqrt{5 \times \text{寄与率}} .
+\end{equation}
+\textbf{$\|\sigma\|$（ばらつきの大きさ）が両辺で消える}ので，境目は寄与率（分布の形）だけで決まる。これが「大きさではなく形が効く」の数式による裏付けである。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \draw[->] (-5.2,0) -- (2.4,0);
+  \node[lab, anchor=west] at (2.4,0) {悪性のずれの方向};
+  \draw (0,0.1) -- (0,-0.1);
+  \node[lab, below] at (0,-0.15) {全体の平均（0）};
+  \foreach \x in {0.55, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 0.65}
+    \fill (\x,0) circle (2pt);
+  \node[lab, above] at (0.9,0.15) {正常 16 台：$+\frac{4}{20} z\|\sigma\|$};
+  \foreach \x in {-4.0, -3.75, -3.5, -3.25}
+    \node[draw, fill=black!30, inner sep=2.3pt] at (\x,0) {};
+  \node[lab, above] at (-3.6,0.15) {悪性 4 台：$-\frac{16}{20} z\|\sigma\|$};
+\end{tikzpicture}
+\caption{中心化したあとの，悪性のずれの方向に沿った並び（概念図）。正常 16 台のずれは，この方向とはほぼ直交する。}
+\label{fig:noniid-est}
+\end{figure}
+
+\paragraph{実測との比較。}【観測】
+ALIE（$z = 0.75$）の条件での正常の寄与率（0.102 / 0.141 / 0.207，表 \texttt{tab:structure}）を入れると，境目は約 0.71 / 0.84 / 1.02。
+実際に D4 の AUC が切り替わった区間（0.5〜0.75 / 0.75〜1 / 0.75〜1）と整合する。
+$\alpha = 1$ の境目（1.02）が区間の上端の 1 に近いことは，$z = 1$ の AUC が 0.81 と切り替わりの途中であることとも合う。
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item ALIE の D4 に効くのは (c)（方向の集中）だけである。(a)（ノルムのばらつき）が効いたのは\textbf{符号反転の} D4 で，仕組みも違う（\S\ref{sec:claim-sf-d4}）。
+  \item 「Non-IID はばらつきが大きいので，2 割の悪性では足りない」は誤り。後半の spread（合計）は同じで，大きいのは集中の度合いである。また悪性の割合は 2 割で固定しており，変わるのは必要な $z$ の大きさである。実際，$\alpha = 1$ でも $z \ge 1.25$ では AUC 1.00。
+  \item 見積もりは結果を見たあとの近似で，悪性のずれと正常の主要な変動方向が直交することを仮定している。式の 16 や 4 は，正常 16 台・悪性 4 台の本実験の設定による。
+  \item 寄与率と $|\cos|$ の対応は観測であって，因果を示したものではない。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{(b) と (c) の言い方の注意}
+\label{sec:claim-noniid-notes}
+
+\begin{itemize}
+  \item (b) で $\mu$ が小さいことを「誤差として考える」と書かない。測定の誤りのように読める。「$e_i$ に比べて無視できるほど小さい」と書く。
+  \item D2 の $r$ は「更新ベクトル」ではなく「参照方向」である。
+  \item 卒論 9.2 では，Li ら（2023）の「Non-IID が Robust Aggregation の頑健性を最終精度の観点で低下させる」という報告と，本結果が矛盾しないこと，検知性能という観点から補うことを書いている。提出前に Li らの要旨を読み直して，この要約が合っているか確かめておく。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{主張：平均に近づけても隠れない。一番隠れるのは殻の上（卒論 9.3）}
+\label{sec:claim-rq3}
+
+卒論（\texttt{Memo/soturon3.tex}）の考察「攻撃のステルス性と検知破綻の境界」の手引きである。2026 年 10 月 21 日に，対話で解釈を確かめながら組み立てた。
+\S\ref{sec:claim-shell}（高次元の殻）は以前の版の説明で，この節はそれを 9.3 の流れに合わせて詳しくしたものである。
+
+\paragraph{全体の主張（RQ3 への答え）。}
+\begin{itemize}
+  \item 悪性を正常の平均に近づけること（$z$ を小さくすること）は，検知を回避する手段にならない。
+  \item push\_ratio $= 1$ は「それを下回ると検知が破綻する境界」ではなく，悪性が正常の\textbf{殻の上}に来て，距離やノルムで判定する検知器から\textbf{一番隠れやすくなる点の近く}である。
+  \item その付近で破綻するかどうかは，検知器の性質と正常の分布で違う。D1 は $z = 1.25$ 付近だけで見分けられなくなり，その範囲は Non-IID が強いほど広い。D2 は $z \le 1.5$，D4 は $z$ が小さい範囲で破綻する（\S\ref{sec:claim-alie}）。
+\end{itemize}
+
+\paragraph{使う図表。}
+卒論の図 \texttt{fig:alie-shell}（\texttt{alie\_shell\_by\_z.png}，数値は \texttt{alie\_shell\_table.csv}），表 \texttt{tab:final-auc}。読み方は\S\ref{sec:read-shell}。
+
+% ---------------------------------------------------------
+\subsection{中心仮説の予測と，実際の結果}
+
+中心仮説は「push\_ratio が 1 を下回ると，悪性が正常のばらつきの内側に紛れ，検知性能が急落する」と予測した。ALIE では push\_ratio $\approx z$ なので，$z < 1$ がその領域である。
+実際には，一番内側の $z = 0.385$ で D1・D3 が全 $\alpha$ で AUC 0.96 以上，D2・D4 も 0 近く（逆向きに完全に分離）だった。\textbf{内側に入れても紛れていない}。【観測】
+
+% ---------------------------------------------------------
+\subsection{正常は「中身の詰まった球」ではなく「殻」の上にいる}
+\label{sec:claim-rq3-shell}
+
+\paragraph{なぜそうなるか。}【解釈】
+正常 1 台の，平均からの距離の 2 乗は
+\begin{equation}
+  \|e_i\|^2 = \sum_{j=1}^{d} e_{ij}^2 \qquad (d \approx 26 \text{ 万})
+\end{equation}
+で，26 万個の正の数の和である。たくさんの数を足すと，足し合わせた結果は台ごとにあまり変わらなくなる（大数の法則と同じ理由）。
+だから，どの正常も平均からほぼ同じ距離にいて，\textbf{平均の近くには誰もいない}（図\ref{fig:rq3-shell}）。
+
+\paragraph{根拠。}【観測】
+正常の平均からの距離の変動係数（標準偏差 $\div$ 平均）は，第 46〜50 ラウンドで約 0.08 / 0.09 / 0.18（\texttt{alie\_shell\_table.csv} の \texttt{benign\_dist\_cv}）。
+これは卒論の式 \texttt{eq:alie-pushratio}（push\_ratio $= z \times$ 二乗平均平方根 $\div$ 算術平均）から，push\_ratio $\div z = \sqrt{1 + \text{変動係数}^2}$ を使って求めた値である。
+$\alpha = 1000$ なら，どの正常も平均から「spread $\pm$ 8\%」くらいの距離にいる。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \begin{scope}
+    \fill[black!6] (0,0) circle (1.5);
+    \foreach \x/\y in {0.3/0.4, -0.6/0.2, 0.9/-0.5, -0.2/-0.8, 1.1/0.6, -1.0/-0.6, 0.0/1.1, 0.5/-1.1, -1.2/0.5, 0.6/0.1, -0.4/-0.3, 0.2/-0.3}
+      \fill (\x,\y) circle (2pt);
+    \draw (0,0) node[cross out, draw, inner sep=2pt] {};
+    \node[font=\footnotesize] at (0,-2.0) {低次元の直感（中心仮説）};
+    \node[lab] at (0,-2.45) {平均の周りが中まで詰まっている。\\内側に入れれば紛れるはず};
+  \end{scope}
+  \begin{scope}[xshift=7.0cm]
+    \draw[black!20, line width=6pt] (0,0) circle (1.5);
+    \foreach \a in {10, 40, 75, 110, 140, 170, 200, 235, 265, 300, 330, 355}
+      \fill (\a:1.5) circle (2pt);
+    \draw (0,0) node[cross out, draw, inner sep=2pt] {};
+    \node[draw, fill=black!30, inner sep=2.5pt] at (0.6,0.0) {};
+    \node[lab, anchor=west] at (0.75,0.0) {悪性（$z = 0.385$）};
+    \node[font=\footnotesize] at (0,-2.0) {高次元の実際};
+    \node[lab] at (0,-2.45) {正常は平均からほぼ同じ距離の殻に並ぶ。\\内側には誰もいない};
+  \end{scope}
+\end{tikzpicture}
+\caption{正常の並び方（2 次元で描いた概念図。$\times$ 印が平均，●が正常，■が悪性）。右では，内側に置いた悪性は「紛れる」のではなく「誰もいない場所にぽつんといる」。}
+\label{fig:rq3-shell}
+\end{figure}
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 正常は「球体」（中身の詰まった球）ではなく「球面（殻）」の上に並ぶ。中身が空だからこそ，内側の悪性が目立つ。
+  \item 大数の法則が厳密に成り立つのは，足す値が独立で同じ分布のとき。$e_{ij}$ は座標ごとにばらつきの大きさが違い，独立でもない。卒論では「大数の法則と同様の理由で」と書き，変動係数の実測で裏付けている。
+  \item この解釈は結果を見たあとに整理したもので，殻への集中は変動係数から間接的に確かめただけである（卒論にもそう書いた）。事前の予測は根拠に使わない（\S\ref{sec:claims-predictions}）。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{$z$ を大きくすると，悪性は殻の内側 $\rightarrow$ 殻の上 $\rightarrow$ 殻の外へ動く}
+\label{sec:claim-rq3-path}
+
+悪性は平均から $z \times$ spread の距離にいるので，$z$ を大きくすると，まっすぐ外へ動く（図\ref{fig:rq3-path}）。
+距離やノルムで判定する D1 にとっては，殻の内側と外側では外れて見え，殻の上でだけ見分けにくい。これが D1 の U 字型の正体である。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \draw[black!20, line width=6pt] (0,0) circle (1.6);
+  \foreach \a in {20, 60, 100, 140, 180, 220, 260, 300, 340}
+    \fill (\a:1.6) circle (2pt);
+  \draw (0,0) node[cross out, draw, inner sep=2pt] {};
+  \draw[arr, dashed, black!60] (0.15,0) -- (3.9,0);
+  \node[draw, fill=black!30, inner sep=2.5pt] at (0.62,0) {};
+  \node[draw, fill=black!30, inner sep=2.5pt] at (1.6,0) {};
+  \node[draw, fill=black!30, inner sep=2.5pt] at (3.6,0) {};
+  \node[lab, above] at (0.62,0.2) {$z = 0.385$};
+  \node[lab, below] at (1.75,-0.2) {$z \approx 1$〜1.25};
+  \node[lab, below] at (3.6,-0.2) {$z = 3$};
+  \node[lab, anchor=west] at (4.3,0.9) {内側：ノルム 0.4 倍 $\rightarrow$ D1 で検知};
+  \node[lab, anchor=west] at (4.3,0.0) {殻の上：ノルムが揃う $\rightarrow$ D1 で見分けにくい};
+  \node[lab, anchor=west] at (4.3,-0.9) {外側：ノルム 2.3 倍 $\rightarrow$ D1 で検知};
+\end{tikzpicture}
+\caption{$z$ と悪性の位置（概念図）。悪性は $z$ とともに平均から外へ動く。}
+\label{fig:rq3-path}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{$z$ ごとの位置と D1 の AUC（第 46〜50 ラウンド）。}
+\label{tab:rq3-path}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+$z$ & 殻との位置 & 距離の比（push\_ratio） & ノルムの比 & D1 の AUC（$\alpha = 1000 / 5 / 1$） \\
+\midrule
+0.385 & 内側 & 0.39 & 0.37〜0.40 & 1.00 / 1.00 / 0.97 \\
+1 & 殻の上（距離が揃う） & 1.00〜1.02 & 0.84〜0.85 & 0.88 / 0.84 / 0.47 \\
+1.25 & 殻の上（ノルムが揃う） & 1.25〜1.27 & 1.03〜1.04 & 0.16 / 0.09 / 0.14 \\
+1.5 & 殻の外へ & 1.51〜1.52 & 1.21〜1.23 & 0.99 / 0.94 / 0.72 \\
+3 & 外側 & 3.01〜3.05 & 2.23〜2.31 & 1.00 / 1.00 / 1.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------------------------------------------------------
+\subsection{距離が揃う $z$（$\approx 1$）と，ノルムが揃う $z$（$\approx 1.25$）は違う}
+\label{sec:claim-rq3-norm}
+
+\paragraph{主張。}【観測】＋【解釈】
+平均からの距離が正常と揃うのは push\_ratio $= 1$，つまり $z \approx 1$。一方，ノルム（原点からの長さ）が揃うのは $z \approx 1.25$（表\ref{tab:rq3-path}）。
+D1 が見ているのは\textbf{ノルム}なので，D1 の AUC の最小は $z = 1$ ではなく $z = 1.25$ になる。
+卒論の図 \texttt{fig:alie-shell} では，破線（距離の比）が $z = 1$ で，実線（ノルムの比）が $z \approx 1.25$ で，灰色の帯（正常の殻の厚み）を通る。
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 「$z = 1$ では，悪性が内側にある影響で平均が悪性の方向に動き，悪性がやや内側にいる」は誤り。ALIE の $\mu$ は\textbf{正常だけから}計算するので，悪性がどこにいても平均は動かない（\S\ref{sec:alie}）。実際，$z = 1$ の push\_ratio は 1.00〜1.02 で，平均からの距離では悪性はちょうど殻の上にいる。
+  \item 「やや内側」という感覚は，\textbf{ノルムで見れば}合っている（$z = 1$ でノルムの比 0.84〜0.85）。距離とノルムは別の量で，ずれが生じるのは D1 が原点からの長さを見ているためである。
+  \item なぜ $z = 1$ で悪性のノルムが正常より小さくなるのか（原点からの長さと平均からの距離がずれる理由）は，更新ベクトルそのものを記録していないので確かめていない。卒論も「D1 はノルムを用いるため」という事実の説明にとどめている。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{$\alpha = 1$ では殻が厚く，見分けにくい範囲が広い}
+\label{sec:claim-rq3-alpha}
+
+正常のノルムの変動係数（殻の厚みの目安）は，ALIE の条件で約 0.08 / 0.09 / 0.18（\texttt{alie\_shell\_table.csv} の \texttt{benign\_norm\_cv}）。
+$\alpha = 1$ は殻が約 2 倍厚いので，ノルムの比が殻の厚みの範囲（$1 \pm 0.18$）に収まる $z$ の範囲が広い。
+そのため D1 の AUC が下がる範囲も広い（$z = 1$ で 0.47，$z = 1.5$ で 0.72。$\alpha = 1000$ では 0.88，0.99）。【観測】＋【解釈】
+これは 9.2 の「Non-IID はノルムのばらつきを大きくする」（\S\ref{sec:claim-noniid}）と同じ現象である。
+
+% ---------------------------------------------------------
+\subsection{ALIE が検知されたのは，原論文の失敗ではない}
+
+悪性が平均に近いのは，ALIE の設計どおりである。原論文は，平均との差を小さくして Krum の計算するユークリッド距離を縮め，悪性を選ばせることを狙っている。
+ALIE が避けようとしたのは Trimmed Mean や Krum であり，「平均に近すぎる更新を怪しむ」検知は想定していない。
+したがって $z < 1$ の ALIE が検知されたのは，原論文が想定していない種類の検知を当てた結果である。【解釈】
+
+% ---------------------------------------------------------
+\subsection{言い方の注意}
+
+\begin{itemize}
+  \item 「境界は 1〜1.25」と書かない。中心仮説の「境界」は「これより下は全部だめ」という線だった。実際には下回っても上回っても検知でき，殻の付近の狭い範囲だけで見分けられなくなる。「破綻する範囲」として書く。
+  \item 範囲は実験した $z$ の刻み（1，1.25，1.5）に合わせる。言えるのは「$z = 1$〜1.5 で低下し，$z = 1.25$ で最も低い」まで。
+  \item 破綻する $z$ は検知器ごとに違う（D1：1.25 付近，D2：$\le 1.5$，D4：小さい $z$）。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{主張：中心仮説は，帰結だけが観測され，中核は支持されなかった（卒論 9.4）}
+\label{sec:claim-hyp4}
+
+卒論（\texttt{Memo/soturon3.tex}）の考察「中心仮説の評価」（\texttt{sec:disc-hyp}）の手引きである。2026 年 10 月 21 日に，対話で確かめながら組み立てた。
+\S\ref{sec:claim-hyp}（push\_ratio）は以前の版の説明で，この節はそれを 9.4 の流れに合わせて詳しくしたものである。
+
+\paragraph{この節の成り立ち（正直な記録）。}
+9.4 の\textbf{構成}（仮説を 3 つの主張に分け，前提は一部，中核は 3 つの根拠で不支持，外れた原因は 2 つ）は，以前に AI が書いた下書き（\texttt{soturon2.tex}）の構成と同じである。
+(1)〜(3) の判断と，push\_ratio の逆転が分子（push）によることは，本人が考えた。
+本人の判断で，構成は今のまま残している（2026 年 10 月 21 日）。審査で構成について聞かれても説明できるように，この節で確かめておく。
+
+\paragraph{全体の主張。}
+\begin{table}[H]
+\centering
+\caption{中心仮説の 3 つの主張と評価。}
+\label{tab:hyp4-eval}
+\small
+\begin{tabular}{@{}P{1.4cm} P{5.0cm} P{2.2cm} P{6.6cm}@{}}
+\toprule
+ & 主張 & 評価 & 根拠 \\
+\midrule
+(1) 前提 & Non-IID は正常のばらつき（spread）を大きくする & 一部 & 序盤は約 2.4〜2.9 倍。終盤は 1.00〜1.08 倍で差がない（\S\ref{sec:claim-noniid-spread}） \\
+(2) 中核 & 検知できるかは push\_ratio でほぼ決まり，1 を下回ると急落する & 支持されない & (i) 符号反転で正の相関なし，(ii) ALIE の $z < 1$ で急落しない，(iii) 同じ push\_ratio で AUC が大きく違う \\
+(3) 帰結 & だから Non-IID は検知性能を下げる & 観測されたが，理由が違う & 下がったのは符号反転の D1・D4，ALIE の D2・D4。理由は spread の大きさではなく配分（\S\ref{sec:claim-noniid}） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------------------------------------------------------
+\subsection{(2) 中核が支持されない 3 つの根拠}
+\label{sec:claim-hyp4-core}
+
+\begin{enumerate}
+  \item \textbf{符号反転：正の相関がない。}push\_ratio と AUC の順位相関（卒論の表 \texttt{tab:corr}）は全体で $-0.32$〜$-0.02$。仮説どおりなら，push\_ratio が大きいほど AUC が高い（正の相関）はず。
+        しかも符号反転の push\_ratio は全ラウンドで 1 を下回らなかった（卒論の図 \texttt{fig:pushratio} で全部の点が 1 より右。最小は約 1.42）ので，「1 を下回ると急落する」は\textbf{符号反転では試すことすらできなかった}。【観測】
+  \item \textbf{ALIE：$z < 1$ で急落しない。}push\_ratio $< 1$ の領域（$z < 1$）で，D1 は $z = 0.385$ でも 0.97 以上（\S\ref{sec:claim-rq3}）。【観測】
+  \item \textbf{同じ push\_ratio でも結果が違う。}ALIE の $z = 0.75$ では push\_ratio がどの $\alpha$ でも 0.75 なのに，D4 の AUC は 1.00 / 0.39 / 0.16（\S\ref{sec:claim-noniid-d4}）。【観測】
+\end{enumerate}
+
+% ---------------------------------------------------------
+\subsection{符号反転の push\_ratio の逆転：序盤は分母，終盤は分子が効く}
+\label{sec:claim-hyp4-reversal}
+
+\paragraph{観測。}【観測】
+符号反転の push\_ratio は，序盤は仮説どおり Non-IID ほど\textbf{小さい}（第 1〜5 ラウンドで 8.62 / 2.85 / 1.96。卒論の表 \texttt{tab:seg-push}）のに，
+終盤は逆に Non-IID ほど\textbf{大きい}（第 46〜50 ラウンドで 1.58 / 2.03 / 2.55。卒論の表 \texttt{tab:pushratio}）。
+
+\paragraph{分子と分母に分けると。}
+push\_ratio $=$ push（悪性と正常の平均との距離）$\div$ spread（正常と平均との距離の平均）なので，どちらが変わったかに分ける（表\ref{tab:hyp4-split}，図\ref{fig:hyp4-split}）。
+
+\begin{table}[H]
+\centering
+\caption{符号反転の push\_ratio を分子と分母に分けたもの（push は push\_ratio $\times$ spread で求めた目安。spread は符号反転の実行での正常の値なので，攻撃の影響も含む）。卒論の本文にはこの分解の数値は書いていない。}
+\label{tab:hyp4-split}
+\small
+\begin{tabular}{@{}llccc@{}}
+\toprule
+ & & $\alpha = 1000$ & $\alpha = 5$ & $\alpha = 1$ \\
+\midrule
+序盤（第 1〜5） & push（分子） & 1.22 & 1.13 & 0.93 \\
+ & spread（分母） & 0.142 & 0.397 & 0.476 \\
+ & push\_ratio & 8.62 & 2.85 & 1.96 \\
+\midrule
+終盤（第 46〜50） & push（分子） & 0.24 & 0.35 & 0.60 \\
+ & spread（分母） & 0.154 & 0.171 & 0.234 \\
+ & push\_ratio & 1.58 & 2.03 & 2.55 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \tikzset{fbox/.style={box, text width=3.5cm, minimum height=1.0cm}}
+  \node[font=\footnotesize] at (0,1.5) {序盤};
+  \node[fbox] (a1) at (0,0.5) {push：$\alpha$ でほぼ同じ};
+  \node[fbox, core] (a2) at (0,-0.8) {spread：Non-IID で大きい\\（約 2.4〜2.9 倍）};
+  \node[fbox, data] (a3) at (0,-2.2) {push\_ratio：\\Non-IID で\textbf{小さい}\\（仮説どおり）};
+  \draw[arr] (a2) -- (a3);
+  \node[font=\footnotesize] at (7.0,1.5) {終盤};
+  \node[fbox, core] (b1) at (7.0,0.5) {push：Non-IID で大きい\\（悪性のノルムが伸びる）};
+  \node[fbox] (b2) at (7.0,-0.8) {spread：差が縮む};
+  \node[fbox, data] (b3) at (7.0,-2.2) {push\_ratio：\\Non-IID で\textbf{大きい}\\（逆転）};
+  \draw[arr, rounded corners] (b1.east) -- ++(0.4,0) |- (b3.east);
+  \node[lab, anchor=west] at (9.55,-1.0) {攻撃でモデルが\\悪性のデータに合わず，\\悪性の更新が大きくなる\\（\S\ref{sec:claim-sf-d1}）};
+\end{tikzpicture}
+\caption{push\_ratio $=$ push $\div$ spread のどちらが効いたか。濃い箱が，その時期に push\_ratio の大小を決めた側。}
+\label{fig:hyp4-split}
+\end{figure}
+
+\paragraph{なぜ終盤に push が Non-IID ほど大きくなるのか。}【解釈】（仕組みの部分は\S\ref{sec:claim-sf-d1} の【推測】）
+符号反転の悪性は，悪性クライアントが正直に学習した更新を反転したものなので，ノルムはその更新のノルムに等しい。
+悪性の更新は反転して集約されるので，グローバルモデルは悪性クライアントのデータに合わなくなり，悪性クライアントのローカル学習での更新が大きくなる（\S\ref{sec:claim-sf-d1}）。
+その増え方は Non-IID ほど大きい（終盤の悪性/正常のノルムの比 1.30 / 1.65 / 2.18，卒論の表 \texttt{tab:signflip-norm}）。
+悪性は正常と逆を向いているうえにノルムが大きいので，正常の平均から遠くなり，push が大きくなる。
+つまり終盤の push\_ratio の大小は，仮説が想定した「正常のばらつき」ではなく，\textbf{攻撃が学習を通じて悪性の更新を大きくした副作用}で決まっていた。
+
+% ---------------------------------------------------------
+\subsection{仮説が外れた 2 つの原因}
+\label{sec:claim-hyp4-why}
+
+\begin{enumerate}
+  \item \textbf{低次元の直感。}仮説は「正常が平均の周りを埋める」と暗に考えていた。実際の高次元では，正常は平均からほぼ一定の距離の殻の上に並ぶので，平均に近い悪性は紛れずに目立つ（\S\ref{sec:claim-rq3-shell}）。
+  \item \textbf{push\_ratio は 1 つの量にすぎない。}push\_ratio は「正常の平均からの距離」という 1 つの量で悪性の位置をまとめたもの。ところが検知器は，それぞれ違う量（ノルム，参照方向との角度，第 1 主成分への射影など）を見て，違う向きの外れを異常とみなす（\S\ref{sec:claim-alie-summary}）。
+        だから同じ push\_ratio でも，検知器が見る量の上で悪性がどこにいるかで，検知できるかどうかが変わる。
+\end{enumerate}
+
+\paragraph{代わりに言えること（卒論 9.4 の結論）。}
+検知できるかどうかを説明するには，「悪性と正常の平均との距離」という 1 つの量ではなく，\textbf{検知器が見る量の上での悪性の位置}と，\textbf{正常の分布の形}を考える必要がある。
+
+% ---------------------------------------------------------
+\subsection{読むときの注意}
+
+\begin{itemize}
+  \item 「Non-IID が強いと push\_ratio は小さくなる」と言い切るのは誤り。それは\textbf{序盤だけ}で，終盤は逆に大きくなる。
+  \item 終盤の逆転を「更新を繰り返すうちに散らばり（spread）が大きくなったから」と説明するのは逆向き。分母の spread ではなく，分子の push が大きくなったのが原因である。
+  \item (1) の前提を「支持されない」と言い切らない。序盤には成り立っているので「一部」。
+  \item (1) は spread だけの主張である。push\_ratio や AUC の話を混ぜない。
+  \item (3) は「下がったかどうか」と「なぜ下がったか」を分ける。下がったこと自体は仮説どおりだが，理由は仮説と違う。
+  \item 符号反転の push\_ratio は 1 を下回らなかったので，符号反転だけでは「1 を下回ると急落する」を検証できていない。その部分の反証は ALIE（$z < 1$）が担っている。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{妥当性への脅威と今後の課題（卒論 9.5）}
+\label{sec:claim-threats}
+
+卒論（\texttt{Memo/soturon3.tex}）の考察「妥当性への脅威と今後の課題」（\texttt{sec:disc-threats}）の手引きである。2026 年 10 月 21 日に，本人が限界を挙げ，それを対話で確かめて組み立てた（以前の版の下書きは参照していない）。
+項目の多くは本人が挙げたもので，「検知と防御」の段落の論理のつなぎ方だけは AI が整理した（本人は説明できると確認済み）。
+
+全体像を表\ref{tab:threats}に示す。左の列の括弧は，卒論の段落の書き出しである。
+\begin{table}[H]
+\centering
+\caption{卒論 9.5 の制約と，それを補う今後の課題。}
+\label{tab:threats}
+\small
+\begin{tabular}{@{}P{2.3cm} P{6.3cm} P{6.6cm}@{}}
+\toprule
+区分（書き出し） & 制約 & 今後の課題 \\
+\midrule
+確かめていない解釈（まず） & 損失・$r$ と $e_i$・射影を記録していない。殻と見積もりは後付け。D3 は悪性 4 台が同一であることに依存しうる & 第一：記録して解釈を直接確かめる。第二：ばらつきを持たせた ALIE \\
+分析の方法（また） & 相関の点（1 実行の 1 ラウンド）が独立でない & （検定はせず，傾向の目安として扱った） \\
+実験の条件（さらに） & MNIST のみ，20 台，学習データの半分。Non-IID はラベルの偏りだけ。悪性の割合 0.2 のみ。$\alpha$ 3 水準，$z$ 8 水準。$\alpha = 1$ は未収束 & 第三：FEMNIST など，データ数の偏り，悪性の割合，細かい水準。第四：ラウンドを増やす \\
+脅威モデル（加えて） & full knowledge を仮定 & 第二：partial knowledge の攻撃者 \\
+検知と防御（最後に） & ALIE は FedAvg ではほぼ無害。検知は防御と同じではない & 第五：検知と頑健な集約を組み合わせる \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------------------------------------------------------
+\subsection{ラウンドとローカルエポック}
+\label{sec:claim-threats-round}
+
+相関の点や収束の話を読むための前提。
+\begin{itemize}
+  \item \textbf{ラウンド}：サーバとクライアントの 1 往復。サーバがグローバルモデルを配る $\rightarrow$ 各クライアントが手元のデータで学習 $\rightarrow$ 更新を送る $\rightarrow$ サーバが集約。本研究は 50 ラウンド。
+  \item \textbf{ローカルエポック}：1 ラウンドの「学習」の中で，クライアントが手元のデータを何周するか。本研究は 2 エポック（1,200 件をバッチ 32 で 2 周，1 ラウンドで約 75 回の更新）。
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.35cm]
+  \tikzset{rbox/.style={box, text width=2.3cm, minimum height=0.9cm}}
+  \foreach \r/\y in {1/0, 2/-1.3} {
+    \node[lab, anchor=east] at (-0.3,\y) {ラウンド \r};
+    \node[rbox] (s\r) at (1.2,\y) {配る};
+    \node[rbox, core] (l\r) at (4.3,\y) {各クライアント：\\1,200 件を 2 周};
+    \node[rbox] (u\r) at (7.4,\y) {送る};
+    \node[rbox] (a\r) at (10.5,\y) {集約};
+    \draw[arr] (s\r) -- (l\r); \draw[arr] (l\r) -- (u\r); \draw[arr] (u\r) -- (a\r);
+  }
+  \draw[arr, rounded corners] (a1.south) -- ++(0,-0.25) -| (s2.north);
+  \node[lab] at (5.8,-2.3) {$\vdots$（ラウンド 50 まで。前のラウンドの集約結果から始まる）};
+  \node[lab, anchor=south] at (4.3,0.5) {ローカルエポックは\\この中の話};
+\end{tikzpicture}
+\caption{ラウンドとローカルエポックの関係。}
+\label{fig:threats-round}
+\end{figure}
+
+\paragraph{読むときの注意。}
+収束を確かめるには，ラウンド数を増やすほかに，ローカルエポック数を増やす方法もある。ただしローカルエポックを増やすと，各クライアントが自分のデータに合わせすぎて，Non-IID では更新がばらばらになりやすい。卒論の今後の課題は「ラウンド数を増やす」にしている。
+
+% ---------------------------------------------------------
+\subsection{相関の点が独立でない理由}
+\label{sec:claim-threats-corr}
+
+卒論の表 \texttt{tab:corr} で 1 点として数えているのは，\textbf{クライアントではなく，1 つの実行の 1 ラウンド}（合計 1,500 点）である。
+各ラウンドのモデルは前のラウンドの集約結果から始まるので，同じ実行の\textbf{連続するラウンド}の push\_ratio や AUC は似た値になる（図\ref{fig:threats-corr}）。
+そのため，1,500 点あるように見えても独立な情報はもっと少なく，そのまま検定すると「有意」と出やすい。卒論では検定をせず，相関は傾向の目安として扱った。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  \foreach \t/\y in {1/0, 2/-0.8, 3/-1.6} {
+    \node[lab, anchor=east] at (-0.3,\y) {実行 \t};
+    \foreach \k in {0,...,9} {
+      \fill (0.5+0.9*\k,\y) circle (2.2pt);
+      \ifnum\k<9 \draw[black!50] (0.5+0.9*\k,\y) -- (0.5+0.9*\k+0.9,\y); \fi
+    }
+  }
+  \node[lab, anchor=west] at (9.2,-0.8) {同じ行の点どうしは\\前のラウンドを引き継ぐので\\似た値になる};
+  \node[lab] at (4.5,-2.3) {1 つの点 $=$ 1 実行の 1 ラウンド（実際は 30 実行 $\times$ 50 ラウンド $=$ 1,500 点）};
+\end{tikzpicture}
+\caption{相関の点のつながり（概念図）。}
+\label{fig:threats-corr}
+\end{figure}
+
+\paragraph{読むときの注意。}
+「各クライアントが他のクライアントの結果に依存するから独立でない」は，焦点がずれている。点として数えているのはラウンドなので，問題は「連続するラウンドが似ること」である。
+
+% ---------------------------------------------------------
+\subsection{検知と防御は違う}
+\label{sec:claim-threats-defense}
+
+\paragraph{根拠。}【観測】
+卒論の表 \texttt{tab:acc} で，攻撃なしとの精度の差（ポイント）は次のとおり。
+\begin{center}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & $\alpha = 1000$ & $\alpha = 5$ & $\alpha = 1$ \\
+\midrule
+符号反転 & 0.9 & 2.4 & 18.1 \\
+ALIE $z = 1$ & 0.0 & 0.2 & 1.7 \\
+ALIE $z = 1.5$ & 0.0 & 0.2 & 2.0 \\
+ALIE $z = 3$ & 0.2 & 0.5 & 5.2 \\
+\bottomrule
+\end{tabular}
+\end{center}
+ALIE は $\alpha \ge 5$ では $z = 3$ でも精度をほとんど下げない。$\alpha = 1$ でも $z \le 1.5$ では 2 ポイント以内で，試行間のばらつき（$\pm 2.5$〜2.7）と同じくらいである。
+
+\paragraph{論理のつながり。}【解釈】（つなぎ方は AI が整理した）
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.4cm]
+  \tikzset{fbox/.style={box, text width=3.0cm, minimum height=1.2cm}}
+  \node[fbox] (a) {ALIE は頑健な集約\\（Trimmed Mean，Krum）\\から隠れる攻撃};
+  \node[fbox, right=of a] (b) {FedAvg は単純な平均\\$\rightarrow$ 対象外。\\精度をほぼ下げない};
+  \node[fbox, right=of b] (c) {本研究の多くは\\「ほぼ無害な摂動を\\検知できるか」の評価};
+  \node[fbox, core, right=of c] (d) {検知できても\\防御できるとは限らない\\（集約と組み合わせて未評価）};
+  \draw[arr] (a) -- (b); \draw[arr] (b) -- (c); \draw[arr] (c) -- (d);
+\end{tikzpicture}
+\caption{「検知と防御」の段落の論理。}
+\label{fig:threats-defense}
+\end{figure}
+
+\paragraph{読むときの注意。}
+\begin{itemize}
+  \item 「ALIE は $z = 1$〜1.5 で精度を落とせる」は誤り。$z \le 1.5$ ではほぼ下がらない。はっきり下がったのは $\alpha = 1$ で $z$ が大きいとき（$z = 3$ で 5.2 ポイント）だけ。
+  \item 精度（グローバルモデルのテスト精度）と AUC（検知性能）を混ぜない。
+  \item 「mean」は頑健な防御ではない。単純な平均そのもので，FedAvg と同じ種類である。
+\end{itemize}
+
+% ---------------------------------------------------------
+\subsection{そのほかの注意}
+
+\begin{itemize}
+  \item \textbf{full knowledge の言い方}：「サーバ側から攻撃者が見える」ではなく，「攻撃者が正常クライアントの更新を参照できる」。ALIE は正常の $\mu$ と $\sigma$ を使うので，partial knowledge では推定するしかなく，悪性の位置がずれる。
+  \item \textbf{悪性 4 台が同一のベクトルであることに依存しうるのは D3}（特徴量の空間で 1 点に重なる）。D4 は，ばらつきを足しても 4 台が平均的には同じ方向（$-z\sigma$）にずれるので，大きくは変わらない可能性がある。卒論では「D3 は依存している可能性があり，確かめていない」とだけ書いた。
+  \item \textbf{CPU と GPU}：全実行を CPU で行ったので GPU での再現は確かめていない。結果の妥当性には直接関わらないので，卒論の 9.5 からは外した（実行環境は実験の章の表に書いてある）。
+  \item \textbf{書かなかった項目}：卒論の脅威モデルの章には「悪性クライアントの集合が全ラウンドで固定」という仮定もある。9.5 には入れていないが，審査で聞かれたら限界として認める。
+\end{itemize}
+
+% ---------------------------------------------------------
+\section{主張：良性の各座標は，裾が正規分布より重い}
+\label{sec:claim-tail}
+
+\paragraph{主張。}
+ALIE の原論文は，良性の各座標が正規分布に従うと仮定している。
+本実験では，中心付近ではその仮定がよく当てはまるが，裾（極端な値）は正規分布より重く，Non-IID が強いほど重い。
+
+\paragraph{根拠。}【観測】
+\texttt{mal\_rank\_mean} は，「悪性の値以下の良性が何割いるか」を座標ごとに求めて平均したもの。
+正規分布なら $\Phi(-z)$ になる（$\Phi$ は標準正規分布の累積分布関数）。
+\begin{itemize}
+  \item $z \le 1$：実測 0.34 / 0.30 / 0.22 / 0.17（$z = 0.385 / 0.5 / 0.75 / 1$）は，$\Phi(-z) = 0.350 / 0.309 / 0.227 / 0.159$ とよく合う。
+  \item $z = 3$：$\Phi(-3) \approx 0.001$ なのに，実測は 0.073 / 0.110 / 0.180（$\alpha = 1000 / 5 / 1$）。裾の外まで押したつもりでも，良性の 1 割前後が悪性より外にいる。
+\end{itemize}
+
+\paragraph{読むときの注意。}
+この主張は卒論の結論には直接使っていないが，「原論文の仮定は Non-IID ではそのまま成り立たない」ことの具体例として，妥当性の議論で使っている。
+
+% ---------------------------------------------------------
+\section{主張：ALIE は FedAvg ではほぼ無害}
+\label{sec:claim-harm}
+
+\paragraph{主張。}
+ALIE は $\alpha \ge 5$ ではどの $z$ でも精度をほとんど下げない（攻撃なしとの差は最大 0.5 ポイント）。
+$\alpha = 1$ で $z \ge 2$ のときだけ，はっきり下がる（$z = 2$ で約 2.6，$z = 3$ で約 5.2 ポイント）。【観測】
+
+\paragraph{なぜそうなるか。}【解釈】
+20 台を単純に平均すると，悪性 4 台が $\mu - z\sigma$ を送ったときの平均のずれは，座標ごとに $0.2\,z\,\sigma$ になる。
+一方，良性 16 台の平均そのものも，偶然 $\sigma / \sqrt{16} = 0.25\,\sigma$ くらいは揺れる。
+$z \le 1$ のずれは，この自然な揺れ以下なので，学習にはほとんど効かない。原論文も，単純な平均ではこの攻撃が薄まると報告している。
+
+\paragraph{読むときの注意。}
+これは卒論の一番大きな弱点につながる。「害がほとんどない攻撃を見つけて何の意味があるのか」と聞かれうる（\S\ref{sec:claims-qa}）。
+
+% ---------------------------------------------------------
+\section{事前の予測と結果}
+\label{sec:claims-predictions}
+
+再スイープの前に計画書に書いた 3 つの予測と，その結果。
+
+\paragraph{卒論では使わない。}
+卒論（\texttt{soturon3.tex}）では，これらの予測を主張の根拠に使わない（2026 年 10 月 21 日に決めた）。
+予測が実行の前に書かれていたことは確認できた（下の表）。しかし計画書の文章の多くは AI に書かせたもので，予測を本人が立てたと説明できない。
+審査で「事前に考えていたのか」と聞かれたら，「直感的にはそう考えていたが，記録に残していないので，論文では後付けの解釈として扱った」と答える。
+
+\begin{table}[H]
+\centering
+\caption{予測が実行の前に書かれていたことの確認（日本時間）。}
+\small
+\begin{tabular}{@{}P{3.2cm} P{7.2cm} P{4.9cm}@{}}
+\toprule
+日時 & できごと & 根拠 \\
+\midrule
+10 月 9 日 19:50 & 計画書の PDF を作成。予測も「再スイープ」の節もまだない & \texttt{sotsuron\_plan2.pdf} の作成日時と本文 \\
+10 月 11 日 18:25 & 計画書に「実行前に記す予測」があり，D1 の予測は今と同じ文面 & AI 利用の記録（\texttt{Memo/AI\_utilization/}\allowbreak\texttt{logs/raw/}\allowbreak\texttt{af47f037…jsonl}） \\
+10 月 11 日 18:25 & D4 の予測の「$\alpha = 0.1$」を「$\alpha = 1$」に修正（$\alpha$ の定義の変更に合わせたもの） & 同上 \\
+10 月 12 日 7:50 & 再スイープの最初の実行 & \texttt{run\_config.txt} の最初の \texttt{run\_id} \\
+\bottomrule
+\end{tabular}
+\end{table}
+\texttt{sotsuron\_plan2.tex} の予測は git にはコミットされていない（最後のコミットは 9 月 1 日）。また，今の計画書には再スイープ後の結果も書き足されている（10 月 19 日更新）。
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{6.4cm} P{1.8cm} P{7.1cm}@{}}
+\toprule
+予測 & 結果 & 根拠 \\
+\midrule
+D1 は $z$ が 1 をやや超える付近で最小になり，それより大きい $z$ で再び上がる & 当たった & 全 $\alpha$ で $z = 1.25$ が最小，$z \ge 1.5$ で回復（\S\ref{sec:claim-shell}） \\
+D4 は $\alpha = 1$ でも $z$ を大きくすれば見つけるようになり，その $z$ は Non-IID が強いほど大きい & 当たった & $\alpha = 1$ でも $z \ge 1.25$ で 0.99 以上。境は $\alpha = 1000$ で 0.5〜0.75，$\alpha = 5, 1$ で 0.75〜1（\S\ref{sec:claim-d4}） \\
+$z \ge 2$ では FedAvg でも ALIE が精度を下げうる & 一部 & $\alpha = 1$ だけ（\S\ref{sec:claim-harm}） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+なお，$z = 3$ の 10 ラウンドだけの動作確認（全検知器 AUC 1.0）は予測を書く前に見ている。計画書にもそう記録してある。
+
+% ---------------------------------------------------------
+\section{数値を自分で計算し直す}
+\label{sec:claims-recompute}
+
+卒論の数値は，次のどれかで再現できる。
+\begin{enumerate}
+  \item \textbf{分析スクリプトの出力}：\texttt{python analyze\_detection.py experiments\_detection\_v3/\_logs} を実行すると，\texttt{analysis/} に図と表ができる。
+        最終 AUC（\texttt{detection\_final\_auc\_table.csv}），精度（\texttt{accuracy\_table.csv}），構造指標（\texttt{detection\_structure\_table.csv}），符号反転の相関（\texttt{detection\_pushratio\_corr\_table.csv}）はここから取る。
+  \item \textbf{ノルムの比と D2 のスコア}：\texttt{detection\_updates.csv} から，次のように計算する（プロジェクト直下で実行）。
+\end{enumerate}
+
+\begin{cmd}
+import pandas as pd
+from analyze_detection import keep_last_runs
+u = pd.read_csv("experiments_detection_v3/_logs/detection_updates.csv")
+u = keep_last_runs(u, "updates")            # 回し直した実行の古い行を捨てる
+a = u[u["attack_type"] != "none"]
+# ラウンドごとに，悪性と良性のノルムの平均を出し，その比をとる
+g = a.groupby(["alpha", "attack_type", "alie_z", "trial", "round", "is_malicious"],
+              dropna=False)["delta_norm"].mean().unstack("is_malicious")
+g["ratio"] = g[1] / g[0]
+g = g.reset_index()
+last = g[g["round"] > 45]                    # 最終 5 ラウンド
+print(last.groupby(["alpha", "attack_type", "alie_z"], dropna=False)["ratio"].mean())
+# D2 のスコア：良性と悪性で平均を比べる
+al = a[(a["attack_type"] == "alie") & (a["alie_z"] <= 1.5)]
+print(al.groupby(["alpha", "is_malicious"])["d2_cosine"].mean())
+\end{cmd}
+
+\begin{enumerate}
+  \setcounter{enumi}{2}
+  \item \textbf{殻の厚さ（CV）}：\texttt{detection\_metrics.csv} の ALIE の行で，最終 5 ラウンドの $\mathrm{push\_ratio}/z$ を $\alpha$ ごとに平均し，$\sqrt{(\cdot)^2 - 1}$ を計算する（\S\ref{sec:claim-shell} の根拠 1）。
+  \item \textbf{ラウンドの区間ごとの AUC}：\texttt{detection\_metrics.csv} の \texttt{round} を 1〜5，6〜15，16〜30，31〜50 に分け，（攻撃，$\alpha$，検知器）ごとに \texttt{auc} を平均する。卒論の「第 1〜5 ラウンドの平均」はこれである。分析スクリプトが \texttt{analysis/detection\_segment\_auc\_table.csv} として出力し，卒論の付録 B に全条件を載せている。
+\end{enumerate}
+
+% ---------------------------------------------------------
+\section{審査で聞かれそうなことと答え方}
+\label{sec:claims-qa}
+
+\paragraph{Q1. ALIE は FedAvg ではほぼ無害なのに，検知を調べる意味はあるのか。}
+答えの方向：本研究は検知を，集約手法とは独立した「前段」として評価している。検知できれば，除外や重み下げに使える。
+ALIE は Trimmed Mean や Krum を破るための攻撃なので，そうした集約手法と組み合わせる場面では検知の価値が大きい。
+ただし，その組み合わせでの効果は確かめていない（今後の課題）。
+
+\paragraph{Q2. D3 が ALIE を見つけるのは，悪性 4 台が同じベクトルだからではないか。}
+答えの方向：その可能性はある，と認める（\S\ref{sec:claim-d3}）。同じベクトルを送るのは原論文どおりだが，現実の攻撃者は小さなばらつきを足して避けられる。
+確かめるには，ばらつきを足した ALIE の追加実験が必要。
+
+\paragraph{Q3. 「Non-IID は形を変える」は後付けではないか。}
+答えの方向：そのとおり，後付けの解釈である（\S\ref{sec:claim-d4}）。$\alpha$ も 3 水準しかない。
+「重心に近すぎても目立つ」（殻）の解釈も，卒論では結果を見たあとに整理したものとして書いている（\S\ref{sec:claim-rq3}）。
+ただし殻の解釈は，正常の距離の変動係数（0.08〜0.18）という独立した観測で支えられている。「形」の解釈は寄与率と $|\cos|$ の対応と近似の見積もりで支えられている。
+
+\paragraph{Q4. $\alpha = 1$ は収束していないのに，その検知性能を議論してよいのか。}
+答えの方向：収束していないことは明記している（\S\ref{sec:claim-acc}）。ラウンド推移の図で，学習の段階による変化も示している。
+ラウンドを増やした確認は今後の課題。
+
+\paragraph{Q5. 検定をしていないのはなぜか。}
+答えの方向：同じ実行の中のラウンドどうしは独立でないので，ラウンドを点として検定すると有意に出すぎる。
+そのため，試行（10 回）を単位にした平均と標準偏差で示し，傾向の記述にとどめた。必要なら試行単位のブートストラップで信頼区間を出せる。
+
+\paragraph{Q6. 中心仮説が外れたのは研究の失敗ではないか。}
+答えの方向：外れた理由（高次元では良性が殻に乗る）と，代わりに効いていた要因（良性の広がりの形，検知器の判定の向き）を示せている。
+仮説を後から書き換えず，外れたこととして報告している点も，研究の進め方として正しい。
+
+\paragraph{Q7. 符号反転を D2 が序盤から見つけられるのはなぜか。それが崩れるのはどんなときか。}
+答えの方向：反転すると参照方向とのなす角が $\theta$ から $\pi - \theta$ になり，D2 のスコアは正常が $1 - \cos\theta$，悪性が $1 + \cos\theta$ になる。
+正常が参照方向と同じ側にある限り，1 を挟んで必ず分かれる（\S\ref{sec:claim-sf-d2}）。
+崩れるのは，正常更新の向きがばらつき $\cos\theta$ が 0 に近づくとき（学習が進む，Non-IID が強い）と，悪性が多数派になって参照方向が悪性側に移るとき。
+
+\paragraph{Q8. D1 の AUC が序盤は 0.5 付近なのに，あとで上がるのはなぜか。攻撃のせいだと言える根拠は。}
+答えの方向：D1 は向きを見ないので，反転直後（大きさが同じ）は見分けられない。
+攻撃でモデルが悪性のデータに合わなくなり，悪性が計算する更新が大きくなるため，ノルムの差が開く（\S\ref{sec:claim-sf-d1}）。
+攻撃のせいだと言える根拠は，攻撃なしの実行で同じ 4 台のノルムの比が 1 付近のまま開かないこと。
+ただし「悪性のデータでの損失が大きい」は，損失をクライアントごとに記録していないので確かめていない，と認める。
+
+\paragraph{Q9. $\alpha = 1$ では悪性のノルムが正常の 2 倍以上あるのに，D1 が一番効かないのはなぜか。}
+答えの方向：正常どうしのノルムのばらつき（変動係数 0.39）が大きく，D1 は中央値から上下どちらに離れた正常も疑うため（\S\ref{sec:claim-sf-d1alpha}）。
+誤りの 55\% は中央値より小さい正常から来ている。
+「FedAvg の重みの偏り」ではない，と言えるようにしておく（データ数は全員同じで，重みも同じ）。
+
+\paragraph{Q10. D4 は第 1 主成分が悪性方向を向いているのに，$\alpha = 1$ で AUC が下がるのはなぜか。}
+答えの方向：D4 のスコアは射影の 2 乗なので符号が消え，$-$ 側の悪性と，$+$ 側の遠くにいるノルムの大きい正常が同じ扱いになる（\S\ref{sec:claim-sf-d4}）。
+誤りの 70\% はノルムが中央値より大きい正常から来ており，正常どうしでも D4 スコアとノルムの順位相関は 0.78。
+学習とともに正常のノルムのばらつきが広がり（0.18 $\rightarrow$ 0.37），それとともに AUC が下がる。
+「2 乗でノルムが強調されるから」ではない（2 乗は順位を変えない）と言えるようにしておく。
+
+\paragraph{Q11. ALIE の $z \le 1.5$ で，D2 の AUC がちょうど 0.00 になるのはなぜか。}
+答えの方向：0.00 は「見分けられない」ではなく「悪性が一番正常らしいと判定される」逆転である。
+参照方向 $r$（座標ごとの中央値）は，悪性 4 台がすべての座標で平均より下の同じ側にいるので，悪性の側に寄る。終盤は $\mu$ が小さいので，$r$ の向きは主に悪性の方向で決まる。
+一方，正常のずれ $e_i$ は座標ごとに符号がばらばらで，すべて正の $\sigma_j$ と相関がないので，悪性の方向と直交する。だから正常は $r$ とほぼ直角，悪性は $r$ に近い（\S\ref{sec:claim-alie-d2}）。
+$r$ や $e_i$ は記録していないので，スコアの値と矛盾しない解釈である，と認める。
+
+\paragraph{Q12. D2 が検知に転じる $z$ が，$\alpha = 1$ だけ大きいのはなぜか。}
+答えの方向：距離ではなく角度の問題である（距離の比は $\alpha$ によらず $z$ で決まる）。
+Non-IID ではクライアントごとに更新の向きが違い，平均すると打ち消し合うので，$\mu$ が $e_i$ に比べて小さい。
+すると正常はより直角に，悪性はより $r$ に近くなり，2 本の線が交わる $z$ が大きくなる（\texttt{fig:alie-d2-z}）。
+
+\paragraph{Q13. D2 が逆転しているのに，D3 が ALIE を見つけられるのはなぜか。}
+答えの方向：D3 も D2 スコアを特徴量に使うが，重心から\textbf{どちらの向きに}外れても疑う両側のスコアなので，「小さすぎる D2 スコア」も外れとして拾う。
+加えて悪性 4 台が 1 点に重なる。後者は攻撃の作り方による弱さで，ばらつきを足した ALIE では確かめていない（\S\ref{sec:claim-alie-d3}）。
+
+\paragraph{Q14. D1 も D4 も両側のスコアなのに，$z$ が小さい ALIE に対して D1 は検知でき，D4 はできなかったのはなぜか。}
+答えの方向：「両側かどうか」ではなく，\textbf{見ている量の上で悪性が中心にいるかどうか}の違いである。
+ノルムの軸では悪性は正常の約 0.4 倍で小さい側に外れているが，第 1 主成分への射影の軸では中心（ほぼ 0）にいる（\S\ref{sec:claim-alie-summary}）。
+
+\paragraph{Q15. Non-IID による検知性能の低下が，spread の増大で説明できないと言えるのはなぜか。}
+答えの方向：spread は前半こそ Non-IID で約 2.9 倍だが，後半は 1.00〜1.08 倍で差がない。
+検知性能が $\alpha$ で大きく違ったのは後半なので，その時期に差のない spread では説明できない（\S\ref{sec:claim-noniid-spread}）。
+「$\alpha$ は spread に影響しない」とは言わない（前半には影響がある）。
+
+\paragraph{Q16. では Non-IID は何を変えたのか。}
+答えの方向：ばらつきの大きさではなく配分。ノルムのばらつき（符号反転の D1・D4），共通の成分と各クライアントのずれの比（ALIE の D2），方向への集中（ALIE の D4）の 3 つ（\S\ref{sec:claim-noniid}）。
+
+\paragraph{Q17. 第 1 主成分の寄与率が大きいと，なぜ D4 で ALIE を見つけにくいのか。境目の式はどう出したのか。}
+答えの方向：寄与率は「合計のうち一番大きい方向が占める割合」なので，合計が同じなら，集中しているほどその方向のばらつきが大きく，悪性のずれが上回りにくい。
+見積もりは「正常の最大方向 $\approx$ 寄与率 $\times 16\|\sigma\|^2$」と「悪性のずれ $= \frac{4 \times 16}{20} z^2\|\sigma\|^2$」を比べて $z > \sqrt{5 \times \text{寄与率}}$。$\|\sigma\|$ が消えるので形だけで決まる（\S\ref{sec:claim-noniid-d4}）。
+結果を見たあとの近似で，直交を仮定している，と認める。
+
+\paragraph{Q18. 悪性を正常の平均に近づけたのに（$z < 1$），なぜ紛れずに検知されたのか。}
+答えの方向：高次元では，正常の平均からの距離の 2 乗は約 26 万個の正の数の和なので，どの正常もほぼ同じ距離に集まる（変動係数 0.08〜0.18）。
+正常は平均の周りを埋めるのではなく殻の上に並び，内側には誰もいない。内側に置いた悪性は「紛れる」のではなく「誰もいない場所にいる」ので目立つ（\S\ref{sec:claim-rq3-shell}）。
+結果を見たあとに整理した解釈であり，殻への集中は変動係数から間接的に確かめただけ，と認める。
+
+\paragraph{Q19. D1 の AUC が一番下がるのが $z = 1$ ではなく 1.25 なのはなぜか。}
+答えの方向：平均からの距離が揃うのは $z \approx 1$（push\_ratio $= 1$）だが，D1 が見るのは原点からの長さ（ノルム）で，ノルムが揃うのは $z \approx 1.25$ だから（\S\ref{sec:claim-rq3-norm}）。
+ALIE の平均は正常だけから計算するので，悪性によって平均が動くからではない。なぜ距離とノルムがずれるかは確かめていない。
+
+\paragraph{Q20. 事前に予測していたのか。}
+答えの方向：直感的にはそう考えていたが，記録に残していないので，論文では結果を見たあとの解釈として扱った（\S\ref{sec:claims-predictions}）。
+
+\paragraph{Q21. 中心仮説は結局どこまで正しかったのか。}
+答えの方向：3 つに分けて答える。前提（Non-IID で spread が大きくなる）は序盤だけ。中核（push\_ratio で決まり，1 未満で急落）は支持されない（相関なし，$z < 1$ で急落しない，同じ push\_ratio で AUC が違う）。帰結（Non-IID で検知性能が下がる）は観測されたが，理由は spread ではなく配分（\S\ref{sec:claim-hyp4}）。
+
+\paragraph{Q22. 符号反転の push\_ratio が終盤に Non-IID ほど大きくなったのはなぜか。}
+答えの方向：分母の spread ではなく，分子の push が大きくなったから。攻撃でモデルが悪性のデータに合わなくなり，悪性の更新（ノルム）が Non-IID ほど大きく伸びた（\S\ref{sec:claim-hyp4-reversal}）。
+損失を記録していないので，仕組みの部分は推測である，と認める。
+
+\paragraph{Q23. 相関を検定していないのはなぜか。}
+答えの方向：点として数えているのは 1 実行の 1 ラウンドで，同じ実行の連続するラウンドは前のラウンドを引き継ぐので似た値になり，独立でない。そのまま検定すると有意に出すぎるので，傾向の目安として扱った（\S\ref{sec:claim-threats-corr}）。
+
+\paragraph{Q24. ほとんど害のない ALIE を検知できても意味があるのか。}
+答えの方向：本研究の ALIE の多くは FedAvg のもとでは精度をほぼ下げない。ALIE は本来，頑健な集約から隠れる攻撃なので，そこで検知を使えば価値がある可能性がある。ただし，検知と防御は違い，集約と組み合わせた評価はしていない（今後の課題，\S\ref{sec:claim-threats-defense}）。
+
+\paragraph{Q25. 一番大きな限界は何か。}
+答えの方向：自分の言葉で答えられるようにしておく。候補は，解釈の多くを直接確かめていないこと（損失・$r$・射影を記録していない），MNIST・ラベルの偏りだけという条件の狭さ，検知と防御を結びつけていないこと（\S\ref{sec:claim-threats}）。
+
+% =========================================================
+\part{リファレンス}
+\label{part:reference}
+
+% =========================================================
+\section{攻撃と検知器の早見表}
+\label{sec:attack}
+
+考え方と式の説明は，\S\ref{sec:theory-attack} にある。ここは，実行時に見返すための一覧である。
+
+\subsection{攻撃}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{2.6cm} P{4.0cm} P{8.7cm}@{}}
+\toprule
+\texttt{attack-type} & 動く場所 & 内容 \\
+\midrule
+\texttt{none} & （なし） & 攻撃なし。悪性 0 台として扱う。良性の広がりの基準値を得るための条件。 \\
+\texttt{sign\_flip}（A1） & クライアント側（\texttt{client\_app.py}） &
+更新量 $\Delta = \text{学習後} - \text{学習前}$ の符号を反転して送る。向きが正反対になり，大きさは変わらない。 \\
+\texttt{alie}（A2） & サーバ側（\texttt{robust\_strategy.py}） &
+良性の更新の，重みごとの平均 $\mu$ と標準偏差 $\sigma$ から $g^{\text{mal}} = \mu - z\sigma$ を作り，
+悪性クライアント全員に同じ値を割り当てる。良性のばらつきの範囲内に収まるので，見つかりにくい。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+ALIE は Baruch ら（``A Little Is Enough'', 2019）の生成則に基づく。
+$z$ は実験条件として与え，原論文 Algorithm 3 の $z_{\max}$（20 台・悪性 4 台で約 0.385）は参照値として使うにとどめる。
+悪性クライアントは，データ数を偽らずに申告するものとする（FedAvg の重みは，申告されたデータ数である）。
+
+\subsection{検知器}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{2.4cm} P{6.0cm} P{6.9cm}@{}}
+\toprule
+記号 & スコア & 得手・不得手 \\
+\midrule
+D1 \texttt{d1\_norm} & $|\,\|g_i\| - \mathrm{median}_j\|g_j\|\,|$ &
+更新の大きさを見る。極端に大きい・小さい更新に強く，大きさが良性と変わらない攻撃に弱い。 \\
+D2 \texttt{d2\_cosine} & $1 - \cos(g_i, r)$，$r$ は重みごとの中央値 &
+更新の向きを見る。向きを逆にする符号反転に強い。 \\
+D3 \texttt{d3\_kmeans} & 標準化した 4 つの特徴（大きさ，D2，第 1・第 2 主成分）で 2 グループに分け，多数派の中心までの距離 &
+大きさと向きをまとめて見る。悪性が多数を占めると成り立たない。 \\
+D4 \texttt{d4\_spectral} & $(\tilde{g}_i \cdot v)^2$，$v$ は第 1 主成分の方向 &
+一番ばらつきの大きい方向への突き出しを見る。良性どうしのばらつきのほうが大きいと，悪性を見つけられない。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{D1 の同点について。}
+クライアントの台数が偶数のとき，中央値は真ん中の 2 台の平均になるので，その 2 台のスコアは数式の上で必ず等しくなる。
+計算の丸め誤差でこれがずれないよう，ごく近い値は同じ値にそろえている。ROC-AUC では，同点を「半分正解」と数える。
+
+% =========================================================
+\section{エラーで止まる条件}
+\label{sec:guards}
+
+設定の誤りがあるとき，黙って想定と違う実験が走るのを防ぐため，次の場合は学習の途中でもエラーで止まるようにしてある。
+止まった条件は \texttt{final\_model.pt} が作られないので，スイープでは「失敗」として記録される。
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{6.4cm} P{8.9cm}@{}}
+\toprule
+止まる条件 & 理由 \\
+\midrule
+\texttt{pyproject.toml} に，コードが読む項目が無い & 設定の書き忘れ。別の値で黙って動くことはない。 \\
+\texttt{attack-type}，\texttt{aggregation-method}，\texttt{data-split} に，使えない値を指定した &
+現在使えるのは，それぞれ \texttt{none} / \texttt{sign\_flip} / \texttt{alie}，\texttt{fedavg}，\texttt{dirichlet\_equal} / \texttt{dirichlet} だけ。 \\
+\texttt{num-clients} $\times$ \texttt{malicious-ratio} が整数にならない &
+丸めると，記録される割合と実際の台数がずれるため（例：20 台 $\times$ 0.125 $=$ 2.5 台）。 \\
+学習結果を返したクライアントの数が \texttt{num-clients} と違う &
+起動している台数と設定が食い違うと，悪性に選ばれた番号の一部が実在せず，悪性の台数が設定より少なくなるため。 \\
+検知のログに書く行に，項目が欠けている & 空欄のまま記録されるのを防ぐため。 \\
+Flower のコマンドが見つからない（スイープ開始時） & 仮想環境の Python で実行していない。1 条件も回さずに止まる。 \\
+GPU の設定がマシンと食い違っている（スイープ開始時） & クライアントが起動できない，または，GPU で回しているつもりでクライアントが CPU で学習する，という状態を防ぐため（\S\ref{sec:gpu}）。 \\
+\texttt{device} に，そのマシンで使えない装置を指定した & 指定した装置で回っていない結果が，黙って記録されるのを防ぐため。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =========================================================
+\section{再現性}
+
+同じ装置で同じ条件を回し直すと，ログの数値は最後の桁まで一致する
+（CPU と，Apple Silicon の Mac の GPU で確認）。そのために，次のことをしている。
+
+\begin{itemize}
+  \item \texttt{trial} 番号を乱数の種として，データ分割，モデルの初期値，学習時のデータの並べ替えを固定する
+        （初期値は \texttt{server\_app.py}，並べ替えは \texttt{client\_app.py} で \texttt{torch.manual\_seed} により固定）。
+  \item 悪性クライアントの選出は \texttt{malicious-seed} で固定する（スイープでは \texttt{trial} と同じ値を渡す）。
+  \item サーバは，クライアントからの返信を，届いた順ではなくクライアント番号の順に並べ直してから計算する。
+\end{itemize}
+
+\texttt{trial} を変えると，データの分け方，モデルの初期値，悪性になるクライアントのすべてが変わる。
+
+\paragraph{装置による違い。}
+CPU と GPU では計算の丸め方が違うので，同じ条件でも結果の数値は変わる（AUC が変わるラウンドもある）。
+1 つのスイープの中では，装置を変えないこと。どの装置で回したかは，\texttt{run\_config.txt} の \texttt{device (effective)} に記録される。
+
+\paragraph{NVIDIA の GPU での再現性は未確認。}
+NVIDIA の GPU では，結果が変わりにくくなる設定（\texttt{cudnn.deterministic}）を入れてあるが，
+回し直したときに完全に一致するかは，まだ確かめていない。
+確かめるには，同じ条件を，出力先を変えて 2 回実行し，2 つの \texttt{detection\_metrics.csv} を比べる
+（\texttt{run\_id} の列は実行の日時を含むので，それ以外の列を比べる）。
+
+% =========================================================
+\section{トラブルシューティング}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{5.6cm} P{9.7cm}@{}}
+\toprule
+症状 & 対処 \\
+\midrule
+\texttt{flwr: command not found}，または「Flower のコマンドが見つかりません」 &
+仮想環境が有効になっていない。\texttt{source .venv/bin/activate} を実行する。 \\
+「学習結果を返したクライアントは N 台ですが，設定の num-clients は M です」 &
+起動している台数と設定が合っていない。手で \texttt{flwr run} を実行しているなら，\texttt{-{}-run-config} の \texttt{num-clients} を，
+\texttt{\textasciitilde/.flwr/config.toml} の \texttt{num-supernodes} に合わせる。 \\
+「N 台 $\times$ 割合 r $=$ x 台で，整数になりません」 &
+\texttt{malicious-ratio} を，台数との積が整数になる値にする（20 台なら 0.1，0.2，0.3 など）。 \\
+スイープで条件が「FAILED」になる &
+画面に出力の末尾が表示され，\texttt{failures.csv} にも記録される。原因を直してからもう一度実行すれば，失敗した条件だけが回る。 \\
+\texttt{detection\_metrics.csv} の \texttt{auc} が NaN &
+攻撃なしの条件（悪性 0 台）なら正常。 \\
+「client-num-gpus = … ですが，このマシンでは NVIDIA の GPU（cuda）が使えません」 &
+GPU の無いマシンなら，\texttt{client-num-gpus} を 0.0 にする。GPU があるはずなら，PyTorch が GPU 対応の版かを確かめる（\S\ref{sec:gpu}）。 \\
+「NVIDIA の GPU が使えるマシンですが，client-num-gpus = 0.0 のため…」 &
+GPU で回すなら \texttt{client-num-gpus} を 0 より大きくする。CPU で回すなら \texttt{device} を \texttt{"cpu"} にする。 \\
+\texttt{CUDA out of memory} & 同時に GPU を使うクライアントが多すぎる。\texttt{client-num-gpus} を大きくする（例：0.5）。 \\
+実行が始まったまま，いつまでも進まない & GPU の無いマシンで \texttt{client-num-gpus} が 0 より大きいと，クライアントが起動できずに待ち続ける。
+手で \texttt{flwr run} を実行した場合に起こりうる（スイープでは開始前に止まる）。 \\
+MNIST のダウンロードの警告 & \texttt{HF\_TOKEN} が未設定という警告は無視してよい。 \\
+メモリ不足 & 更新ベクトルは（クライアントの台数 $\times$ 266{,}060）の表としてサーバ上に載る。\texttt{num-clients} を下げる。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =========================================================
+\section{設定を決めた経緯と，結果を読むときの注意}
+\label{sec:decisions}
+
+2026 年 10 月 11 日に，実験の設定と分析の方法をいくつか変更した。
+あとから「なぜこの値なのか」「この結果はどう読めばよいのか」が分からなくならないように，決めたことと理由をここにまとめる。
+正式な記述は研究計画書（\texttt{sotsuron\_plan2.tex}）の「データ分布」と「再スイープ」の節にある。
+
+\subsection{決めたことの一覧}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}P{3.3cm} P{3.6cm} P{8.4cm}@{}}
+\toprule
+項目 & 決めた内容 & 理由（ひとことで） \\
+\midrule
+データの分け方 & \texttt{dirichlet\_equal}（全員 1{,}500 枚） & 枚数の偏りを無くし，数字の偏りだけの影響を見るため。 \\
+Dirichlet の式 & $\mathrm{Dir}(\alpha \cdot p)$ & Hsu ら（2019）の式そのままにするため。独自の変更はしない。 \\
+$\alpha$ の値 & 1000 / 5 / 1 & 式を直す前の 100 / 0.5 / 0.1 と，まったく同じ分け方になる値。 \\
+一番大きい $\alpha$ & 100 ではなく 1000 & IID の比較対象として使うため。100 だと少し偏る。 \\
+ローカルエポック & 1 から 2 に変更 & 1 台あたりの枚数が半分になり，学習が足りなくなったため。 \\
+ラウンド数 & 50 のまま & 「最後の 5 ラウンド」で評価する決まりを変えないため。 \\
+push\_ratio の分析 & 符号反転だけ & ALIE では push\_ratio が $z$ と同じ量になるため。 \\
+出力先 & \texttt{experiments\_}\allowbreak\texttt{detection\_v3} & 以前の 54 回の実行と混ぜないため。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{$\alpha$ の定義を Hsu らの式に合わせた}
+
+枚数をそろえる分け方に切り替えたとき，最初は，以前の $\alpha$ の値（100 / 0.5 / 0.1）をそのまま使えるように，
+ディリクレ分布に渡す値を $\alpha \times 10 \times p$ としていた（$p$ はデータ全体での各数字の割合）。
+しかし，Hsu らの式は $\alpha \times p$ であり，これでは $\alpha$ の意味が 10 倍ずれる。
+「原論文にない独自の変更は入れない」という方針で，式を $\alpha \times p$ に直した。
+
+式を直すと，同じ偏り具合を表す $\alpha$ の値は 10 倍になる。そこで $\alpha$ を 1000 / 5 / 1 とした。
+この値で作られる分け方は，直す前の 100 / 0.5 / 0.1 のときと，\texttt{trial} 1〜10 のすべてで完全に同じであることを確かめてある。
+変わったのは，式と $\alpha$ の書き方だけである。
+
+\paragraph{$\alpha$ の値をそのまま（100 / 0.5 / 0.1）にしなかった理由。}
+式だけ直して値を変えないと，偏りが今よりずっと強くなる。
+一番多い数字が占める割合は，100 / 0.5 / 0.1 の順に 16\% / 75\% / 91\% になり，$\alpha = 0.1$ ではほぼ「1 台が 1 種類の数字だけを持つ」状態になる。
+これでは 50 ラウンドで学習が収束しにくい。
+
+\paragraph{一番大きい $\alpha$ を 1000 にした理由。}
+この水準は，Non-IID と比べるための「IID」として使う。表\ref{tab:iid-check}のとおり，$\alpha = 1000$ は，でたらめに 1{,}500 枚を配った場合とほとんど区別がつかない。
+$\alpha = 100$ はばらつきが約 4 倍あり，「弱い Non-IID」になってしまう。論文では，$\alpha = 1000$ を「$\approx$IID」と書く。
+
+\begin{table}[H]
+\centering
+\caption{$\alpha$ が大きいときの偏り具合と，完全な IID との比較。}
+\label{tab:iid-check}
+\begin{tabular}{@{}P{6.6cm} P{4.2cm} P{4.2cm}@{}}
+\toprule
+ & 一番多い数字の割合 & 比率の標準偏差 \\
+\midrule
+でたらめに 1{,}500 枚を配った場合（完全な IID） & 11.6\% & 約 0.008 \\
+$\alpha = 1000$ & 12\% & 約 0.009 \\
+$\alpha = 100$ & 16\% & 約 0.030 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Hsu らと違うところ。}
+式は同じだが，次の 3 点は違う。論文には明記する。
+\begin{itemize}
+  \item $p$ は，Hsu らでは「どの数字も同じ割合」である。本実験では，MNIST の実際の割合（9.0\%〜11.2\%）を使っている。
+  \item Hsu らは 100 台に 500 枚ずつ，全データを配る。本実験は 20 台に 1{,}500 枚ずつで，全 60{,}000 枚の半分だけを使う。
+        全部を配ると在庫切れが増え，引いた比率どおりに配れなくなるためである（$\alpha = 1$ で，ずれが約 2\% から約 23\% に広がる）。
+  \item ある数字の在庫が切れたときの配り方は，Hsu らには書かれていない。「切れた数字を除いて比率を作り直す」は，本実験で決めたものである。
+\end{itemize}
+
+\subsection{ローカルエポックを 2 にした}
+
+枚数をそろえる分け方では，1 台が学習に使う枚数が，以前の平均約 2{,}400 枚から 1{,}200 枚に減る。
+1 ラウンドで重みを更新する回数が半分になるので，エポック 1 のままでは 50 ラウンドで学習が足りなかった。
+攻撃なし・\texttt{trial} 1 で 50 ラウンド回して確かめた結果が，表\ref{tab:epoch-manual}である（Flower を通さない簡易な実行）。
+
+\begin{table}[H]
+\centering
+\caption{ローカルエポックと，50 ラウンド時点のテスト精度。}
+\label{tab:epoch-manual}
+\begin{tabular}{@{}P{5.2cm} P{3.2cm} P{3.2cm} P{3.4cm}@{}}
+\toprule
+ & $\alpha = 1000$ & $\alpha = 1$ & 300 回の実行時間 \\
+\midrule
+エポック 1 & 97.0\% & 92.2\% & 基準の約半分 \\
+エポック 2（採用） & 98.0\% & 95.1\% & 基準 \\
+エポック 3 & 98.3\% & 96.1\% & 約 1.5 倍 \\
+以前の 54 回の実行（エポック 1） & 98.1\% & 95.9\% & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item エポック 2 にすると，1 ラウンドに見る枚数が 2{,}400 枚に戻り，以前の実行と学習の量がそろう。精度も以前に近い。
+  \item エポック 3 は，$\alpha = 1$ の精度が約 1 ポイント上がるだけで，実行時間が 1.5 倍になり，以前の実行と学習の量がそろわなくなる。
+  \item ラウンド数を 100 にする案は，「最後の 5 ラウンド」で評価する決まりや，以前の実行との対応が変わるので，採らなかった。
+\end{itemize}
+
+\paragraph{注意。}
+この簡易な確認でも，エポック 2 の $\alpha = 1$ は 45 ラウンドから 50 ラウンドのあいだに 0.3 ポイント上がっていた。
+本番の 300 回の実行で確かめると，$\alpha = 1$ の上がり幅は，攻撃なしで 0.53 ポイント，ALIE で 0.63〜0.88 ポイントであり，50 ラウンドでは\textbf{収束していなかった}。
+$\alpha = 1000$ は第 35 ラウンド以降，5 ラウンドで約 0.1 ポイントの上昇で横ばいになり，$\alpha = 5$ も上がり幅が小さくなって，ほぼ頭打ちだった。
+論文では，$\alpha = 1$ の最終 5 ラウンドの検知性能を「学習が進みきる前の段階のもの」と書き，精度と検知性能のラウンド推移の図を添える
+（\texttt{accuracy\_by\_round.png}，\texttt{accuracy\_table.csv}）。
+
+\subsection{結果を読むときの注意}
+
+\paragraph{AUC が 0 に近いのは，「見分けられない」ではない。}
+AUC が 0.5 なら見分けられていないが，0 に近いなら，「悪性のほうが，いつも良性らしく見えている」ということである（\S\ref{sec:auc}）。
+以前の 54 回の実行では，ALIE に対する D2 の AUC が全部の条件で 0.00 だった。D4 も，$z$ が小さいと 0.01〜0.08 だった。
+ALIE の悪性の更新は良性の平均のすぐ近くに作られるので，「外れているものを探す」検知器には，だれよりも普通に見える。
+したがって，「AUC が低い＝検知が難しい」とまとめてはいけない。0.5 からどれだけ離れているかと，どちら向きかを分けて書く。
+
+\paragraph{ALIE の悪性 4 台は，まったく同じ更新を送っている。}
+これは原論文（Baruch らの Algorithm 3）のとおりであり，実装の誤りではない。ただし，次の 2 点に注意する。
+\begin{itemize}
+  \item D3（k-means）が ALIE をよく見つけるのは，同じ 4 点が固まって見えるためかもしれない。
+        ALIE の巧妙さを見破っているとは限らないので，考察で確かめる。
+  \item 「同じ更新が複数届いたら悪性」と調べるだけで見つかってしまう。これは，この攻撃の設定の限界として書く。
+\end{itemize}
+
+\paragraph{ALIE では，push\_ratio は $z$ と同じ量である。}
+\S\ref{sec:spread} に書いたとおり，ALIE では push\_ratio がほぼ $z$ になり，$\alpha$ を変えても変わらない
+（以前の実行での push\_ratio $\div z$ は 1.00〜1.14）。
+そこで，push\_ratio と AUC の関係は符号反転だけで調べ，ALIE は $z$ を横軸にした図（\texttt{detection\_auc\_by\_z.png}）で見る。
+同じ $z$ なのに $\alpha$ によって AUC が違えば，それは push\_ratio では説明できない違いである。
+
+\paragraph{符号反転の push\_ratio は，ほとんど $\alpha$ で決まる。}
+符号反転には強さを決める数値がないので，push\_ratio を動かしているのは主に $\alpha$ である。
+そのため，全部の点で push\_ratio と AUC に相関があっても，「$\alpha$ が違うと AUC が違う」ことを言い換えただけかもしれない。
+以前の実行で試すと，順位相関係数は全体では 0.68〜0.74（D2〜D4）だったが，同じ $\alpha$ の中だけで見ると $-0.04$〜0.48 だった。
+再スイープでは，同じ $\alpha$ の中でも連動しているかを，\texttt{detection\_pushratio\_corr\_table.csv} で確かめる。
+
+\paragraph{以前の 54 回の実行とは，数値を直接比べない。}
+データの分け方，$\alpha$ の定義，ローカルエポックの 3 つが違う。同じ図や表には並べず，「変更の根拠になった予備的な実行」として扱う。
+
+\subsection{原論文との違いのまとめ}
+
+\begin{table}[H]
+\centering
+\caption{ALIE について，原論文（Baruch ら，2019）と本実験の違い。}
+\begin{tabular}{@{}P{3.6cm} P{5.4cm} P{6.3cm}@{}}
+\toprule
+項目 & 原論文 & 本実験 \\
+\midrule
+式 & $\mu + z\sigma$ & $\mu - z\sigma$（左右対称なので同じ考え方） \\
+$\mu$，$\sigma$ の求め方 & 悪性ワーカー自身のデータから推定 & 良性 16 台の更新から計算（より強い攻撃者） \\
+$z$ & $z_{\max}$ を計算して使う & 8 通りの値を与える（$z_{\max} \approx 0.385$ を含む） \\
+悪性の更新 & 全員同じ & 全員同じ（原論文どおり） \\
+規模 & 51 台中 12 台 & 20 台中 4 台 \\
+何に適用するか & 1 ステップの勾配 & 複数エポック学習したあとの更新 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+原論文は，防御のない単純な平均では攻撃の効果が薄まる，と報告している。
+本実験でも，FedAvg のもとでは，$z$ の小さい ALIE がモデルに与える害は小さいはずである。
+本実験は，ALIE を「モデルをどれだけ壊すか」ではなく，「見つけられるか」を調べる対象として使っている。
+
+\subsection{本番の前に確かめたこと}
+
+\begin{itemize}
+  \item テスト 5 本（\texttt{test\_*.py}）は，すべて合格した。
+  \item Flower を通して 1 条件（$\alpha = 1$，ALIE，$z = 1$）を 2 ラウンド回し，5 つのログと \texttt{final\_model.pt} が出力されることを確かめた。
+  \item 一番強い攻撃（$\alpha = 1$，ALIE，$z = 3$）を 10 ラウンド回した。学習は壊れず（10 ラウンドで精度 81.6\%），
+        4 つの検知器の AUC はすべて 1.0 だった。検知できるかどうかが分かれるのは，$z$ が 0.75〜1.5 のあたりになりそうである。
+  \item 上の 10 ラウンドは 107 秒かかった（Mac，1 回だけの計測）。ここから見積もると，1 回の実行（50 ラウンド）が約 8 分，300 回で約 40 時間である。実際の本番は，別の計算機の CPU で約 62 時間（1 回あたり約 11 分）かかった。
+        実際に回す計算機で数条件を回し，時間を測ってから全体を流すこと。
+\end{itemize}
+
+\subsection{あとで直すことにしたもの}
+
+どちらも，ログから図や表を作り直すだけなので，実験のあとで対応できる。
+\begin{itemize}
+  \item \texttt{detection\_auc\_by\_round.png} は，攻撃ごとに列を作る。$z$ が 8 通りあると 9 列になり，論文には横に長すぎる。載せる $z$ を 3〜4 個に絞る。
+  \item \texttt{detection\_final\_auc\_table.csv} は，以前はラウンドと \texttt{trial} をまとめて平均するだけで，ばらつきが分からなかった。
+        2026 年 10 月 15 日に，\texttt{trial} ごとに最後の 5 ラウンドを平均してから，\texttt{trial} のあいだの平均と標準偏差を出す形に直した
+        （同じ実行の中のラウンドどうしは似た値になるので，まとめて標準偏差を取ると，ばらつきを小さく見積もってしまう）。
+        列は検知器ごとに \texttt{\_mean} と \texttt{\_std} の 2 つずつである。
+\end{itemize}
+
+\section{本書が扱わないもの}
+
+次のものは，実験の実行には使うが，本書では詳しく説明していない。
+
+\begin{itemize}
+  \item \texttt{test\_*.py}：テスト。\S\ref{sec:run} の手順 1 で使う。
+  \item \texttt{tools/verify\_dirichlet\_partition.py}：Dirichlet 分割の様子を図にして確かめるスクリプト。
+        \texttt{python tools/verify\_dirichlet\_partition.py -{}-alpha 1000 5 1 -{}-clients 20 -{}-trial 1} と実行すると，
+        クライアントごとの枚数と保有クラスの要約が表示され，ヒートマップが \texttt{results\_detection/} に保存される。
+        以前の方式を確かめるときは \texttt{-{}-split dirichlet} を付ける。
+  \item \texttt{unused\_features/}：現在の実験で使っていない機能の退避先
+        （Adaptive / Scale 攻撃，Median / Trimmed Mean / Krum / Bulyan，\texttt{iid} / \texttt{non\_iid} 分割，
+        旧モデル，固定画像の保存，悪性クライアントの手動指定）。内容と戻し方は，同フォルダの \texttt{README.md} にある。
+  \item \texttt{legacy\_fang\_reproduction/}：以前の Fang 攻撃再現実験の記録。本実験のコードからは参照していない。
+\end{itemize}
+
+% =========================================================
+\section{用語集}
+\label{sec:glossary}
+
+\begin{description}[leftmargin=1.4em, style=nextline, itemsep=1pt]
+  \item[ALIE] 良性のばらつきの範囲内に隠れる攻撃。良性の平均から，標準偏差の $z$ 倍だけずらした値を送る（\S\ref{sec:alie}）。
+  \item[AUC（ROC-AUC）] 検知器の成績。悪性 1 台と良性 1 台を選んだとき，悪性のスコアのほうが高い確率（\S\ref{sec:auc}）。
+  \item[CSV] 値をカンマで区切って並べたテキストファイル。1 行目が列の名前。
+  \item[Dirichlet 分割] ディリクレ分布を使って，データをクライアントに偏らせて配る方法。偏りの強さを $\alpha$ で調整する（\S\ref{sec:noniid}）。
+  \item[FedAvg] 連合学習の基本的な集約の方法。データ数で重み付けした平均（\S\ref{sec:fedavg}）。
+  \item[Flower（\texttt{flwr}）] 連合学習を実行するためのライブラリ。サーバとクライアントのやり取りを受け持つ。
+  \item[GPU] 画像処理用の計算装置。ニューラルネットワークの計算を速く行える。NVIDIA のものは CUDA という仕組みで使う。
+  \item[IID / Non-IID] クライアントごとのデータの構成が，似ている（IID）／偏っている（Non-IID）。
+  \item[MNIST] 手書き数字（0〜9）の画像のデータセット。学習用 60{,}000 枚，テスト用 10{,}000 枚。
+  \item[push\_ratio] 悪性が良性の重心から離れている距離を，良性の広がりで割ったもの。1 より小さいと，悪性は良性の集団の内側にいる（\S\ref{sec:spread}）。
+  \item[SGD] 確率的勾配降下法。データの一部（バッチ）で勾配を計算し，重みを少しずつ更新する方法。
+  \item[trial] 同じ条件を，乱数だけを変えて繰り返すときの番号。乱数の種として使う。
+  \item[重み（パラメータ）] モデルの中の，学習で調整される数値。本実験では 266{,}060 個。FedAvg の「重み付き平均」の重みとは別のもの。
+  \item[エポック] 手元のデータを 1 周すること。
+  \item[学習率] 1 回の更新で，重みをどれだけ動かすかの倍率。
+  \item[仮想環境] プロジェクトごとに分けた Python の環境。パッケージの版が，ほかのプロジェクトとぶつからないようにする。
+  \item[クライアント] 連合学習で，データを持ち，学習を行う側。
+  \item[グローバルモデル] サーバが持つ，全体で共有するモデル。
+  \item[勾配] 各重みを動かしたときに，損失がどちらにどれだけ変わるかを並べたもの。
+  \item[検知器] 各クライアントの更新に，悪性らしさのスコアを付けるもの。本実験では D1〜D4 の 4 つ。
+  \item[更新ベクトル] 学習でモデルの重みがどれだけ動いたか。届いた重みから，配った重みを引いたもの（\S\ref{sec:update-vector}）。
+  \item[コサイン] 2 本のベクトルの向きの近さ。同じ向きで 1，直角で 0，正反対で $-1$。
+  \item[サーバ] 連合学習で，モデルを配り，集約する側。
+  \item[集約] クライアントから返ってきた重みを，1 つにまとめること。
+  \item[主成分（第 1 主成分）] データが一番大きくばらついている方向（\S\ref{sec:d4}）。
+  \item[条件] 1 回の実行の設定の組み合わせ（$\alpha$，攻撃，$z$，trial など）。
+  \item[スイープ] 設定をいくつかの値に振って，その組み合わせをすべて実行すること（\S\ref{sec:sweep}）。
+  \item[spread（広がり）] 良性クライアントの更新が，その重心からどれだけ散らばっているか。
+  \item[損失] モデルの答えが，正解からどれだけ外れているかを表す数値。小さいほどよい。
+  \item[種（seed）] 乱数の出方を決める数値。同じ種なら，毎回同じ乱数が出る。
+  \item[中央値] 値を大きさの順に並べたときの，真ん中の値。極端な値に引っ張られにくい。
+  \item[ノルム] ベクトルの長さ（大きさ）。
+  \item[バッチ] 学習で，一度にまとめて使うデータ（本実験では 32 枚）。
+  \item[標準偏差] 値のばらつきの大きさを表す数値。
+  \item[符号反転] 更新ベクトルの向きを正反対にする攻撃。
+  \item[モデルポイズニング] 悪性クライアントが，返す重みを書き換えて，学習を妨げる攻撃。
+  \item[ラウンド] 「配る → 学習する → 返す → 集約する」の一巡。
+  \item[悪性クライアント / 良性クライアント] 攻撃を行うクライアント / 正直に学習するクライアント。
+\end{description}
+
+\end{document}
